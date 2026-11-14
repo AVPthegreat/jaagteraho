@@ -59,7 +59,8 @@ export type Step =
   | "applied"
   | "undone"
   | "used_ok"
-  | "used_crash";
+  | "used_crash"
+  | "progress";
 export type PlayEvent = {
   step: Step;
   app: string;
