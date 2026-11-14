@@ -48,18 +48,21 @@ flowchart LR
 
 ## Measured
 
-Every number is produced by a script in this repository. Measured 13 Nov 2026.
+Every number is produced by a script in this repository. Measured 13 and 14 Nov 2026.
 
 **30 real bugs from 17 open-source Python projects** ([`watcher/eval`](watcher/eval)): tracebacks people posted on GitHub (requests, Flask, pip, pytest, Celery, black and others), scored against the lines the real, merged fix changed. JaagteRaho reads the code as it was before the fix and never sees the real fix.
 
 | | Result |
 |---|---|
 | Bug in a file from the traceback: right file | 20 of 20 (100%) |
-| Bug in a file from the traceback: right lines (±3) | 16 of 20 (80%) |
-| Cause outside the traceback: right file | 2 of 9 (22%); 3 of 9 when also shown the files the failing code imports and calls |
-| Cost per diagnosis | about $0.03 (these are large library files) |
+| Bug in a file from the traceback: right lines (±3) | 17 of 20 (85%) |
+| Cause outside the traceback: right file | 5 of 10 (50%), 6 of 10 on a repeat run; before lookups: 2 of 9 (22%) |
+| Cause outside the traceback: right lines (±3) | 3 of 10, 4 of 10 on the repeat; before: 0 of 9 |
+| Cost per diagnosis | about $0.04 (these are large library files) |
 
-Our weak spot is a cause in a file the traceback never mentions, deep inside a large library.
+How the outside-traceback number rose: the diagnosis now gets the repository's code at that commit and may look things up before answering (where a function is defined, where the error's text appears, a few more lines), for up to three cheap rounds. The first call shows the failing functions instead of 160-line windows, so the total cost stayed close to before ($0.042 against $0.038). We designed this after reading the 10 outside-traceback cases, so they are not a held-out test; the 20 in-traceback cases were not used for tuning and did not get worse. Run log: [`watcher/eval/NOTES-lookups.md`](watcher/eval/NOTES-lookups.md).
+
+A cause deep in another part of a large library is still our weakest case: about half are found.
 
 **JR-Bench: 20 planted bugs and 4 noise errors in 7 sample apps** ([`bench`](bench)): six Python apps of 21 to 101 files and one Node.js app. Each bug is planted as if a commit introduced it and triggered for real; a hidden test JaagteRaho never sees judges the fix.
 
