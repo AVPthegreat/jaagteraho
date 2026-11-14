@@ -109,7 +109,16 @@ export type GateResult = {
   review?: { fix_quality: string; touches_sensitive: string; could_break: string; votes: number; unanimous?: boolean };
   /** riskyAdditions with the original files: never shown as a reason, only stops a fix applying itself. */
   risky?: string[];
+  /** Playground only (allowProtected): protected files the fix touches, which in a real app make it wait for the owner. */
+  protected_files?: string[];
 };
+
+/**
+ * allowProtected: ONLY for the Live playground, where the fix goes into a visitor's throwaway copy in the
+ * isolated runner. A protected area (payments, invoices, login...) is then noted, not a reason to withhold,
+ * so the review and the tests still run. Every other code rule stays a hard rule.
+ */
+export type GateOptions = { allowProtected?: boolean };
 
 const countLines = (s: string) => (s === "" ? 0 : s.split("\n").length);
 
@@ -161,7 +170,8 @@ function importedModule(line: string): string | null {
 }
 
 /** Checks done by code alone. Pure apart from the Python syntax check. */
-export function codeChecks(d: DiagnosisResult, shown: SourceFile[]): GateResult {
+export function codeChecks(d: DiagnosisResult, shown: SourceFile[], opts: GateOptions = {}): GateResult {
+  const protectedFiles: string[] = [];
   const reasons: string[] = [];
   const byPath = new Map(shown.map((f) => [f.path, f.text]));
   const patched: Record<string, string> = {};
@@ -175,7 +185,10 @@ export function codeChecks(d: DiagnosisResult, shown: SourceFile[]): GateResult 
   for (const e of d.edits) {
     const original = patched[e.file] ?? byPath.get(e.file);
     if (original === undefined) { reasons.push(`edits a file it was not shown: ${e.file}`); continue; }
-    if (SENSITIVE.test(e.file)) reasons.push(`touches a protected area: ${e.file}`);
+    if (SENSITIVE.test(e.file)) {
+      if (opts.allowProtected) protectedFiles.push(e.file);
+      else reasons.push(`touches a protected area: ${e.file}`);
+    }
     const first = original.indexOf(e.find);
     if (e.find === "" || first === -1) { reasons.push(`text to replace not found in ${e.file}`); continue; }
     if (original.indexOf(e.find, first + 1) !== -1) { reasons.push(`text to replace is not unique in ${e.file}`); continue; }
@@ -200,7 +213,10 @@ export function codeChecks(d: DiagnosisResult, shown: SourceFile[]): GateResult 
       else if (!ok) reasons.push(`${path} would no longer be valid ${path.endsWith(".js") || path.endsWith(".mjs") ? "JavaScript" : "TypeScript"}`);
     }
   }
-  return { passed: reasons.length === 0, reasons: [...new Set(reasons)], changed_lines: changed, diff: diffs.join("\n"), patched };
+  return {
+    passed: reasons.length === 0, reasons: [...new Set(reasons)], changed_lines: changed, diff: diffs.join("\n"), patched,
+    ...(protectedFiles.length ? { protected_files: [...new Set(protectedFiles)] } : {}),
+  };
 }
 
 const Review = z.object({
@@ -251,8 +267,8 @@ export async function reviewFix(ai: AI, cause: string, diff: string, files: Sour
   return { fix_quality: major("fix_quality"), touches_sensitive: major("touches_sensitive"), could_break: major("could_break"), votes: answers.length, unanimous };
 }
 
-export async function runGate(ai: AI | null, d: DiagnosisResult, shown: SourceFile[]): Promise<GateResult> {
-  const g = codeChecks(d, shown);
+export async function runGate(ai: AI | null, d: DiagnosisResult, shown: SourceFile[], opts: GateOptions = {}): Promise<GateResult> {
+  const g = codeChecks(d, shown, opts);
   // Code checks are hard rules: protected areas, new packages, syntax, size. They always withhold.
   if (!g.passed) return { ...g, level: "withheld" };
   if (!ai) return { ...g, passed: false, level: "withheld", reasons: ["no model available to review the fix"] };

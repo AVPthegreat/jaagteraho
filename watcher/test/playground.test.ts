@@ -12,7 +12,8 @@ import type { AI } from "../src/ai/claude.js";
 import { SpendGuard } from "../src/ai/claude.js";
 import { openDb } from "../src/db/db.js";
 import { playgroundBus, type PlaygroundEvent } from "../src/playground/events.js";
-import { Playground } from "../src/playground/runner.js";
+import { areaWords, copyVerdict, Playground } from "../src/playground/runner.js";
+import { SENSITIVE } from "../src/pipeline/gate.js";
 import { crashReport } from "../src/playground/sandbox.js";
 import { laneFor, phoneAllowedFor, Worker } from "../src/pipeline/worker.js";
 import type { Phone } from "../src/phone/phone.js";
@@ -406,6 +407,107 @@ describe("playground review fixes", () => {
     assert.equal(first.status, 200);
     await first.body?.cancel();
     assert.equal((await app.request(`/public/playground/mine/${t}`)).status, 401, "single use");
+    pg.stop();
+  });
+});
+
+describe("protected areas in the playground copy (Ledgerly GST)", () => {
+  const LG = "pg-ledgerly-gst-rate-string";
+  const ldir = mkdtempSync(join(tmpdir(), "jrpgtest-lg-"));
+  after(() => rmSync(ldir, { recursive: true, force: true }));
+  {
+    const bench = JSON.parse(readFileSync(join(BENCH, "cases.json"), "utf8"));
+    const extra = JSON.parse(readFileSync(join(BENCH, "playground-cases.json"), "utf8"));
+    cpSync(join(BENCH, "apps", "ledgerly"), join(ldir, "apps", "ledgerly"), { recursive: true });
+    writeFileSync(join(ldir, "cases.json"), JSON.stringify({ apps: { ledgerly: bench.apps.ledgerly }, cases: extra.cases.filter((c: { id: string }) => c.id === LG) }));
+  }
+  const FIND = 'gst_rate=data["gst_rate"],';
+  const REG = "import unittest\nfrom ledgerly.invoice import service\n\nclass T(unittest.TestCase):\n    def test_text_rate(self):\n        from ledgerly.app import handle\n        handle('POST', '/api/customers', {'name': 'A', 'credit_limit': '5000', 'since': '2026-01-02'})\n        r = handle('POST', '/api/invoices', {'customer_id': 1, 'amount': '1200', 'gst_rate': '18', 'issued_on': '2026-11-01'})\n        self.assertEqual(r['status'], 201)\n";
+  const ledgerAI = (db: ReturnType<typeof openDb>, replace: string, sensitive: "yes" | "no") => {
+    const usage = { input_tokens: 1000, output_tokens: 100 };
+    const client = {
+      messages: {
+        parse: async (req: { system: string }) => {
+          if (req.system.includes("You assess one production error"))
+            return { stop_reason: "end_turn", usage, parsed_output: { is_noise: "no", severity: "3", category: "unhandled_input", user_blocked: "yes", suggested_action: "notify" } };
+          if (req.system.includes("diagnosis step"))
+            return {
+              stop_reason: "end_turn",
+              usage,
+              parsed_output: {
+                cause_plain: "The GST rate arrives as text.", cause_technical: "ledgerly/invoice/service.py:14 keeps the rate as a string.", file: "ledgerly/invoice/service.py", line: 14,
+                confidence_words: "sure", edits: [{ file: "ledgerly/invoice/service.py", find: FIND, replace }], test_hint: "h", regression_test: { file: "t.py", code: REG },
+              },
+            };
+          return { stop_reason: "end_turn", usage, parsed_output: { fix_quality: "3", touches_sensitive: sensitive, could_break: "no" } };
+        },
+      },
+    };
+    return { client, guard: new SpendGuard(db, 40, 45), decisionModel: "claude-haiku-5-5", diagnosisModel: "claude-sonnet-5-5" } as unknown as AI;
+  };
+  const steps = (pg: Playground, session: string) => {
+    const got: PlaygroundEvent[] = [];
+    playgroundBus.on(`session:${session}`, (ev: PlaygroundEvent) => got.push(ev));
+    return got;
+  };
+
+  it("a fix in invoicing is reviewed, tested and can be applied in the copy, with the true note", async () => {
+    for (const sensitive of ["no", "yes"] as const) {
+      const db = openDb(":memory:");
+      const pg = new Playground(db, ledgerAI(db, 'gst_rate=float(data["gst_rate"]),', sensitive), { dir: ldir, canSpend: () => true });
+      const s = `ledger-visitor-${sensitive}`;
+      const got = steps(pg, s);
+      const r = pg.startOwn({ session: s, caseId: LG, exam: false, heal: "auto" }, "ledgerly") as { run_id: number };
+      await pg.settle();
+      const gate = got.find((e) => e.step === "gate")!.data;
+      assert.equal(gate.code_rules, "passed", "a protected area is a note in the copy, not a failed code rule");
+      assert.equal(gate.review_ran, true, "the AI review ran");
+      assert.deepEqual(gate.protected_files, ["ledgerly/invoice/service.py"]);
+      assert.equal(got.find((e) => e.step === "own_test")!.data.verdict, "proved", "its own test ran and proved it");
+      const ready = got.find((e) => e.step === "ready")!.data;
+      assert.equal(ready.approvable, true, sensitive);
+      assert.equal(ready.reason, null);
+      assert.match(String(ready.protected_note), /In a real app this fix waits for your tap, because it touches invoicing or payments\. In your copy you can apply it\./);
+      assert.ok(got.some((e) => e.step === "note" && /protected area/.test(String(e.data.text))), "never heals a protected fix on its own");
+      const o = pg.ownRun(s, r.run_id)!;
+      assert.equal(o.state, "broken");
+      assert.equal(await pg.applyFix(o, "approved"), "applied");
+      assert.equal(pg.latest(1)[0].hidden_test, "passed");
+      assert.equal(pg.latest(1)[0].appliable_in_copy, true);
+      pg.stop();
+    }
+  });
+
+  it("risky code still blocks in the copy, with its true reason", async () => {
+    const risky = openDb(":memory:");
+    const pg2 = new Playground(risky, ledgerAI(risky, 'gst_rate=float(__import__("os").environ.get("X", data["gst_rate"])),', "no"), { dir: ldir, canSpend: () => true });
+    const got = steps(pg2, "ledger-risky-1");
+    pg2.startOwn({ session: "ledger-risky-1", caseId: LG, exam: false, heal: "ask" }, "ledgerly");
+    await pg2.settle();
+    const ready = got.find((e) => e.step === "ready")?.data;
+    assert.equal(ready?.approvable, false);
+    assert.match(String(ready?.reason ?? got.find((e) => e.step === "gate")?.data.reasons), /dynamic code|environment|only a person|withheld/);
+    assert.doesNotMatch(String(ready?.reason ?? ""), /reaches outside the program/);
+    pg2.stop();
+  });
+
+  it("copyVerdict gives the true reason for each case", () => {
+    assert.deepEqual(copyVerdict("recommended", [], [], null), { appliable: true, reason: null, protectedNote: null });
+    assert.equal(copyVerdict("caution", ["it touches a sensitive area"], ["shop/payments.py"], null).appliable, true);
+    assert.match(copyVerdict("caution", ["the reviewer is not sure it removes the cause"], [], null).reason ?? "", /AI reviewer had concerns \(the reviewer is not sure/);
+    assert.match(copyVerdict("withheld", ["text to replace not found in a.py"], [], null).reason ?? "", /checks withheld this fix \(text to replace not found/);
+    assert.match(copyVerdict("recommended", [], ["a/payment.py"], "starts processes or changes files").reason ?? "", /^Not applied: the fix starts processes/);
+    assert.equal(areaWords(["accounts/login.py"]), "sign-in or permissions");
+  });
+
+  it("Surprise me prefers bugs outside protected areas whose last fix could be applied", () => {
+    const db = openDb(":memory:");
+    const pg = new Playground(db, null, { canSpend: () => false });
+    const cases = pg.casesFor("ledgerly");
+    for (let i = 0; i < 30; i++) {
+      const c = pg.surprise(cases);
+      assert.ok(!(c.inject ?? []).some((e) => SENSITIVE.test(e.file)), c.id);
+    }
     pg.stop();
   });
 });
