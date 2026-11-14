@@ -3,6 +3,7 @@
 
 import type { Context, MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { envInt } from "../envint.js";
 
 /** Every request body, unless the route says otherwise. JSON from the website is a few KB. */
 export const BODY_LIMIT_BYTES = 256 * 1024;
@@ -142,7 +143,8 @@ export class NetSlots {
 }
 
 /** Live feeds across the whole public API (the exam portal demo and the playground share one pool). */
-export const FEEDS_PER_IP = 20; // a room of judges behind one address still fits
-export const FEEDS_MAX = 300;
-export const FEEDS_PER_NET = Math.floor(FEEDS_MAX / 10);
+// A room of judges behind one NAT address shares one IP: demo and playground views come from the same pool.
+export const FEEDS_PER_IP = envInt("JR_FEEDS_PER_IP", 60, 5, 500);
+export const FEEDS_MAX = envInt("JR_FEEDS_MAX", 600, 50, 5000);
+export const FEEDS_PER_NET = Math.max(FEEDS_PER_IP * 2, Math.floor(FEEDS_MAX / 10));
 export const liveFeeds = new NetSlots(FEEDS_PER_IP, FEEDS_PER_NET, FEEDS_MAX);
