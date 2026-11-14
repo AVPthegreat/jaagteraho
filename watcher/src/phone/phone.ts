@@ -254,7 +254,15 @@ export class Phone {
     app.post("/twilio/twiml/:token", async (c) => {
       if (!this.cfg.publicBase) return c.text("forbidden", 403);
       if (!(await signed(c))) {
-        console.log("phone: call script refused (bad Twilio signature)");
+        // Debug detail for a live mismatch: which request shape Twilio signed (keys and URL forms only, no values).
+        const form = await c.req.parseBody().catch(() => ({}) as Record<string, unknown>);
+        const params: Record<string, string> = {};
+        for (const [k, v] of Object.entries(form)) if (typeof v === "string") params[k] = v;
+        const sig = c.req.header("x-twilio-signature") ?? "";
+        const forms = { base: `${this.cfg.publicBase}${c.req.path}`, url: c.req.url, port: `${this.cfg.publicBase}:443${c.req.path}` };
+        const hits = Object.entries(forms).map(([n, u]) => `${n}=${twilioSignature(this.cfg.token, u, params) === sig}`).join(" ");
+        const noParams = twilioSignature(this.cfg.token, forms.base, {}) === sig;
+        console.log(`phone: call script refused (bad Twilio signature) sig=${sig ? "present" : "missing"} keys=${Object.keys(params).sort().join(",")} ${hits} noParams=${noParams} ct=${c.req.header("content-type") ?? ""}`);
         return c.text("forbidden", 403);
       }
       const call = this.peek(c.req.param("token"));
