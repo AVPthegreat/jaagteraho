@@ -36,18 +36,27 @@ export class LocalSource implements SourceProvider {
   }
 }
 
+/** A branch, tag or commit name safe to put in a URL: no "..", no "//", no leading or trailing "/" or ".". */
+export function safeRef(ref: string): boolean {
+  return /^[A-Za-z0-9_][\w.\/-]{0,99}$/.test(ref) && !ref.includes("..") && !ref.includes("//") && !/[./]$/.test(ref) && !ref.endsWith(".lock");
+}
+
 /** A fixed token, or a function that mints one (GitHub App installation tokens). */
 export type GitHubToken = string | undefined | (() => Promise<string | undefined>);
 
 export class GitHubSource implements SourceProvider {
   name = "github";
-  constructor(private repo: string, private tokenSource?: GitHubToken) {}
+  /** cacheScope: who the token belongs to (e.g. "project:12"), so cached private code stays with its owner. */
+  constructor(private repo: string, private tokenSource?: GitHubToken, private cacheScope?: string) {}
   index(ref?: string | null): Promise<RepoIndex | null> {
-    const at = ref && /^[\w./-]{1,100}$/.test(ref) ? ref : "";
-    return cachedIndex(`github:${this.repo}@${at}`, async () => {
+    const at = ref && safeRef(ref) ? ref : "";
+    // A copy read with a token belongs to whoever owns that token: the cache key carries its scope, so a
+    // private repository is never served to another app or to the public paste page.
+    const scope = this.tokenSource ? (this.cacheScope ?? "token") : "public";
+    return cachedIndex(`github:${scope}:${this.repo}@${at}`, async () => {
       const token = typeof this.tokenSource === "function" ? await this.tokenSource() : this.tokenSource;
       const headers: Record<string, string> = { accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28", ...(token ? { authorization: `Bearer ${token}` } : {}) };
-      const url = (r: string) => `https://api.github.com/repos/${this.repo}/tarball${r ? `/${encodeURIComponent(r)}` : ""}`;
+      const url = (r: string) => `https://api.github.com/repos/${this.repo}/tarball${r ? `/${r.split("/").map(encodeURIComponent).join("/")}` : ""}`;
       // A release name that is not a ref falls back to the default branch, as getFile does.
       return (await indexFromTarball(url(at), headers)) ?? (at ? indexFromTarball(url(""), headers) : null);
     });

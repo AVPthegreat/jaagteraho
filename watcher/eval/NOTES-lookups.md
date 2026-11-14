@@ -28,3 +28,11 @@ Total eval spend: about $2.79 of the $6 budget.
 - One or two runs per setting; the outside cases moved between 5 and 6 of 10 on the same code. Treat "about half" as the result, not a precise number.
 - "Before" counted 9 outside cases (black #5214 was not diagnosed); now all 10 are diagnosed.
 - Still missed: jinja #1701 (block concat in runtime.py), fastapi #9424 (the model reads dependencies/utils.py but blames routing.py), both black cases (blib2to3 Leaf attribute, linegen split).
+
+## Security review fixes (after runs A-D; not re-measured, behaviour on the eval cases is unchanged except on errors)
+- Tarball loading streams: unwanted entries are skipped by counting bytes, kept chunks are joined once, hard caps on download (80 MB) and decompressed bytes (200 MB), one 60 s limit over download, decompression and parsing.
+- Paste page: the repository is downloaded only after the traceback's files are found in it; failed attempts count against the visitor's and the day's quota (never shown).
+- Definitions come from a name index built once per snapshot (yielding to the event loop); search yields too; the map looks up at most 60 names.
+- A failed lookup round falls back once to the single call without tools; the spend cap and the owner's credit are re-checked before every follow-up round.
+- The snapshot cache key carries who could read it (project id, paste page, or public); unsafe refs are never put in a URL.
+- Cached reads are charged at 0.1x the input price for every model.

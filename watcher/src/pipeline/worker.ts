@@ -55,7 +55,7 @@ export function tokenFor(project: ProjectRow): GitHubToken {
 export function sourceFor(project: ProjectRow): SourceProvider | null {
   if (!project.repo) return null;
   if (project.repo.startsWith("local:")) return new LocalSource(project.repo.slice(6));
-  return new GitHubSource(project.repo, tokenFor(project));
+  return new GitHubSource(project.repo, tokenFor(project), `project:${project.id}`);
 }
 
 export class Worker {
@@ -340,7 +340,10 @@ export class Worker {
     ]);
     if (change) feed("change", { ...change });
     const started = Date.now();
-    const out = await runDiagnosis(this.ai!, event, files, sourceMoved, change, files.length ? index : null);
+    // Lookup rounds stop as soon as the owner's credit falls under the floor checked above.
+    const out = await runDiagnosis(this.ai!, event, files, sourceMoved, change, files.length ? index : null, {
+      budgetOk: () => creditLeftForProject(this.db, project.id) >= 0.02,
+    });
     if ("error" in out) {
       feed("cause", { unavailable: `Diagnosis failed: ${out.error}` });
       return;

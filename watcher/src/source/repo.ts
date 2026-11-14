@@ -44,6 +44,32 @@ export class RepoIndex {
     return out;
   }
 
+  private defs: Map<string, Array<{ path: string; line: number; owner: string | null }>> | null = null;
+
+  /**
+   * Builds the name -> definitions table in one pass over the code, yielding to the event loop between
+   * files so a large repository never blocks other requests. Lookups and the map then cost a Map read.
+   */
+  async buildDefinitions(): Promise<void> {
+    if (this.defs) return;
+    const defs = new Map<string, Array<{ path: string; line: number; owner: string | null }>>();
+    let n = 0;
+    for (const [path, text] of this.files) {
+      indexFile(defs, path, text);
+      if (++n % 50 === 0) await new Promise((r) => setImmediate(r));
+    }
+    this.defs = defs;
+  }
+
+  private table() {
+    if (!this.defs) {
+      const defs = new Map<string, Array<{ path: string; line: number; owner: string | null }>>();
+      for (const [path, text] of this.files) indexFile(defs, path, text);
+      this.defs = defs;
+    }
+    return this.defs;
+  }
+
   /**
    * Where `name` is defined. "Class.method" finds the method inside that class first.
    * Returns at most `limit` hits, app code before tests.
@@ -53,43 +79,51 @@ export class RepoIndex {
     if (!parts.length) return [];
     const target = parts[parts.length - 1];
     const owner = parts.length > 1 ? parts[parts.length - 2] : null;
-    const def = new RegExp(`^(\\s*)(?:async\\s+)?(?:def|class|function)\\s+${target}\\b|^(\\s*)(?:export\\s+)?(?:const|let|var)\\s+${target}\\s*=|^()${target}\\s*=|^(\\s+)(?:static\\s+|async\\s+|get\\s+|set\\s+)*${target}\\s*\\([^)]*\\)\\s*\\{`);
-    const hits: Array<{ path: string; line: number; rank: number }> = [];
-    for (const [path, text] of this.files) {
-      if (!text.includes(target)) continue;
-      const lines = text.split("\n");
-      for (let i = 0; i < lines.length; i++) {
-        const m = lines[i].match(def);
-        if (!m) continue;
-        const indent = (m[1] ?? m[2] ?? m[3] ?? m[4] ?? "").length;
-        let inOwner = false;
-        if (owner && indent > 0) {
-          for (let j = i - 1; j >= 0; j--) {
-            const c = lines[j].match(/^(\s*)class\s+(\w+)/);
-            if (c && c[1].length < indent) {
-              inOwner = c[2] === owner;
-              break;
-            }
-          }
-        }
-        const rank = (owner && !inOwner ? 2 : 0) + (SECONDARY.test(path) ? 4 : 0) + (path.endsWith(".pyi") ? 1 : 0);
-        hits.push({ path, line: i + 1, rank });
-      }
-    }
+    const hits = (this.table().get(target) ?? []).map((d) => ({
+      path: d.path,
+      line: d.line,
+      rank: (owner && d.owner !== owner ? 2 : 0) + (SECONDARY.test(d.path) ? 4 : 0) + (d.path.endsWith(".pyi") ? 1 : 0),
+    }));
     return hits.sort((a, b) => a.rank - b.rank || a.path.length - b.path.length).slice(0, limit).map(({ path, line }) => ({ path, line }));
   }
 
-  /** Lines containing `needle` literally, app code first. */
-  search(needle: string, limit = 15): Array<{ path: string; line: number; text: string }> {
+  /** Lines containing `needle` literally, app code first. Yields to the event loop while it scans. */
+  async search(needle: string, limit = 15): Promise<Array<{ path: string; line: number; text: string }>> {
     if (needle.trim().length < 3) return [];
     const hits: Array<{ path: string; line: number; text: string; secondary: boolean }> = [];
+    let n = 0;
     for (const [path, text] of this.files) {
+      if (++n % 200 === 0) await new Promise((r) => setImmediate(r));
       if (!text.includes(needle)) continue;
       text.split("\n").forEach((l, i) => {
-        if (l.includes(needle)) hits.push({ path, line: i + 1, text: l.trim().slice(0, 200), secondary: SECONDARY.test(path) });
+        if (l.includes(needle) && hits.length < 500) hits.push({ path, line: i + 1, text: l.trim().slice(0, 200), secondary: SECONDARY.test(path) });
       });
     }
     return hits.sort((a, b) => Number(a.secondary) - Number(b.secondary)).slice(0, limit).map(({ path, line, text }) => ({ path, line, text }));
+  }
+}
+
+const DEF = /^(\s*)(?:async\s+)?(?:def|class|function)\s+(\w+)|^(\s*)(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=|^()(\w+)\s*=|^(\s+)(?:static\s+|async\s+|get\s+|set\s+)*(\w+)\s*\([^)]*\)\s*\{/;
+const NOT_NAMES = new Set(["if", "for", "while", "switch", "catch", "return", "function"]);
+
+/** Adds every definition in one file to `defs`, with the class it sits in (by indentation). */
+function indexFile(defs: Map<string, Array<{ path: string; line: number; owner: string | null }>>, path: string, text: string) {
+  const classes: Array<{ indent: number; name: string }> = [];
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (l.length > 400) continue;
+    const m = l.match(DEF);
+    if (!m) continue;
+    const indent = (m[1] ?? m[3] ?? m[5] ?? m[7] ?? "").length;
+    const name = m[2] ?? m[4] ?? m[6] ?? m[8];
+    if (!name || NOT_NAMES.has(name)) continue;
+    while (classes.length && classes[classes.length - 1].indent >= indent) classes.pop();
+    const owner = indent > 0 && classes.length ? classes[classes.length - 1].name : null;
+    let list = defs.get(name);
+    if (!list) defs.set(name, (list = []));
+    if (list.length < 200) list.push({ path, line: i + 1, owner });
+    if (/^\s*class\s/.test(l)) classes.push({ indent, name });
   }
 }
 
@@ -117,54 +151,120 @@ export function showLines(index: RepoIndex, path: string, start: number, end: nu
 
 // ---- Loading ----
 
-/** Minimal streaming tar reader: keeps code files only, never buffers the whole archive. */
-async function untar(stream: Readable, keep: (path: string, size: number) => boolean): Promise<Map<string, string>> {
+const MAX_UNPACKED = 200_000_000;
+const MAX_HEADER_DATA = 65_536;
+const LOAD_TIME_MS = 60_000;
+
+/** Bytes waiting to be parsed, kept as a list of chunks (no copy per chunk). */
+class ByteQueue {
+  private chunks: Buffer[] = [];
+  length = 0;
+  push(c: Buffer) {
+    if (c.length) {
+      this.chunks.push(c);
+      this.length += c.length;
+    }
+  }
+  /** Removes and returns exactly n bytes (n must be <= length). */
+  take(n: number): Buffer {
+    const parts: Buffer[] = [];
+    let need = n;
+    while (need > 0) {
+      const c = this.chunks[0];
+      if (c.length <= need) {
+        parts.push(c);
+        this.chunks.shift();
+        need -= c.length;
+      } else {
+        parts.push(c.subarray(0, need));
+        this.chunks[0] = c.subarray(need);
+        need = 0;
+      }
+    }
+    this.length -= n;
+    return parts.length === 1 ? parts[0] : Buffer.concat(parts, n);
+  }
+  /** Drops up to n bytes; returns how many were dropped. */
+  skip(n: number): number {
+    let left = n;
+    while (left > 0 && this.chunks.length) {
+      const c = this.chunks[0];
+      if (c.length <= left) {
+        this.chunks.shift();
+        left -= c.length;
+      } else {
+        this.chunks[0] = c.subarray(left);
+        left = 0;
+      }
+    }
+    this.length -= n - left;
+    return n - left;
+  }
+}
+
+/**
+ * Streaming tar reader. Keeps code files only; every other entry is skipped by counting its bytes, never
+ * held in memory. Throws past `maxUnpacked` decompressed bytes or after the deadline.
+ */
+export async function untar(stream: AsyncIterable<Buffer>, keep: (path: string, size: number) => boolean, opts: { maxUnpacked?: number; deadline?: number } = {}): Promise<Map<string, string>> {
   const files = new Map<string, string>();
-  let buf: Buffer = Buffer.alloc(0);
-  let want: { path: string; size: number; keep: boolean } | null = null;
+  const q = new ByteQueue();
+  const maxUnpacked = opts.maxUnpacked ?? MAX_UNPACKED;
+  let unpacked = 0;
   let total = 0;
   let longName: string | null = null;
+  // The entry being read: its data is kept (whole, at most MAX_FILE) or skipped; then its padding is skipped.
+  let entry: { path: string; size: number; keep: boolean; skipLeft: number; padLeft: number } | null = null;
   for await (const chunk of stream) {
-    buf = buf.length ? Buffer.concat([buf, chunk as Buffer]) : (chunk as Buffer);
+    unpacked += chunk.length;
+    if (unpacked > maxUnpacked) throw new Error("repository too large");
+    if (opts.deadline && Date.now() > opts.deadline) throw new Error("repository took too long to read");
+    q.push(chunk);
     for (;;) {
-      if (!want) {
-        if (buf.length < 512) break;
-        const h = buf.subarray(0, 512);
-        if (h.every((b) => b === 0)) {
-          buf = buf.subarray(512);
-          continue;
-        }
+      if (!entry) {
+        if (q.length < 512) break;
+        const h = q.take(512);
+        if (h.every((b) => b === 0)) continue;
         const str = (a: number, b: number) => h.subarray(a, b).toString("utf8").replace(/\0.*$/s, "");
         const size = parseInt(str(124, 136).trim() || "0", 8);
+        if (!Number.isFinite(size) || size < 0) throw new Error("bad tar header");
         const type = String.fromCharCode(h[156]);
         const prefix = str(345, 500);
         let path: string = longName ?? (prefix ? `${prefix}/${str(0, 100)}` : str(0, 100));
         longName = null;
+        const padLeft = Math.ceil(size / 512) * 512 - size;
         if (type === "x" || type === "L") {
-          // A pax header or GNU long name: the next entry's real path.
-          buf = buf.subarray(512);
-          want = { path: type === "L" ? "\0longname" : "\0pax", size, keep: true };
+          // A pax header or GNU long name: the next entry's real path (kept only if small).
+          const ok = size <= MAX_HEADER_DATA;
+          entry = { path: type === "L" ? "\0longname" : "\0pax", size, keep: ok, skipLeft: ok ? 0 : size, padLeft };
           continue;
         }
         // GitHub tarballs put everything under "<owner>-<repo>-<sha>/".
         path = path.split("/").slice(1).join("/");
-        buf = buf.subarray(512);
         const isFile = type === "0" || type === "\0";
-        want = { path, size, keep: isFile && files.size < MAX_FILES && total + size <= MAX_TOTAL && keep(path, size) };
+        const kept = isFile && size <= MAX_FILE && files.size < MAX_FILES && total + size <= MAX_TOTAL && keep(path, size);
+        entry = { path, size, keep: kept, skipLeft: kept ? 0 : size, padLeft };
       }
-      const padded = Math.ceil(want.size / 512) * 512;
-      if (buf.length < padded) break;
-      if (want.keep) {
-        const data: string = buf.subarray(0, want.size).toString("utf8");
-        if (want.path === "\0longname") longName = data.replace(/\0.*$/s, "");
-        else if (want.path === "\0pax") longName = data.match(/(?:^|\n)\d+ path=([^\n]*)\n/)?.[1] ?? null;
+      if (entry.keep) {
+        if (q.length < entry.size) break;
+        const data: string = q.take(entry.size).toString("utf8");
+        if (entry.path === "\0longname") longName = data.replace(/\0.*$/s, "");
+        else if (entry.path === "\0pax") longName = data.match(/(?:^|\n)\d+ path=([^\n]*)\n/)?.[1] ?? null;
         else {
-          files.set(want.path, data);
-          total += want.size;
+          files.set(entry.path, data);
+          total += entry.size;
         }
+        entry.keep = false;
       }
-      buf = buf.subarray(padded);
-      want = null;
+      if (entry.skipLeft > 0) {
+        entry.skipLeft -= q.skip(entry.skipLeft);
+        if (entry.skipLeft > 0) break;
+      }
+      if (entry.padLeft > 0) {
+        entry.padLeft -= q.skip(entry.padLeft);
+        if (entry.padLeft > 0) break;
+      }
+      entry = null;
     }
   }
   return files;
@@ -172,21 +272,43 @@ async function untar(stream: Readable, keep: (path: string, size: number) => boo
 
 const wanted = (path: string, size: number) => CODE.test(path) && !SKIP_DIR.test(path) && size <= MAX_FILE;
 
-/** Downloads `https://...tar.gz` and indexes its code files. */
-export async function indexFromTarball(url: string, headers: Record<string, string> = {}): Promise<RepoIndex | null> {
-  const res = await fetch(url, { headers: { "user-agent": "jaagteraho-watcher", ...headers }, signal: AbortSignal.timeout(60_000) }).catch(() => null);
-  if (!res?.ok || !res.body) return null;
-  if (Number(res.headers.get("content-length") ?? 0) > MAX_DOWNLOAD) return null;
-  let seen = 0;
-  const body = Readable.fromWeb(res.body as import("node:stream/web").ReadableStream);
-  body.on("data", (c: Buffer) => {
-    seen += c.length;
-    if (seen > MAX_DOWNLOAD) body.destroy(new Error("repository too large"));
-  });
+/**
+ * Downloads `https://...tar.gz` and indexes its code files. One time limit covers the download, the
+ * decompression and the parsing; compressed and decompressed sizes are both capped.
+ */
+export async function indexFromTarball(url: string, headers: Record<string, string> = {}, opts: { timeoutMs?: number; maxDownload?: number; maxUnpacked?: number } = {}): Promise<RepoIndex | null> {
+  const timeoutMs = opts.timeoutMs ?? LOAD_TIME_MS;
+  const maxDownload = opts.maxDownload ?? MAX_DOWNLOAD;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(new Error("repository took too long to read")), timeoutMs);
+  const deadline = Date.now() + timeoutMs;
+  let body: Readable | null = null;
+  let gunzip: ReturnType<typeof createGunzip> | null = null;
   try {
-    return new RepoIndex(await untar(body.pipe(createGunzip()), wanted));
+    const res = await fetch(url, { headers: { "user-agent": "jaagteraho-watcher", ...headers }, signal: ctrl.signal });
+    if (!res.ok || !res.body) return null;
+    if (Number(res.headers.get("content-length") ?? 0) > maxDownload) return null;
+    let seen = 0;
+    body = Readable.fromWeb(res.body as import("node:stream/web").ReadableStream);
+    gunzip = createGunzip();
+    const g = gunzip;
+    body.on("data", (c: Buffer) => {
+      seen += c.length;
+      if (seen > maxDownload) g.destroy(new Error("repository too large"));
+    });
+    body.on("error", (e) => g.destroy(e));
+    ctrl.signal.addEventListener("abort", () => g.destroy(new Error("repository took too long to read")));
+    const files = await untar(body.pipe(g), wanted, { maxUnpacked: opts.maxUnpacked, deadline });
+    const index = new RepoIndex(files);
+    await index.buildDefinitions();
+    if (Date.now() > deadline) return null;
+    return index;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
+    body?.destroy();
+    gunzip?.destroy();
   }
 }
 
@@ -211,7 +333,9 @@ export async function indexFromFolder(root: string): Promise<RepoIndex> {
     }
   };
   await walk(base);
-  return new RepoIndex(files);
+  const index = new RepoIndex(files);
+  await index.buildDefinitions();
+  return index;
 }
 
 /** A few recent snapshots, so a burst of errors from one app downloads its code once. */

@@ -161,13 +161,15 @@ const LOOKUP_TOOLS: Anthropic.Tool[] = [
   },
 ];
 
+const MAP_NAMES = 60;
 const COMMON = new Set(["len", "str", "int", "isinstance", "getattr", "setattr", "hasattr", "list", "dict", "set", "tuple", "print", "range", "super", "type", "self", "cls", "get", "append", "join", "format", "items", "keys", "values", "pop", "update", "split", "strip", "startswith", "endswith", "replace", "encode", "decode", "lower", "upper", "extend", "add", "copy", "sorted", "any", "all", "min", "max", "map", "zip", "iter", "next", "bool", "float", "repr", "id", "open", "callable", "enumerate", "filter", "return", "if", "for", "while", "not", "and", "or", "in", "is", "Error", "Exception"]);
 
 /**
  * Code-picked pointers for the model: where the functions called by the failing code are defined (when not
  * shown), and where fixed parts of the error message appear in the code. A few hundred tokens.
  */
-export function repoMap(index: RepoIndex, files: SourceFile[], message: string): string {
+export async function repoMap(index: RepoIndex, files: SourceFile[], message: string): Promise<string> {
+  await index.buildDefinitions();
   const shown = new Set(files.map((f) => index.resolve(f.path) ?? f.path));
   const calls: string[] = [];
   const seen = new Set<string>();
@@ -177,6 +179,7 @@ export function repoMap(index: RepoIndex, files: SourceFile[], message: string):
       for (const m of body.matchAll(/\b([A-Za-z_]\w{2,})\s*\(/g)) {
         const name = m[1];
         if (seen.has(name) || COMMON.has(name) || /^(def|class|function)$/.test(name)) continue;
+        if (seen.size >= MAP_NAMES) break;
         seen.add(name);
         // Skip names defined in a file already shown, and test helpers.
         const defs = index.definitions(name, 5);
@@ -191,7 +194,7 @@ export function repoMap(index: RepoIndex, files: SourceFile[], message: string):
     .filter((p) => !/^(Traceback|During handling)/.test(p))
     .slice(0, 3);
   const said: string[] = [];
-  for (const p of pieces) for (const h of index.search(p, 6).filter((x) => !SECONDARY.test(x.path)).slice(0, 3)) said.push(`"${p.slice(0, 60)}" -> ${h.path}:${h.line}: ${h.text.slice(0, 120)}`);
+  for (const p of pieces) for (const h of (await index.search(p, 6)).filter((x) => !SECONDARY.test(x.path)).slice(0, 3)) said.push(`"${p.slice(0, 60)}" -> ${h.path}:${h.line}: ${h.text.slice(0, 120)}`);
   return [
     calls.length ? `Functions called by the failing code, defined in files not shown:\n${calls.join("\n")}` : "",
     said.length ? `Where the error message's text appears in the code:\n${said.slice(0, 8).join("\n")}` : "",
@@ -199,7 +202,7 @@ export function repoMap(index: RepoIndex, files: SourceFile[], message: string):
 }
 
 /** Runs one lookup. Files the model reads are added to `read` so its edits can be checked against them. */
-export function runLookup(index: RepoIndex, name: string, input: Record<string, unknown>, read: Map<string, SourceFile>): string {
+export async function runLookup(index: RepoIndex, name: string, input: Record<string, unknown>, read: Map<string, SourceFile>): Promise<string> {
   const note = (path: string) => {
     if (!read.has(path)) read.set(path, { path, text: index.files.get(path) ?? "", focus: [], related: true });
   };
@@ -209,7 +212,7 @@ export function runLookup(index: RepoIndex, name: string, input: Record<string, 
     return hits.map((h) => (note(h.path), `<file path="${h.path}">\n${showDefinition(index, h.path, h.line)}\n</file>`)).join("\n");
   }
   if (name === "search_code") {
-    const hits = index.search(String(input.text ?? ""));
+    const hits = await index.search(String(input.text ?? ""));
     if (!hits.length) return "No matches.";
     return hits.map((h) => `${h.path}:${h.line}: ${h.text}`).join("\n");
   }
@@ -233,6 +236,11 @@ export type DiagnosisOutput = {
   lookups: string[];
 };
 
+export type DiagnosisOptions = {
+  /** Checked before every follow-up round (for example the owner's remaining credit). False stops the diagnosis. */
+  budgetOk?: () => boolean;
+};
+
 export async function runDiagnosis(
   ai: AI,
   event: { exception_type: string; message: string; transaction: string | null; frames: CleanFrame[] },
@@ -240,37 +248,70 @@ export async function runDiagnosis(
   sourceMoved: boolean,
   change: Change | null = null,
   index: RepoIndex | null = null,
+  opts: DiagnosisOptions = {},
 ): Promise<DiagnosisOutput | { error: string }> {
   const model = ai.guard.pick(ai.diagnosisModel, ai.decisionModel);
   if (!model) return { error: "spending limit reached" };
+  const useTools = index !== null && process.env.JR_DIAGNOSIS_LOOKUPS !== "0";
+  if (!useTools) {
+    const only = await attempt(ai, model, event, files, sourceMoved, change, null, opts);
+    return "error" in only ? { error: only.error } : only;
+  }
+  const first = await attempt(ai, model, event, files, sourceMoved, change, index, opts);
+  if (!("error" in first)) return first;
+  if (first.budget) return { error: first.error };
+  // A failed lookup round must not cost the owner the diagnosis: fall back once to the single call.
+  if (opts.budgetOk && !opts.budgetOk()) return { error: "spending limit reached" };
+  const again = ai.guard.pick(ai.diagnosisModel, ai.decisionModel);
+  if (!again) return { error: "spending limit reached" };
+  const second = await attempt(ai, again, event, files, sourceMoved, change, null, opts);
+  if ("error" in second) return { error: `${first.error}; without lookups: ${second.error}` };
+  return { ...second, cost: second.cost + first.cost, input_tokens: second.input_tokens + first.input_tokens, output_tokens: second.output_tokens + first.output_tokens };
+}
 
+type Attempt = DiagnosisOutput | { error: string; budget?: boolean; cost: number; input_tokens: number; output_tokens: number };
+
+async function attempt(
+  ai: AI,
+  model: string,
+  event: { exception_type: string; message: string; transaction: string | null; frames: CleanFrame[] },
+  files: SourceFile[],
+  sourceMoved: boolean,
+  change: Change | null,
+  index: RepoIndex | null,
+  opts: DiagnosisOptions,
+): Promise<Attempt> {
   // The whole stack (up to 25 frames), app code and libraries, so callers far from the crash are visible too.
   const all = event.frames;
   const listed = all.length > 25 ? [...all.slice(0, 5), null, ...all.slice(-20)] : all;
   const stack = listed
     .map((f) => (f ? `${f.filename ?? f.abs_path}:${f.lineno} in ${f.function}${f.in_app ? "" : " (library or caller, not app code)"}\n    ${f.context_line?.trim() ?? ""}` : "    ... (frames not shown)"))
     .join("\n");
-  const useTools = index !== null && process.env.JR_DIAGNOSIS_LOOKUPS !== "0";
-  const map = useTools ? repoMap(index, files, event.message) : "";
-  const content = [
-    fence("event", `Route: ${event.transaction ?? "unknown"}\nError: ${event.exception_type}: ${event.message}\nStack (oldest first):\n${stack}`),
-    ...files.map((f) => `<file path="${f.path}"${f.related ? ' role="imported by the code above, not in the stack trace"' : ""}>\n${numbered(f.text, f.focus, undefined, undefined, undefined, useTools)}\n</file>`),
-    map ? fence("map", map) : "",
-    change ? fence("change", `${describeChange(change)}\nFiles changed: ${change.files.slice(0, 15).join(", ") || "unknown"}`) : "",
-    sourceMoved
-      ? "Note: the code at the reported line differs from the file shown, so the deployed version may be different. Say so, and propose edits only if you are sure they still apply."
-      : "",
-    "Diagnose this error.",
-  ].filter(Boolean).join("\n\n");
-
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: [{ type: "text", text: content, cache_control: { type: "ephemeral" } }] }];
-  const read = new Map<string, SourceFile>();
-  const lookups: string[] = [];
+  const useTools = index !== null;
   let cost = 0;
   let input = 0;
   let output = 0;
   try {
+    const map = index ? await repoMap(index, files, event.message) : "";
+    const content = [
+      fence("event", `Route: ${event.transaction ?? "unknown"}\nError: ${event.exception_type}: ${event.message}\nStack (oldest first):\n${stack}`),
+      ...files.map((f) => `<file path="${f.path}"${f.related ? ' role="imported by the code above, not in the stack trace"' : ""}>\n${numbered(f.text, f.focus, undefined, undefined, undefined, useTools)}\n</file>`),
+      map ? fence("map", map) : "",
+      change ? fence("change", `${describeChange(change)}\nFiles changed: ${change.files.slice(0, 15).join(", ") || "unknown"}`) : "",
+      sourceMoved
+        ? "Note: the code at the reported line differs from the file shown, so the deployed version may be different. Say so, and propose edits only if you are sure they still apply."
+        : "",
+      "Diagnose this error.",
+    ].filter(Boolean).join("\n\n");
+
+    const messages: Anthropic.MessageParam[] = [{ role: "user", content: useTools ? [{ type: "text", text: content, cache_control: { type: "ephemeral" } }] : content }];
+    const read = new Map<string, SourceFile>();
+    const lookups: string[] = [];
     for (let round = 0; ; round++) {
+      // The spend cap and the owner's credit are checked again before every follow-up call.
+      if (round > 0 && (ai.guard.pick(ai.diagnosisModel, ai.decisionModel) !== model || (opts.budgetOk && !opts.budgetOk()))) {
+        return { error: "spending limit reached", budget: true, cost, input_tokens: input, output_tokens: output };
+      }
       const last = !useTools || round >= MAX_LOOKUP_ROUNDS || lookups.length >= MAX_LOOKUPS;
       const r = await ai.client.messages.parse(
         {
@@ -291,19 +332,21 @@ export async function runDiagnosis(
         const calls = r.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
         // Thinking and tool-use blocks go back unchanged; text blocks lose the SDK's parsed field.
         messages.push({ role: "assistant", content: r.content.map((b) => (b.type === "text" ? { type: "text" as const, text: b.text } : b)) as Anthropic.ContentBlockParam[] });
-        const results: Anthropic.ToolResultBlockParam[] = calls.map((c) => {
+        const results: Anthropic.ToolResultBlockParam[] = [];
+        for (const c of calls) {
           const allowed = lookups.length < MAX_LOOKUPS;
           lookups.push(`${c.name} ${JSON.stringify(c.input).slice(0, 120)}`);
-          const text = allowed ? runLookup(index!, c.name, (c.input ?? {}) as Record<string, unknown>, read) : "Lookup limit reached. Answer with what you have.";
-          return { type: "tool_result", tool_use_id: c.id, content: text.slice(0, 24_000) };
-        });
+          const text = allowed ? await runLookup(index!, c.name, (c.input ?? {}) as Record<string, unknown>, read) : "Lookup limit reached. Answer with what you have.";
+          results.push({ type: "tool_result", tool_use_id: c.id, content: text.slice(0, 24_000) });
+        }
+        if (!results.length) return { error: "model asked for a lookup without naming one", cost, input_tokens: input, output_tokens: output };
         // Keep the cache warm for the next round: mark the newest block.
         results[results.length - 1] = { ...results[results.length - 1], cache_control: { type: "ephemeral" } };
         const lastNext = round + 1 >= MAX_LOOKUP_ROUNDS || lookups.length >= MAX_LOOKUPS;
         messages.push({ role: "user", content: lastNext ? [...results, { type: "text", text: "No more lookups. Give the diagnosis now, naming the most likely file and line." }] : results });
         continue;
       }
-      if (r.stop_reason !== "end_turn" || !r.parsed_output) return { error: `model stopped: ${r.stop_reason}` };
+      if (r.stop_reason !== "end_turn" || !r.parsed_output) return { error: `model stopped: ${r.stop_reason}`, cost, input_tokens: input, output_tokens: output };
       const shown = new Set(files.map((f) => f.path));
       return {
         result: r.parsed_output,
@@ -316,6 +359,6 @@ export async function runDiagnosis(
       };
     }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : String(e) };
+    return { error: e instanceof Error ? e.message : String(e), cost, input_tokens: input, output_tokens: output };
   }
 }
