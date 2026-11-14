@@ -18,7 +18,7 @@ npx jaagteraho test                 # send a test error (reads SENTRY_DSN or .en
 
 Running it twice changes nothing. Nothing is sent anywhere except the new app's name (to register it) and the one test error.
 
-By default `init` registers the app with the hosted JaagteRaho API (`https://jr-api.15-252-108-184.sslip.io`). Self-hosting? Set `JAAGTERAHO_URL` or pass `--server https://your-watcher`.
+By default `init` registers the app with the hosted JaagteRaho API (`https://jr-api.139-84-156-94.sslip.io`). Self-hosting? Set `JAAGTERAHO_URL` or pass `--server https://your-watcher`.
 
 Needs Node.js 18.17 or newer. Works on macOS, Linux and Windows.
 
