@@ -16,7 +16,7 @@ const Edit = z.object({ file: z.string().max(300), find: z.string().max(20_000),
 const Base = z.union([z.object({ kind: z.literal("bench"), app: z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/), edits: z.array(Edit).max(10).optional() }), z.object({ kind: z.literal("sandbox") })]);
 const Files = z.record(z.string().max(300), z.string().max(400_000)).refine((m) => Object.keys(m).length <= 5, "too many files");
 const JobSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("trigger"), base: Base, code: z.string().max(20_000) }),
+  z.object({ kind: z.literal("trigger"), base: Base, code: z.string().max(20_000), patched: Files.optional(), respond: z.boolean().optional() }),
   z.object({ kind: z.literal("hidden"), base: Base, patched: Files, test: z.string().max(100_000) }),
   z.object({ kind: z.literal("prove"), base: Base, patched: Files, test: z.string().max(100_000) }),
 ]);

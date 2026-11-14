@@ -21,13 +21,13 @@ export type Edit = { file: string; find: string; replace: string };
 export type Base = { kind: "bench"; app: string; edits?: Edit[]; dir?: string } | { kind: "sandbox" } | { kind: "local"; path: string };
 
 export type Job =
-  | { kind: "trigger"; base: Base; code: string }
+  | { kind: "trigger"; base: Base; code: string; patched?: Record<string, string>; respond?: boolean }
   | { kind: "hidden"; base: Base; patched: Record<string, string>; test: string }
   | { kind: "prove"; base: Base; patched: Record<string, string>; test: string };
 
 export type Outcome = "passed" | "failed" | "error";
 export type JobResult =
-  | { kind: "trigger"; status: number | null; signal: string | null; stderr: string; dir: string }
+  | { kind: "trigger"; status: number | null; signal: string | null; stderr: string; dir: string; response?: string | null }
   | { kind: "hidden"; outcome: Outcome }
   | { kind: "prove"; before: Outcome; after: Outcome };
 
@@ -245,20 +245,43 @@ export function judge(r: { status: number | null; signal: string | null; stdout:
   return "error";
 }
 
+const RESULT = "__JR_RESPONSE__";
+
+/**
+ * The trigger's last line is the request a user makes (handle(...)); with respond, its return value is
+ * printed so the playground can show the app's real answer once the bug is fixed. Our code, not visitor input.
+ */
+export function withResponse(code: string, node: boolean): string {
+  const lines = code.replace(/\s+$/, "").split("\n");
+  const last = lines.pop()!.trim().replace(/;$/, "");
+  if (!/^handle\(/.test(last)) return code;
+  return node
+    ? [...lines, `process.stdout.write("\\n${RESULT}" + JSON.stringify(${last}) + "\\n");`].join("\n")
+    : [...lines, `import json as _jr_json`, `print("\\n${RESULT}" + _jr_json.dumps(${last}, default=str))`].join("\n");
+}
+
+function responseOf(stdout: string): string | null {
+  const at = stdout.lastIndexOf(RESULT);
+  if (at < 0) return null;
+  return stdout.slice(at + RESULT.length).split("\n")[0].slice(0, 4000);
+}
+
 export async function execJob(job: Job, opts: ExecOptions): Promise<JobResult> {
   const dirs: string[] = [];
   try {
     if (job.kind === "trigger") {
-      const dir = await prepare(job.base, opts);
+      const dir = await prepare(job.base, opts, job.patched ?? {});
       dirs.push(dir);
-      if (isNode(dir)) {
-        const r = await run(process.execPath, [...nodeArgs(dir), "-e", job.code], dir, RUN_TIMEOUT_MS);
-        return { kind: "trigger", status: r.status, signal: r.signal, stderr: r.stderr, dir };
+      const node = isNode(dir);
+      const code = job.respond ? withResponse(job.code, node) : job.code;
+      if (node) {
+        const r = await run(process.execPath, [...nodeArgs(dir), "-e", code], dir, RUN_TIMEOUT_MS);
+        return { kind: "trigger", status: r.status, signal: r.signal, stderr: r.stderr, dir, response: job.respond ? responseOf(r.stdout) : undefined };
       }
       // The confinement is imported from a file, so the trigger's own line numbers stay close to what it says.
       await writeFile(join(dir, "jr_sandbox.py"), PY_PRELUDE);
-      const r = await run(PY(), ["-E", "-s", "-c", `import jr_sandbox\n${job.code}`], dir, RUN_TIMEOUT_MS);
-      return { kind: "trigger", status: r.status, signal: r.signal, stderr: r.stderr, dir };
+      const r = await run(PY(), ["-E", "-s", "-c", `import jr_sandbox\n${code}`], dir, RUN_TIMEOUT_MS);
+      return { kind: "trigger", status: r.status, signal: r.signal, stderr: r.stderr, dir, response: job.respond ? responseOf(r.stdout) : undefined };
     }
     if (job.kind === "hidden") {
       const dir = await prepare(job.base, opts, job.patched);
