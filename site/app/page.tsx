@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { headers } from "next/headers";
 import benchmarks from "./evidence/benchmarks.json";
 import { Clips } from "./home/clips";
 import { HomeMotion } from "./home/home-motion";
@@ -7,15 +6,13 @@ import { LiveStrip } from "./home/live-strip";
 import { NightStory } from "./home/night-story";
 import { Radar } from "./home/radar";
 import { Shield } from "./home/shield";
-import { TryIt } from "./home/try-it";
 import { Watches } from "./home/watches";
 import { CLIPS } from "./site";
 import "./home/home.css";
 
 const d = (n: number) => ({ "--d": n }) as React.CSSProperties;
 
-export default async function Home() {
-  const country = (await headers()).get("x-vercel-ip-country");
+export default function Home() {
   const bench = benchmarks.jr_bench.after;
   const real = benchmarks.real_bugs.before;
 
@@ -53,7 +50,7 @@ export default async function Home() {
       <NightStory />
 
       {/* 3. What it watches */}
-      <section className="section watch-band" id="watches" aria-labelledby="watch-h">
+      <section className="section screen watch-band" id="watches" aria-labelledby="watch-h" data-pin-steps="4">
         <div className="frame">
           <div className="section-head">
             <p className="eyebrow" data-rv>
@@ -63,7 +60,7 @@ export default async function Home() {
               Not every error deserves your night. <em>These might.</em>
             </h2>
             <p className="lead" data-rv style={d(2)}>
-              Pick a part of your app to see what JaagteRaho does when it breaks, and which written rule decides.
+              Scroll, or pick a part of your app: what JaagteRaho does when it fails, and which written rule decides.
             </p>
           </div>
           <Watches />
@@ -71,7 +68,7 @@ export default async function Home() {
       </section>
 
       {/* 4. See it work */}
-      <section className="section clips-band" id="see" aria-labelledby="see-h">
+      <section className="section screen clips-band" id="see" aria-labelledby="see-h">
         <div className="frame">
           <div className="section-head">
             <p className="eyebrow" data-rv>
@@ -86,7 +83,7 @@ export default async function Home() {
       </section>
 
       {/* 5. How safe is it */}
-      <section className="section safe-band" id="safety" aria-labelledby="safe-h">
+      <section className="section screen safe-band" id="safety" aria-labelledby="safe-h" data-pin-steps="5">
         <div className="frame">
           <div className="section-head">
             <p className="eyebrow" data-rv>
@@ -103,23 +100,8 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* 6. Try it yourself */}
-      <section className="section try-band" id="try" aria-labelledby="try-h">
-        <div className="frame">
-          <div className="section-head">
-            <p className="eyebrow live" data-rv>
-              <i aria-hidden="true" /> Live · no sign-up
-            </p>
-            <h2 id="try-h" className="h-section" data-rv style={d(1)}>
-              Don&apos;t take our word. <em>Break something.</em>
-            </h2>
-          </div>
-          <TryIt country={country && /^[A-Z]{2}$/.test(country) ? country : null} />
-        </div>
-      </section>
-
       {/* 7. Proof */}
-      <section className="section proof4" id="proof" aria-labelledby="proof-h">
+      <section className="section screen proof4" id="proof" aria-labelledby="proof-h">
         <div className="frame">
           <div className="section-head">
             <p className="eyebrow" data-rv>
@@ -131,36 +113,45 @@ export default async function Home() {
           </div>
           <ul className="nums">
             <li data-rv>
-              <b>
-                <span data-count={bench.alerted}>{bench.alerted}</span>
-                <small>/{bench.bugs}</small>
-              </b>
-              <span>planted bugs reached the owner</span>
+              <Link href="/evidence#bench-h">
+                <b>
+                  <span data-count={bench.alerted}>{bench.alerted}</span>
+                  <small>/{bench.bugs}</small>
+                </b>
+                <span>planted bugs reached the owner</span>
+              </Link>
             </li>
             <li data-rv style={d(1)}>
-              <b>
-                <span data-count={bench.shown_wrong}>{bench.shown_wrong}</span>
-              </b>
-              <span>wrong fixes among the {bench.shown} shown, judged by hidden tests</span>
+              <Link href="/evidence#bench-h">
+                <b>
+                  <span data-count={bench.shown_wrong}>{bench.shown_wrong}</span>
+                </b>
+                <span>wrong fixes among the {bench.shown} it showed</span>
+              </Link>
             </li>
             <li data-rv style={d(2)}>
-              <b>
-                <span data-count={bench.noise_quiet}>{bench.noise_quiet}</span>
-                <small>/{bench.noise}</small>
-              </b>
-              <span>harmless errors kept quiet</span>
+              <Link href="/evidence#bench-h">
+                <b>
+                  <span data-count={bench.median_decision_seconds}>{bench.median_decision_seconds}</span>
+                  <small> s</small>
+                </b>
+                <span>median time to decide: wake you, message you, or stay quiet</span>
+              </Link>
             </li>
             <li data-rv style={d(3)}>
-              <b>
-                <span data-count={bench.median_fix_seconds}>{bench.median_fix_seconds}</span>
-                <small> s</small>
-              </b>
-              <span>median time to a fix that passed every check</span>
+              <Link href="/evidence#bench-h">
+                <b>
+                  <span data-count={(bench.cost_per_error_usd * 100).toFixed(1)}>{(bench.cost_per_error_usd * 100).toFixed(1)}</span>
+                  <small>¢</small>
+                </b>
+                <span>average AI cost per error (US cents), diagnosis and fix included</span>
+              </Link>
             </li>
           </ul>
           <p className="nums-note" data-rv>
-            JR-Bench: {bench.bugs} planted bugs and {bench.noise} harmless errors in 7 live apps we built and run. On {real.in_trace.cases} real bugs from open-source
-            projects, it named the right file {real.in_trace.right_file} of {real.in_trace.cases} times when the traceback shows it.{" "}
+            JR-Bench: {bench.bugs} planted bugs and {bench.noise} harmless errors (all {bench.noise} kept quiet) in 7 apps we built and run; a fix ready in
+            a median {bench.median_fix_seconds} s. On {real.in_trace.cases} real bugs from open-source projects, it named the right file{" "}
+            {real.in_trace.right_file} of {real.in_trace.cases} times when the traceback shows it.{" "}
             <Link className="textlink" href="/evidence">
               How each number was measured →
             </Link>
@@ -169,7 +160,7 @@ export default async function Home() {
       </section>
 
       {/* 8. Close */}
-      <section className="close4" aria-labelledby="close-h">
+      <section className="close4 screen" aria-labelledby="close-h">
         <div className="close4-glow" aria-hidden="true" />
         <form className="frame close4-inner" action="/connect" method="get">
           <h2 id="close-h" className="h-section" data-rv>

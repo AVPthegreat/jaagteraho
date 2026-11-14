@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useScrollStep } from "./use-step";
 import { GATE_SRC, HEAL_SRC } from "../site";
 
 /*
@@ -55,8 +56,10 @@ const SHIELD = "M200 24 L340 78 V196 C340 290 278 350 200 378 C122 350 60 290 60
 
 export function Shield() {
   const [on, setOn] = useState(0);
+  const box = useRef<HTMLDivElement | null>(null);
+  useScrollStep(box, setOn);
   return (
-    <div className="shield" data-shield>
+    <div ref={box} className="shield" data-shield>
       <figure className="shield-art" aria-hidden="true">
         <svg viewBox="0 0 400 400" focusable="false">
           {LAYERS.map((l, i) => {
