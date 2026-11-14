@@ -383,7 +383,7 @@ export class Worker {
     const fixId = Number(
       this.db
         .prepare("INSERT INTO fixes (diagnosis_id, diff, gate_result, status, created_at) VALUES (?, ?, ?, ?, ?)")
-        .run(diagnosisId, gate.diff, JSON.stringify({ passed: gate.passed, level: gate.level, reasons: gate.reasons, changed_lines: gate.changed_lines, review: gate.review, test_run: testRun }), status, new Date().toISOString())
+        .run(diagnosisId, gate.diff, JSON.stringify({ passed: gate.passed, level: gate.level, reasons: gate.reasons, changed_lines: gate.changed_lines, review: gate.review, test_run: testRun, risky: gate.risky }), status, new Date().toISOString())
         .lastInsertRowid,
     );
     feed("fix", { fix_id: fixId, status, level: gate.level, diff: gate.passed ? gate.diff : null, reasons: gate.reasons, changed_lines: gate.changed_lines, test_run: testRun, test_code: gate.passed ? out.result.regression_test?.code || null : null });

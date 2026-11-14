@@ -462,7 +462,8 @@ export class Healer {
       fix_status: info.status,
       gate: JSON.parse(info.gate_result),
       files: edits.map((e) => e.file),
-      risky: riskyAdditions(edits),
+      // Recomputed here, plus what the gate found with the full original files (modules the file already imports).
+      risky: [...new Set([...riskyAdditions(edits), ...((JSON.parse(info.gate_result) as { risky?: string[] }).risky ?? [])])],
       authenticated: this.incidentAuthenticated(info.incident_id),
       heals_last_night: this.healsSince(info.project_id, session, now - NIGHT_MS),
       now,
@@ -518,7 +519,7 @@ export class Healer {
   }
 
   private latestRelease(projectId: number): string | null {
-    const r = this.db.prepare("SELECT release FROM events WHERE project_id = ? AND release IS NOT NULL ORDER BY id DESC LIMIT 1").get(projectId) as { release: string } | undefined;
+    const r = this.db.prepare("SELECT release FROM events WHERE project_id = ? AND release IS NOT NULL AND authenticated = 1 ORDER BY id DESC LIMIT 1").get(projectId) as { release: string } | undefined;
     return r?.release ?? null;
   }
 
@@ -805,7 +806,7 @@ export class Healer {
         if (h.release_before) {
           // The deploy is the first error report from a newer release after the merge.
           const seen = this.db
-            .prepare("SELECT MIN(received_at) AS at FROM events WHERE project_id = ? AND received_at > ? AND release IS NOT NULL AND release != ?")
+            .prepare("SELECT MIN(received_at) AS at FROM events WHERE project_id = ? AND received_at > ? AND release IS NOT NULL AND release != ? AND authenticated = 1")
             .get(h.project_id, h.applied_at, h.release_before) as { at: string | null };
           if (seen.at) this.update(id, "applied", "deploy seen: a newer release is reporting", { deployed_at: seen.at });
           else {

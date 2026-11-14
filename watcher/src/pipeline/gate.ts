@@ -34,23 +34,65 @@ const RISKY_ADDED: Array<[RegExp, string]> = [
   [/\brequire\s*\(|\bimport\s*\(/, "loads a module at run time"],
   [/\b(exec|eval|compile|execfile|__import__|globals|getattr|setattr|Function)\s*\(|\b(importlib|__import__|__builtins__|__globals__|__subclasses__)\b|\bnew\s+Function\b/, "runs dynamic code"],
   [/\b(subprocess|child_process|os\.(system|popen|exec\w*|spawn\w*|fork|kill|remove|unlink|rmdir|rename|chmod|chown)|execSync|spawnSync|execFile)\b/, "starts processes or changes files"],
-  [/\b(socket|urllib|urlopen|httpx|requests|aiohttp|http\.client|https?\.(get|request)|fetch|axios|XMLHttpRequest|WebSocket|net\.connect|dgram|smtplib|ftplib|paramiko)\b/, "talks to the network"],
+  [/\b(socket|urllib\d*|urlopen|httpx|requests|aiohttp|http\.client|https?\.(get|request)|fetch|axios|XMLHttpRequest|WebSocket|websockets?|net\.connect|dgram|tls\.connect|undici|superagent|got|smtplib|ftplib|telnetlib|paramiko|boto3|grpc|PoolManager)\b/, "talks to the network"],
   [/\b(pickle|marshal|ctypes|cffi|shelve|dill|yaml\.load)\b/, "uses unsafe loading"],
   [/\b(fs\.(write|append|rm|unlink|create|copy|rename|mkdir|chmod)\w*|writeFile\w*|open\s*\([^)]*["'][wax+])/, "writes files"],
-  [/\b(base64|b64decode|b32decode|atob|btoa|binascii|unhexlify|fromhex|codecs\.decode|fromCharCode|chr\s*\(|decodeURIComponent|Buffer\.from\s*\([^)]*,\s*["'](hex|base64))/, "decodes hidden data"],
+  [/\b(base64|b64decode|b32decode|atob|btoa|binascii|unhexlify|fromhex|codecs\.decode|zlib|gzip|fromCharCode|chr\s*\(|decodeURIComponent|Buffer\.from\s*\([^)]*,\s*["'](hex|base64))/, "decodes hidden data"],
+  [/\bbytes\s*\([^)]*\)\s*\.decode|\bbytearray\s*\(|\.decode\s*\(\s*["'](base64|hex|rot.?13|zlib|uu|bz2)|\.encode\s*\(\s*["']rot.?13/, "decodes hidden data"],
+  [/["'`]{2}\s*\.join\s*\(|\.join\s*\(\s*(map\s*\(\s*(chr|str)|\[\s*["'`])|\.join\s*\(\s*["'`]{2}\s*\)/, "builds text from pieces (a URL or code)"],
   [/:\/\/|["'`](h|ht|htt|https?|ftp|www)["'`.:]?\s*\+|\+\s*["'`](t|tp|ttp|ps?|s?:\/*)["'`]/, "builds a URL"],
   [/\bprocess\.env\b|\bos\.environ\b|\bos\.getenv\b/, "reads secrets from the environment"],
 ];
 
-/** Reasons a fix must not be applied without a person: risky code on any added line. */
-export function riskyAdditions(edits: Array<{ find: string; replace: string }>): string[] {
+// Modules that reach the network or start processes. A name the file already imports from one of them,
+// used on an added line, is as risky as importing it (e.g. "import requests as r" then "r.post(...)").
+const REACHING_MODULES = /^(requests|httpx|aiohttp|urllib\d*|http|https|socket|ssl|smtplib|ftplib|telnetlib|paramiko|subprocess|shutil|pty|boto3|botocore|grpc|websockets?|ws|net|tls|dgram|child_process|axios|node-fetch|got|undici|superagent|cross-fetch|fs|fs\/promises|ctypes|pickle|marshal)(\.|\/|$)/;
+
+/** Names a file binds to a reaching module (Python and JavaScript/TypeScript imports). */
+export function reachingNames(text: string): string[] {
+  const names = new Set<string>();
+  for (const m of text.matchAll(/^\s*import\s+([\w.]+)(?:\s+as\s+(\w+))?/gm)) if (REACHING_MODULES.test(m[1])) names.add(m[2] ?? m[1].split(".")[0]);
+  for (const m of text.matchAll(/^[ \t]*from[ \t]+([\w.]+)[ \t]+import[ \t]+(\([^)]*\)|[\w \t,]+)/gm)) {
+    if (!REACHING_MODULES.test(m[1])) continue;
+    for (const part of m[2].replace(/[()]/g, "").split(",")) {
+      const alias = part.trim().split(/\s+as\s+/).pop()?.trim();
+      if (alias) names.add(alias);
+    }
+  }
+  for (const m of text.matchAll(/import\s+(?:\*\s+as\s+)?(\w+)?\s*,?\s*(?:\{([^}]*)\})?\s*from\s+["']([^"']+)["']/g)) {
+    if (!REACHING_MODULES.test(m[3].replace(/^node:/, ""))) continue;
+    if (m[1]) names.add(m[1]);
+    for (const part of (m[2] ?? "").split(",")) {
+      const alias = part.trim().split(/\s+as\s+/).pop()?.trim();
+      if (alias) names.add(alias);
+    }
+  }
+  for (const m of text.matchAll(/(?:const|let|var)\s+(?:(\w+)|\{([^}]*)\})\s*=\s*(?:await\s+)?(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)/g)) {
+    if (!REACHING_MODULES.test(m[3].replace(/^node:/, ""))) continue;
+    if (m[1]) names.add(m[1]);
+    for (const part of (m[2] ?? "").split(",")) {
+      const alias = part.trim().split(":").pop()?.trim();
+      if (alias) names.add(alias);
+    }
+  }
+  return [...names].filter((n) => /^\w+$/.test(n));
+}
+
+/**
+ * Reasons a fix must not be applied without a person: risky code on any added line. originals (path ->
+ * full file text) also catches added lines that use a network or process module the file already imports.
+ */
+export function riskyAdditions(edits: Array<{ file?: string; find: string; replace: string }>, originals: Record<string, string> = {}): string[] {
   const out = new Set<string>();
   for (const e of edits) {
     const before = new Set(e.find.split("\n").map((l) => l.trim()));
+    const names = e.file && originals[e.file] ? reachingNames(originals[e.file]) : [];
+    const usesName = names.length ? new RegExp(`(^|[^\\w.])(${names.join("|")})\\s*[.(]`) : null;
     for (const line of e.replace.split("\n")) {
       const l = line.trim();
       if (!l || before.has(l)) continue;
       for (const [re, why] of RISKY_ADDED) if (re.test(line)) out.add(why);
+      if (usesName?.test(line)) out.add("uses a network or process module the file already imports");
     }
   }
   return [...out];
@@ -65,6 +107,8 @@ export type GateResult = {
   diff: string;
   patched: Record<string, string>;
   review?: { fix_quality: string; touches_sensitive: string; could_break: string; votes: number; unanimous?: boolean };
+  /** riskyAdditions with the original files: never shown as a reason, only stops a fix applying itself. */
+  risky?: string[];
 };
 
 const countLines = (s: string) => (s === "" ? 0 : s.split("\n").length);
@@ -220,5 +264,6 @@ export async function runGate(ai: AI | null, d: DiagnosisResult, shown: SourceFi
   if (quality === 2) concerns.push("the reviewer is not sure it removes the cause");
   if (review.touches_sensitive === "yes") concerns.push("it touches a sensitive area");
   if (review.could_break === "yes") concerns.push("it may change what some working requests get");
-  return { ...g, review, passed: true, level: concerns.length ? "caution" : "recommended", reasons: concerns };
+  const originals = Object.fromEntries(shown.map((f) => [f.path, f.text]));
+  return { ...g, review, passed: true, level: concerns.length ? "caution" : "recommended", reasons: concerns, risky: riskyAdditions(d.edits, originals) };
 }

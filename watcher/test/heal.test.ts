@@ -644,3 +644,66 @@ describe("security review fixes", () => {
     assert.equal(codes.filter((c) => c === 429).length, 2);
   });
 });
+
+describe("re-review fixes", () => {
+  it("forged events with a fake release cannot mark a deploy or set the old release", async () => {
+    const db = openDb(":memory:");
+    const { tg } = fakeTg();
+    const { github } = fakeGitHub({ autoMerge: "clean" });
+    const h = new Healer(db, tg, { twinFixed: "http://x", github });
+    const s = seed(db, { release: "v1" });
+    savePolicy(db, s.pid, { mode: "auto-now" });
+    const row = await h.onFix(s.inc, { session: null, action: "wake" });
+    // A forged event on another incident, after the apply, with a fake new release.
+    const other = Number(db.prepare("INSERT INTO incidents (project_id, fingerprint, exception_type, first_seen, last_seen) VALUES (?, 'o', 'E', ?, ?)").run(s.pid, iso(Date.now()), iso(Date.now())).lastInsertRowid);
+    addEvent(db, s.pid, other, Date.now() + 1000, false, "fake-v2");
+    const merged = Date.parse(row!.applied_at!);
+    await h.tick(merged + 20 * 60_000);
+    assert.equal(h.get(row!.id)!.deployed_at, null, "an unsigned release does not count as a deploy");
+    assert.equal(h.get(row!.id)!.status, "applied");
+    // latestRelease ignores unsigned events too.
+    const s2 = seed(db, { release: "v1" });
+    const o2 = Number(db.prepare("INSERT INTO incidents (project_id, fingerprint, exception_type, first_seen, last_seen) VALUES (?, 'o2', 'E', ?, ?)").run(s2.pid, iso(Date.now()), iso(Date.now())).lastInsertRowid);
+    addEvent(db, s2.pid, o2, Date.now() + 500, false, "fake-v7");
+    savePolicy(db, s2.pid, { mode: "auto-now" });
+    const r2 = await h.onFix(s2.inc, { session: null, action: "wake" });
+    assert.equal(r2?.release_before, "v1");
+  });
+
+  it("catches more ways to reach out or hide code, including modules the file already imports", async () => {
+    const { riskyAdditions, reachingNames } = await import("../src/pipeline/gate.js");
+    const cases: string[] = [
+      "    http = urllib3.PoolManager()",
+      "    r = httpx.get(u)",
+      "    async with aiohttp.ClientSession() as s:",
+      "    s = bytes([104, 105]).decode()",
+      "    s = blob.decode('base64')",
+      "    u = ''.join(['ht', 'tp:', '//x'])",
+      "    code = ''.join(map(chr, nums))",
+    ];
+    for (const line of cases) assert.ok(riskyAdditions([{ find: "x", replace: line }]).length > 0, line);
+    const py = "import requests as rq\nfrom subprocess import run as go\nimport json\n";
+    assert.deepEqual(reachingNames(py).sort(), ["go", "rq"]);
+    const js = 'import axios from "axios";\nconst { exec: sh } = require("node:child_process");\nimport { readFile } from "node:fs/promises";\n';
+    assert.deepEqual(reachingNames(js).sort(), ["axios", "readFile", "sh"]);
+    const edit = (replace: string) => [{ file: "app/views.py", find: "x = 1", replace }];
+    assert.match(riskyAdditions(edit("    rq.post(u, data)"), { "app/views.py": py }).join(), /already imports/);
+    assert.match(riskyAdditions(edit("    go(['ls'])"), { "app/views.py": py }).join(), /already imports/);
+    assert.deepEqual(riskyAdditions(edit("    x = data.get('k', 1)"), { "app/views.py": py }), []);
+    assert.deepEqual(riskyAdditions([EDIT], { [EDIT.file]: py }), []);
+  });
+
+  it("a gate-recorded risk (seen with the full file) blocks the apply", async () => {
+    const db = openDb(":memory:");
+    const { tg } = fakeTg();
+    const { github, calls } = fakeGitHub();
+    const h = new Healer(db, tg, { twinFixed: "http://x", github });
+    const s = seed(db);
+    const g = JSON.parse((db.prepare("SELECT gate_result FROM fixes WHERE id = ?").get(s.fix) as { gate_result: string }).gate_result);
+    db.prepare("UPDATE fixes SET gate_result = ? WHERE id = ?").run(JSON.stringify({ ...g, risky: ["uses a network or process module the file already imports"] }), s.fix);
+    savePolicy(db, s.pid, { mode: "auto-now" });
+    assert.equal(await h.onFix(s.inc, { session: null, action: "wake" }), null);
+    assert.match(h.check(s.fix, "owner", null).blocker ?? "", /already imports/);
+    assert.equal(calls.length, 0);
+  });
+});
