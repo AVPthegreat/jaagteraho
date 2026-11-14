@@ -1,0 +1,389 @@
+[
+  {
+    "repo": "pallets/jinja",
+    "issue": "https://github.com/pallets/jinja/issues/1448",
+    "fix": "https://github.com/pallets/jinja/pull/1455",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/jinja2/environment.py",
+      "src/jinja2/runtime.py",
+      "src/jinja2/utils.py"
+    ],
+    "lookups": [
+      "find_definition {\"name\":\"Environment.getattr\"}",
+      "search_code {\"text\":\"has no attribute\"}",
+      "find_definition {\"name\":\"CodeGenerator.visit_Getattr\"}",
+      "find_definition {\"name\":\"CodeGenerator.visit_Test\"}",
+      "find_definition {\"name\":\"CodeGenerator._filter_test_common\"}"
+    ],
+    "files_read": [
+      "src/jinja2/sandbox.py",
+      "src/jinja2/compiler.py"
+    ],
+    "fixed_files": [
+      "src/jinja2/runtime.py"
+    ],
+    "named": "src/jinja2/compiler.py:1713",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "Rendering a template failed because it read `a` from `d.test`, and `d.test` is an empty dict. Jinja raised an error instead of treating the value as missing. I can't say whether this is a bug in Jinja or just how the template is written, because I never saw the template.",
+    "cause_technical": "The error comes from template line 5. The generated code calls `environment.getattr(d.test, 'a')`. `Environment.getattr` (src/jinja2/environment.py:469-480) returns `self.undefined(obj=obj, name='a')`, which is correct. The `UndefinedError` is raised later, when that Undefined is used in some other way, such as a further attribute access, a call, or a filter. This points to the compiler code that handles chained attribute access (`CodeGenerator.visit_Getattr`, src/jinja2/compiler.py:1713), or to how the template guards the access, for example `is defined` or `default`. `visit_Getattr`, `visit_Test`, `_filter_test_common` and `Environment.getattr` all look correct as shown. The template source and the Undefined class (runtime.py) were not shown, so I can't confirm the cause. I'm not proposing an edit because any change would be a guess.",
+    "real_cause": "The base Undefined class mapped __contains__ to _fail_with_undefined_error (a change meant only for StrictUndefined), so an 'in' test on a default Undefined value raised UndefinedError.",
+    "seconds": 18,
+    "cost_usd": 0.0311
+  },
+  {
+    "repo": "pallets/click",
+    "issue": "https://github.com/pallets/click/issues/2355",
+    "fix": "https://github.com/pallets/click/pull/2554",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/click/_termui_impl.py",
+      "src/click/termui.py"
+    ],
+    "lookups": [
+      "search_code {\"text\":\"if WIN:\"}",
+      "search_code {\"text\":\"WIN =\"}",
+      "read_lines {\"path\":\"src/click/_compat.py\",\"start\":1,\"end\":20}",
+      "read_lines {\"path\":\"src/click/_termui_impl.py\",\"start\":625,\"end\":640}",
+      "read_lines {\"path\":\"src/click/_termui_impl.py\",\"start\":686,\"end\":730}"
+    ],
+    "files_read": [
+      "src/click/_compat.py"
+    ],
+    "fixed_files": [
+      "src/click/_compat.py"
+    ],
+    "named": "src/click/_termui_impl.py:687",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "On MSYS2/MinGW Python, `apio` crashed while downloading and showing a progress bar. Click tried to load a Unix-only terminal module that doesn't exist on that Python, so the install failed.",
+    "cause_technical": "In src/click/_compat.py line 15, `WIN` is False on MSYS2 (`not MSYS2`). So in src/click/_termui_impl.py around line 632, the `else` branch runs on this Windows-based Python. Its module-level `import tty` / `import termios` (lines 687-688) raise ModuleNotFoundError when ProgressBar is imported. The fix is to import them lazily inside raw_terminal, the only place they are used. That way importing the module, and so the progress bar, no longer needs them.",
+    "real_cause": "_compat.py computed WIN as False on MSYS2 Python (sys.version contains 'GCC'), so _termui_impl took the POSIX branch and imported tty/termios, which do not exist there.",
+    "seconds": 19,
+    "cost_usd": 0.0306
+  },
+  {
+    "repo": "encode/httpx",
+    "issue": "https://github.com/encode/httpx/issues/1203",
+    "fix": "https://github.com/encode/httpx/pull/1205",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "httpx/_models.py",
+      "httpx/_content_streams.py"
+    ],
+    "lookups": [
+      "read_lines {\"path\":\"httpx/_models.py\",\"start\":395,\"end\":530}",
+      "read_lines {\"path\":\"httpx/_models.py\",\"start\":340,\"end\":394}",
+      "read_lines {\"path\":\"httpx/_models.py\",\"start\":1,\"end\":2}"
+    ],
+    "files_read": [],
+    "fixed_files": [
+      "httpx/_models.py"
+    ],
+    "named": "httpx/_models.py:536",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Removing a header such as 'host' crashed with a KeyError even though the header was present. The header object keeps two copies of its data, and they had stopped matching.",
+    "cause_technical": "In httpx/_models.py, Headers keeps `_list` (raw pairs) and a separate `_dict` cache. `__getitem__` reads only `_list`, so `MutableMapping.pop('host')` finds the header there. `__delitem__` (line 536) then runs `del self._dict[del_key]`, which raises KeyError(b'host') when `_dict` has no such key. The likely way they diverge is in-place changes to `headers.raw`, which is documented as mutable and only changes `_list`. I did not confirm that. The fix is to make `__delitem__` use `_list` as the source of truth and tolerate a missing `_dict` entry. It should still raise KeyError when the header is in neither place.",
+    "real_cause": "Request.prepare() inserted auto headers directly into headers.raw (the internal _list) without updating the _dict index, so later deleting such a header (e.g. host) raised KeyError in __delitem__.",
+    "seconds": 16,
+    "cost_usd": 0.0328
+  },
+  {
+    "repo": "pallets/jinja",
+    "issue": "https://github.com/pallets/jinja/issues/1427",
+    "fix": "https://github.com/pallets/jinja/pull/1449",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/jinja2/idtracking.py",
+      "src/jinja2/compiler.py",
+      "src/jinja2/visitor.py",
+      "src/jinja2/utils.py"
+    ],
+    "lookups": [
+      "find_definition {\"name\":\"FrameSymbolVisitor.visit_AssignBlock\"}",
+      "find_definition {\"name\":\"FrameSymbolVisitor\"}",
+      "read_lines {\"path\":\"src/jinja2/idtracking.py\",\"start\":40,\"end\":230}",
+      "read_lines {\"path\":\"src/jinja2/idtracking.py\",\"start\":189,\"end\":232}"
+    ],
+    "files_read": [],
+    "fixed_files": [
+      "src/jinja2/compiler.py"
+    ],
+    "named": "src/jinja2/compiler.py:1564",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Compiling a template that has a block set (`{% set x %}...{% endset %}`) crashed the compiler. Users got an internal error instead of rendered output. It looks like a variable used inside the block, such as a loop variable, was wrongly treated as if it were being assigned outside the block.",
+    "cause_technical": "In compiler.py visit_AssignBlock (~line 1564), push_assign_tracking() runs before the block body is visited. Names stored while visiting the body are added to the same tracking set as the set target. Examples are a `for` or `with` target `x`, which visit_Name adds when it sees a loop frame or block frame. pop_assign_tracking(frame) then runs with the outer frame and calls frame.symbols.ref('x'). The outer frame never declared 'x', so idtracking.py Symbols.ref raises AssertionError. The fix is to start tracking only around the target visit. This is a diagnosis from reading the code. I could not run it, and I did not read visit_For or visit_With in the compiler to confirm the leak.",
+    "real_cause": "visit_For() never removed variables assigned inside a for loop from the enclosing _assign_stack, so a later {% set %} block's pop_assign_tracking() looked up a loop-local name the outer frame did not know.",
+    "seconds": 38,
+    "cost_usd": 0.0767
+  },
+  {
+    "repo": "encode/httpx",
+    "issue": "https://github.com/encode/httpx/issues/1082",
+    "fix": "https://github.com/encode/httpx/pull/1120",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "httpx/_models.py",
+      "httpx/_config.py",
+      "httpx/_client.py",
+      "httpx/_content_streams.py"
+    ],
+    "lookups": [
+      "find_definition {\"name\":\"get_environment_proxies\"}",
+      "read_lines {\"path\":\"httpx/_utils.py\",\"start\":255,\"end\":290}",
+      "read_lines {\"path\":\"httpx/_utils.py\",\"start\":1,\"end\":5}",
+      "search_code {\"text\":\"mounts[scheme] = proxy_info[scheme]\"}"
+    ],
+    "files_read": [
+      "httpx/_utils.py"
+    ],
+    "fixed_files": [
+      "httpx/_utils.py"
+    ],
+    "named": "httpx/_utils.py:314",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": false,
+    "gate_reasons": [
+      "adds a URL"
+    ],
+    "confidence": "likely",
+    "cause_plain": "A proxy setting in the server's environment (such as HTTP_PROXY=proxy.local:3128) has no http:// or https:// in front. httpx tried to use it on every request and crashed with \"No scheme included in URL\" before sending anything.",
+    "cause_technical": "get_environment_proxies in httpx/_utils.py:314 copies the proxy values from the environment (HTTP_PROXY, HTTPS_PROXY, ALL_PROXY) without checking them. Client._get_proxy_map then passes each value to Proxy(url=...), which calls URL(url). A value like \"host:port\" has no scheme, so the call fails with InvalidURL. The fix is to add a default http:// scheme to scheme-less environment proxy values. I did not read httpx/_models.py:90, where the event says the error is raised, so this is the most likely cause but not confirmed.",
+    "real_cause": "get_environment_proxies() passed bare hostnames from HTTP(S)_PROXY/ALL_PROXY through unchanged, so Proxy(URL(...)) later rejected them for having no scheme.",
+    "seconds": 15,
+    "cost_usd": 0.0266
+  },
+  {
+    "repo": "python-attrs/attrs",
+    "issue": "https://github.com/python-attrs/attrs/issues/781",
+    "fix": "https://github.com/python-attrs/attrs/pull/782",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/attr/_make.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "src/attr/_make.py"
+    ],
+    "named": "twisted/foo.py:8",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "likely",
+    "cause_plain": "A class in the twisted/foo.py file (class Ham) failed to load. It declares a required field, `spam`, after a field that has a default value. The attrs library rejects that order, so the module crashes on import. The attrs library itself is behaving correctly.",
+    "cause_technical": "attr/_make.py:586 in _transform_attrs correctly raises ValueError because class Ham in twisted/foo.py:8 defines the mandatory attribute `spam: int` after an attribute that has a default. The bug is in the caller's class definition, not in attrs. The fix is to give `spam` a default, move it before the defaulted fields, or make the fields kw_only. I can't see foo.py, so I can't propose a safe edit to it.",
+    "real_cause": "The module-level _classvar_prefixes tuple did not include 'typing_extensions.ClassVar', so such annotations were treated as mandatory attributes and _transform_attrs raised the ordering ValueError.",
+    "seconds": 5,
+    "cost_usd": 0.0073
+  },
+  {
+    "repo": "Textualize/rich",
+    "issue": "https://github.com/Textualize/rich/issues/3014",
+    "fix": "https://github.com/Textualize/rich/pull/3471",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "rich/text.py",
+      "rich/console.py",
+      "rich/_pick.py",
+      "rich/_wrap.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "rich/text.py"
+    ],
+    "named": "rich/text.py:1142",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Printing some text crashed with an internal \"list index out of range\" error. The text carried a style that reached past the end of the text. The line-splitting code then searched for a line that doesn't exist.",
+    "cause_technical": "In rich/text.py Text.divide (around lines 1142-1171), the binary search over line_ranges assumes every span lies inside the text. If a span's end is greater than len(text), for example after the text was cropped or edited while its spans were kept, the search for the end line keeps moving lower_bound up. It eventually indexes line_ranges[line_count], which raises IndexError. The fix clamps the span to the text length and skips spans that are empty after clamping.",
+    "real_cause": "Text.append_tokens() appended token content without strip_control_codes(), so control characters (e.g. carriage returns) got into the text and later threw off line offsets in divide().",
+    "seconds": 9,
+    "cost_usd": 0.014
+  },
+  {
+    "repo": "python-attrs/cattrs",
+    "issue": "https://github.com/python-attrs/cattrs/issues/721",
+    "fix": "https://github.com/python-attrs/cattrs/pull/722",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/cattrs/gen/__init__.py",
+      "src/cattrs/dispatch.py",
+      "src/cattrs/converters.py",
+      "src/cattrs/gen/_consts.py",
+      "src/cattrs/gen/_generics.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "src/cattrs/strategies/_subclasses.py"
+    ],
+    "named": "src/cattrs/gen/__init__.py:847",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "text to replace is not unique in src/cattrs/gen/__init__.py"
+    ],
+    "confidence": "likely",
+    "cause_plain": "Building the loader for a class crashed with a confusing internal error, `AttributeError: working_set`, instead of working. The cleanup step tried to delete a bookkeeping value that had already been deleted.",
+    "cause_technical": "In src/cattrs/gen/__init__.py, the `finally` block of make_dict_structure_fn (line ~847) runs `del already_generating.working_set` whenever the local set is empty. The set lives on a thread-local and is shared by nested or re-entrant calls, for example a custom hook factory that calls make_dict_structure_fn again. If an earlier call has already removed the attribute, the `del` raises AttributeError and hides the real result. I could not reproduce the exact nesting from the files shown. The fix makes the cleanup tolerant of a missing attribute.",
+    "real_cause": "_include_subclasses_with_union_strategy() generated hooks in a loop that clobbered the thread-local already_generating.working_set of an outer make_dict_structure_fn call, which then failed deleting it.",
+    "seconds": 12,
+    "cost_usd": 0.018
+  },
+  {
+    "repo": "pytest-dev/pytest",
+    "issue": "https://github.com/pytest-dev/pytest/issues/11417",
+    "fix": "https://github.com/pytest-dev/pytest/pull/11420",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/_pytest/assertion/rewrite.py",
+      "src/_pytest/pathlib.py",
+      "src/_pytest/python.py"
+    ],
+    "lookups": [
+      "find_definition {\"name\":\"module_name_from_path\"}",
+      "read_lines {\"path\":\"src/_pytest/pathlib.py\",\"start\":626,\"end\":628}",
+      "find_definition {\"name\":\"module_name_from_path\"}"
+    ],
+    "files_read": [],
+    "fixed_files": [
+      "src/_pytest/pathlib.py"
+    ],
+    "named": "src/_pytest/pathlib.py:627",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Pytest crashed while importing a test file called `__init__.py` that sits directly in the root folder. It built an empty module name from that path and then failed on it, so the tests in that file could not run.",
+    "cause_technical": "In src/_pytest/pathlib.py `module_name_from_path` (line 627), when the path relative to root is just `__init__`, the code drops that part and the parts tuple becomes empty. The function then returns \"\". `import_path` (importlib mode) passes that empty name to `meta_importer.find_spec`. In `_early_rewrite_bailout` (rewrite.py:200), `PurePath(*[\"\"])` gives `PurePath('.')`, and `with_suffix('.py')` raises ValueError. The fix is to drop `__init__` only when other parts remain. I did not run this fix or the regression test.",
+    "real_cause": "module_name_from_path() stripped a trailing '__init__' even when it was the only path part (an __init__.py at rootdir), producing an empty module name that later broke PurePath(...).with_suffix in the assertion rewriter.",
+    "seconds": 17,
+    "cost_usd": 0.0273
+  },
+  {
+    "repo": "marshmallow-code/marshmallow",
+    "issue": "https://github.com/marshmallow-code/marshmallow/issues/1837",
+    "fix": "https://github.com/marshmallow-code/marshmallow/pull/1843",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/marshmallow/schema.py"
+    ],
+    "lookups": [
+      "search_code {\"text\":\"load = \"}",
+      "search_code {\"text\":\"def load(\"}",
+      "search_code {\"text\":\"_get_fields(\"}",
+      "read_lines {\"path\":\"src/marshmallow/schema.py\",\"start\":40,\"end\":130}"
+    ],
+    "files_read": [],
+    "fixed_files": [
+      "src/marshmallow/schema.py"
+    ],
+    "named": "src/marshmallow/schema.py:100",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Calling `loads()` on a schema that has a field named `load` crashes. Marshmallow calls its own `load` method, but it finds the field object instead and tries to call that. The field here is a Number, hence the error \"'Number' object is not callable\".",
+    "cause_technical": "In `SchemaMeta.__new__` (src/marshmallow/schema.py, line 100), `_get_fields(attrs)` collects the declared fields but leaves them in `attrs`. They then become class attributes through `super().__new__`. A field named `load` therefore replaces the `Schema.load` method on the class. `self.load(...)` at line 748 then calls a `fields.Number` instance, which raises the TypeError. Marshmallow versions that handle this correctly delete the declared fields from `attrs` before the class is created. I did not run this code.",
+    "real_cause": "SchemaMeta.__new__ left declared fields in the class attrs, so a field named 'load' shadowed Schema.load and loads() ended up calling the Number field object.",
+    "seconds": 19,
+    "cost_usd": 0.0261
+  },
+  {
+    "repo": "psf/black",
+    "issue": "https://github.com/psf/black/issues/4625",
+    "fix": "https://github.com/psf/black/pull/4628",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/black/__init__.py",
+      "src/black/output.py"
+    ],
+    "lookups": [
+      "find_definition {\"name\":\"stringify_ast\"}",
+      "read_lines {\"path\":\"src/black/parsing.py\",\"start\":172,\"end\":290}"
+    ],
+    "files_read": [
+      "src/black/parsing.py"
+    ],
+    "fixed_files": [
+      "src/black/parsing.py"
+    ],
+    "named": "src/black/__init__.py:1540",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "Black reformatted a file and its own safety check found that the new code does not mean the same as the original. Black refused to write the file, so the user saw an internal error. I can't tell which input triggered it.",
+    "cause_technical": "The check in assert_equivalent (src/black/__init__.py:1538-1540) compared the AST of the source with the AST of the formatted output. The two strings differed, so it raised ASTSafetyError. The event gives no source snippet and no diff, so I can't tell which formatting rule changed the code's meaning. The comparison in _stringify_ast (src/black/parsing.py) looks correct. The likely cause is a formatting transform in Black's linegen or other formatting code that altered the code's meaning for the failing input. The diff file named in the full error message would show which construct changed. No safe minimal edit can be made without it.",
+    "real_cause": "_stringify_ast() flattened only the top level of tuple targets in del statements, so after Black legitimately dropped redundant parentheses around nested tuples the normalized ASTs differed and assert_equivalent reported a false non-equivalence.",
+    "seconds": 9,
+    "cost_usd": 0.0173
+  },
+  {
+    "repo": "celery/celery",
+    "issue": "https://github.com/celery/celery/issues/6766",
+    "fix": "https://github.com/celery/celery/pull/10385",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "celery/app/task.py",
+      "celery/app/trace.py",
+      "celery/canvas.py",
+      "celery/_state.py"
+    ],
+    "lookups": [
+      "find_definition {\"name\":\"Signature._merge\"}",
+      "find_definition {\"name\":\"Backend._call_task_errbacks\"}",
+      "read_lines {\"path\":\"celery/backends/base.py\",\"start\":256,\"end\":259}",
+      "find_definition {\"name\":\"Backend._call_task_errbacks\"}"
+    ],
+    "files_read": [
+      "celery/backends/base.py"
+    ],
+    "fixed_files": [
+      "celery/canvas.py"
+    ],
+    "named": "celery/backends/base.py:258",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "When a task failed, Celery tried to run the failure handler (error callback) and it crashed with a TypeError. The handler takes the failed request, the exception and the traceback. It had been attached as an immutable (fixed-argument) callback, and Celery dropped those three values. So the handler never ran and the failure wasn't handled.",
+    "cause_technical": "celery/backends/base.py, Backend._call_task_errbacks (line ~258) calls `errback(request, exc, traceback)` directly whenever the errback task takes more than one argument. It never checks whether the signature is immutable (e.g. made with `.si()`). Signature.__call__ (celery/canvas.py:349) goes through `_merge`, and for an immutable signature `_merge` returns only the signature's own args and discards the partial args. The task body `notify_exc(_, exc, tb)` is therefore called with no arguments, which gives the TypeError. This is inferred from the code and the error; I haven't reproduced it. The fix is to skip the direct call for immutable errbacks. They then take the existing path that sends them as tasks with their own fixed args.",
+    "real_cause": "group.link_error() cloned the errback with immutable=True, so the errback was called without the (request, exc, traceback) arguments it expects.",
+    "seconds": 20,
+    "cost_usd": 0.0362
+  }
+]

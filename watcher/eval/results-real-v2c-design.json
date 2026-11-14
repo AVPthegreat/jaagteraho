@@ -1,0 +1,171 @@
+[
+  {
+    "repo": "pallets/flask",
+    "issue": "https://github.com/pallets/flask/issues/5258",
+    "fix": "https://github.com/pallets/flask/pull/5264",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/flask/helpers.py",
+      "src/flask/globals.py"
+    ],
+    "lookups": [
+      "find_definition {\"name\":\"Flask.url_for\"}"
+    ],
+    "files_read": [
+      "src/flask/app.py"
+    ],
+    "fixed_files": [
+      "src/flask/app.py"
+    ],
+    "named": "src/flask/app.py:954",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Calling url_for with a URL value named \"self\" crashes with a confusing TypeError. Python reads that keyword as the method's own \"self\" argument, so the call fails before any URL is built.",
+    "cause_technical": "Flask.url_for in src/flask/app.py (line 953) declares `self` as a normal positional-or-keyword parameter. `helpers.url_for` forwards `**values` containing `self=1`, which collides with the bound `self`. Making `self` positional-only (`self, /, endpoint`) lets `self` be passed through `**values` as a URL or query value.",
+    "real_cause": "Flask.url_for() declared self as an ordinary parameter, so a URL value named 'self' passed via **values collided with it; the fix makes self positional-only.",
+    "seconds": 9,
+    "cost_usd": 0.0292
+  },
+  {
+    "repo": "fastapi/fastapi",
+    "issue": "https://github.com/fastapi/fastapi/issues/9424",
+    "fix": "https://github.com/fastapi/fastapi/pull/9425",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "fastapi/routing.py",
+      "fastapi/dependencies/utils.py",
+      "fastapi/utils.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "fastapi/dependencies/utils.py"
+    ],
+    "named": "fastapi/routing.py:474",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "The app crashes at startup. One route is declared with status 204 (No Content), and FastAPI took the function's return type hint as a response body model. A 204 response can't have a body, so FastAPI refused to load the app.",
+    "cause_technical": "In fastapi/routing.py APIRoute.__init__ (line ~472-477), when response_model is not given, it is inferred from the endpoint's return annotation. This happens without checking the status code. For a 204 route with an annotation such as `-> dict`, response_model becomes truthy. The assert at line 514 then fails. The fix is to skip inferring a response model when the status code doesn't allow a body.",
+    "real_cause": "get_typed_annotation() turned the string annotation 'None' (from postponed annotations) into NoneType rather than None, so the route was treated as having a response body and the 204 assertion failed.",
+    "seconds": 9,
+    "cost_usd": 0.0518
+  },
+  {
+    "repo": "encode/httpx",
+    "issue": "https://github.com/encode/httpx/issues/309",
+    "fix": "https://github.com/encode/httpx/pull/310",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "httpx/dispatch/http11.py",
+      "httpx/concurrency/asyncio.py",
+      "httpx/dispatch/connection.py",
+      "httpx/config.py",
+      "httpx/models.py"
+    ],
+    "lookups": [
+      "read_lines {\"path\":\"httpx/models.py\",\"start\":540,\"end\":630}",
+      "search_code {\"text\":\"def build_redirect_request\"}",
+      "search_code {\"text\":\"def redirect_content\"}",
+      "read_lines {\"path\":\"httpx/middleware.py\",\"start\":84,\"end\":165}",
+      "search_code {\"text\":\"def __delitem__\"}",
+      "read_lines {\"path\":\"httpx/models.py\",\"start\":464,\"end\":480}"
+    ],
+    "files_read": [
+      "httpx/middleware.py"
+    ],
+    "fixed_files": [
+      "httpx/middleware.py"
+    ],
+    "named": ":91",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "likely",
+    "cause_plain": "When a POST got a redirect (such as 301, 302 or 303), the client turned it into a GET with no body. It still sent the old Content-Length header from the POST. The request then promised 5 bytes and sent none, so it failed.",
+    "cause_technical": "In httpx/middleware.py, build_redirect_request (line 91) copies the original request headers through redirect_headers. When the method changes to GET, redirect_content (line 157) returns b",
+    "real_cause": "RedirectMiddleware.redirect_headers() kept Content-Length/Transfer-Encoding when a redirect switched the method to GET and dropped the body, so h11 saw too little data for the declared length.",
+    "seconds": 19,
+    "cost_usd": 0.0814
+  },
+  {
+    "repo": "psf/black",
+    "issue": "https://github.com/psf/black/issues/5214",
+    "fix": "https://github.com/psf/black/pull/5414",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/black/lines.py",
+      "src/black/linegen.py",
+      "src/black/__init__.py",
+      "src/black/nodes.py",
+      "src/black/trans.py"
+    ],
+    "lookups": [
+      "read_lines {\"path\":\"src/black/brackets.py\",\"start\":70,\"end\":135}",
+      "search_code {\"text\":\"bracket_tracker.mark(\"}",
+      "find_definition {\"name\":\"Line.append\"}",
+      "read_lines {\"path\":\"src/black/brackets.py\",\"start\":89,\"end\":98}",
+      "read_lines {\"path\":\"src/black/brackets.py\",\"start\":1,\"end\":10}",
+      "read_lines {\"path\":\"src/black/brackets.py\",\"start\":98,\"end\":99}"
+    ],
+    "files_read": [
+      "src/black/brackets.py",
+      "tests/data/cases/preview_long_strings__regression.py"
+    ],
+    "fixed_files": [
+      "src/blib2to3/pytree.py"
+    ],
+    "named": "src/black/brackets.py:89",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Black crashed while formatting a file. It checked how deeply a piece of code is nested inside brackets, but some pieces never had that value recorded. This happens with a closing bracket that has no matching opening bracket on the same line, or with a comment.",
+    "cause_technical": "BracketTracker.mark in src/black/brackets.py returns early at lines 89-97 for COMMENT leaves and for unmatched closing brackets at depth 0. It returns before `leaf.bracket_depth = self.depth` (line 113), so those leaves have no `bracket_depth`. is_line_short_enough in src/black/lines.py (about line 1404) reads `leaf.bracket_depth` on every leaf of a line that contains a multiline string. That raises AttributeError for any leaf that was skipped. I could not confirm which of the two cases triggered this event. The fix is to set `bracket_depth` before each early return. The exact line numbers in lines.py differ slightly from the traceback (1279 vs about 1404).",
+    "real_cause": "blib2to3 Leaf declared bracket_depth only as an annotation and neither __init__ nor clone() set it, so leaves created outside the bracket tracker lacked the attribute that is_line_short_enough() reads.",
+    "seconds": 22,
+    "cost_usd": 0.1073
+  },
+  {
+    "repo": "python-attrs/attrs",
+    "issue": "https://github.com/python-attrs/attrs/issues/1284",
+    "fix": "https://github.com/python-attrs/attrs/pull/1319",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/attr/_make.py",
+      "src/attr/_next_gen.py"
+    ],
+    "lookups": [
+      "search_code {\"text\":\"pre_init\"}",
+      "find_definition {\"name\":\"_attrs_to_init_script\"}",
+      "search_code {\"text\":\"__attrs_pre_init__(\"}",
+      "search_code {\"text\":\"pre_init_has_args\"}",
+      "read_lines {\"path\":\"src/attr/_make.py\",\"start\":2140,\"end\":2290}",
+      "read_lines {\"path\":\"src/attr/_make.py\",\"start\":2086,\"end\":2130}"
+    ],
+    "files_read": [],
+    "fixed_files": [
+      "src/attr/_make.py"
+    ],
+    "named": "src/attr/_make.py:2209",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Defining an attrs class failed with a SyntaxError when the class has an `__attrs_pre_init__` that takes arguments and has at least one keyword-only field with a default value. attrs builds the class's `__init__` as source code, and that code was invalid.",
+    "cause_technical": "In `_attrs_to_init_script` (src/attr/_make.py, around lines 2204-2219), `kw_only_args` and `args` hold full parameter declarations such as `y=NOTHING`. The pre-init call builds its arguments from those strings. `f\"{kw_arg}={kw_arg}\"` produces `y=NOTHING=y=NOTHING`, which is a SyntaxError when `compile` runs. Positional entries like `x=NOTHING` are also copied into the call, so a default sentinel would be passed instead of the value. The call should use bare parameter names only. I did not open `attrs_pre_init.py`, so this rests on the stack trace and the generator code.",
+    "real_cause": "_attrs_to_init_script() built the __attrs_pre_init__ call from kw_only argument strings that still included '=default', generating invalid code like a=attr_dict['a'].default=a=....",
+    "seconds": 23,
+    "cost_usd": 0.0876
+  }
+]

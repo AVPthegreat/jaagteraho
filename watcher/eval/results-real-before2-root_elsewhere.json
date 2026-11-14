@@ -1,0 +1,324 @@
+[
+  {
+    "repo": "pallets/flask",
+    "issue": "https://github.com/pallets/flask/issues/5258",
+    "fix": "https://github.com/pallets/flask/pull/5264",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/flask/helpers.py",
+      "src/flask/globals.py"
+    ],
+    "lookups": [
+      "find_definition {\"name\":\"Flask.url_for\"}",
+      "read_lines {\"path\":\"src/flask/app.py\",\"start\":952,\"end\":957}"
+    ],
+    "files_read": [
+      "src/flask/app.py"
+    ],
+    "fixed_files": [
+      "src/flask/app.py"
+    ],
+    "named": "src/flask/app.py:954",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Building a link fails if a URL value is named \"self\". Python reads that value as the app object's own argument, so it crashes instead of adding it to the link.",
+    "real_cause": "Flask.url_for() declared self as an ordinary parameter, so a URL value named 'self' passed via **values collided with it; the fix makes self positional-only.",
+    "seconds": 11,
+    "cost_usd": 0.0314
+  },
+  {
+    "repo": "psf/requests",
+    "issue": "https://github.com/psf/requests/issues/6643",
+    "fix": "https://github.com/psf/requests/pull/6644",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/requests/adapters.py",
+      "src/requests/sessions.py",
+      "src/requests/api.py",
+      "src/requests/models.py",
+      "src/requests/cookies.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "src/requests/adapters.py"
+    ],
+    "named": "src/requests/adapters.py:520",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "A request to a web address with a path starting with two slashes, like http://site//v:h, crashed with a raw low-level error. The HTTP library read the path as a host and port, and \"h\" isn't a valid port. It should have told the caller the URL was invalid.",
+    "real_cause": "HTTPAdapter.request_url() passed a path starting with '//' through unchanged, and urllib3 then parsed '//v:h' as a network location and failed; the fix collapses the leading slashes.",
+    "seconds": 11,
+    "cost_usd": 0.0583
+  },
+  {
+    "repo": "encode/httpx",
+    "issue": "https://github.com/encode/httpx/issues/309",
+    "fix": "https://github.com/encode/httpx/pull/310",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "httpx/dispatch/http11.py",
+      "httpx/concurrency/asyncio.py",
+      "httpx/dispatch/connection.py",
+      "httpx/config.py",
+      "httpx/models.py"
+    ],
+    "lookups": [
+      "search_code {\"text\":\"def build_redirect_request\"}",
+      "search_code {\"text\":\"def redirect_headers\"}",
+      "read_lines {\"path\":\"httpx/middleware.py\",\"start\":84,\"end\":175}",
+      "read_lines {\"path\":\"httpx/middleware.py\",\"start\":1,\"end\":20}"
+    ],
+    "files_read": [
+      "httpx/middleware.py"
+    ],
+    "fixed_files": [
+      "httpx/middleware.py"
+    ],
+    "named": "httpx/middleware.py:91",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "A POST that gets redirected (301, 302 or 303) is re-sent as a GET with no body. The old Content-Length header was copied onto it, so the client promised 5 bytes and sent none. The request failed and the real response was never read. Users saw a timeout or protocol error instead of the redirected page.",
+    "real_cause": "RedirectMiddleware.redirect_headers() kept Content-Length/Transfer-Encoding when a redirect switched the method to GET and dropped the body, so h11 saw too little data for the declared length.",
+    "seconds": 16,
+    "cost_usd": 0.0744
+  },
+  {
+    "repo": "pallets/jinja",
+    "issue": "https://github.com/pallets/jinja/issues/1701",
+    "fix": "https://github.com/pallets/jinja/pull/1702",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/jinja2/nativetypes.py",
+      "src/jinja2/environment.py",
+      "src/jinja2/debug.py"
+    ],
+    "lookups": [
+      "search_code {\"text\":\"concat(\"}",
+      "read_lines {\"path\":\"src/jinja2/compiler.py\",\"start\":1815,\"end\":1832}",
+      "search_code {\"text\":\"concat = \"}",
+      "read_lines {\"path\":\"src/jinja2/compiler.py\",\"start\":1590,\"end\":1606}"
+    ],
+    "files_read": [
+      "src/jinja2/compiler.py"
+    ],
+    "fixed_files": [
+      "src/jinja2/runtime.py"
+    ],
+    "named": "src/jinja2/compiler.py:1448",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "A template that outputs a number failed to render in Jinja's \"native\" mode. Somewhere, the number is being joined into text without being converted to a string first. I could not confirm which line does this, so this diagnosis is a guess.",
+    "real_cause": "BlockReference.__call__/_async_call joined block output with the module-level str concat instead of environment.concat, so NativeEnvironment blocks returning non-strings failed.",
+    "seconds": 27,
+    "cost_usd": 0.0608
+  },
+  {
+    "repo": "fastapi/fastapi",
+    "issue": "https://github.com/fastapi/fastapi/issues/9424",
+    "fix": "https://github.com/fastapi/fastapi/pull/9425",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "fastapi/routing.py",
+      "fastapi/dependencies/utils.py",
+      "fastapi/datastructures.py"
+    ],
+    "lookups": [
+      "read_lines {\"path\":\"fastapi/routing.py\",\"start\":470,\"end\":520}",
+      "search_code {\"text\":\"def is_body_allowed_for_status_code\"}",
+      "read_lines {\"path\":\"fastapi/utils.py\",\"start\":42,\"end\":56}"
+    ],
+    "files_read": [
+      "fastapi/utils.py"
+    ],
+    "fixed_files": [
+      "fastapi/dependencies/utils.py"
+    ],
+    "named": "fastapi/routing.py:472",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "The app crashes on startup, so users get no service. A route is declared with status 204 (No Content), but its function has a return type like `-> dict`. FastAPI treats that return type as a response body, and 204 responses can't have one.",
+    "real_cause": "get_typed_annotation() turned the string annotation 'None' (from postponed annotations) into NoneType rather than None, so the route was treated as having a response body and the 204 assertion failed.",
+    "seconds": 14,
+    "cost_usd": 0.0596
+  },
+  {
+    "repo": "psf/black",
+    "issue": "https://github.com/psf/black/issues/4062",
+    "fix": "https://github.com/psf/black/pull/4086",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/black/__init__.py",
+      "src/black/parsing.py",
+      "src/black/output.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "src/black/linegen.py"
+    ],
+    "named": "src/black/__init__.py:1444",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "Black reformatted a piece of code and its own safety check found that the result was not valid Python. Black refused to output it and reported an internal error. I can't tell which input caused it.",
+    "real_cause": "left_hand_split() only checked for a missing opening bracket, not for empty tail leaves, so at line length 1 it produced a split that broke the code and failed the equivalence check.",
+    "seconds": 8,
+    "cost_usd": 0.0385
+  },
+  {
+    "repo": "psf/black",
+    "issue": "https://github.com/psf/black/issues/5214",
+    "fix": "https://github.com/psf/black/pull/5414",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/black/lines.py",
+      "src/black/linegen.py",
+      "src/black/__init__.py",
+      "src/black/nodes.py",
+      "src/black/trans.py"
+    ],
+    "lookups": [
+      "find_definition {\"name\":\"BracketTracker.mark\"}",
+      "find_definition {\"name\":\"Line.append\"}",
+      "search_code {\"text\":\"bracket_depth\"}",
+      "read_lines {\"path\":\"src/black/lines.py\",\"start\":1396,\"end\":1402}"
+    ],
+    "files_read": [
+      "src/black/brackets.py",
+      "tests/data/cases/preview_long_strings__regression.py"
+    ],
+    "fixed_files": [
+      "src/blib2to3/pytree.py"
+    ],
+    "named": "src/black/lines.py:1404",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "guess",
+    "cause_plain": "Black crashed while formatting a file that has a triple-quoted multiline string. It checked whether a line fits, and that check read a nesting-depth value that was never set on some pieces of the line.",
+    "real_cause": "blib2to3 Leaf declared bracket_depth only as an annotation and neither __init__ nor clone() set it, so leaves created outside the bracket tracker lacked the attribute that is_line_short_enough() reads.",
+    "seconds": 21,
+    "cost_usd": 0.0941
+  },
+  {
+    "repo": "marshmallow-code/marshmallow",
+    "issue": "https://github.com/marshmallow-code/marshmallow/issues/2868",
+    "fix": "https://github.com/marshmallow-code/marshmallow/pull/2894",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/marshmallow/schema.py",
+      "src/marshmallow/error_store.py"
+    ],
+    "lookups": [
+      "read_lines {\"path\":\"src/marshmallow/fields.py\",\"start\":120,\"end\":200}",
+      "read_lines {\"path\":\"src/marshmallow/fields.py\",\"start\":340,\"end\":460}",
+      "read_lines {\"path\":\"src/marshmallow/fields.py\",\"start\":200,\"end\":250}",
+      "search_code {\"text\":\"def _validate_missing\"}",
+      "read_lines {\"path\":\"src/marshmallow/fields.py\",\"start\":290,\"end\":310}"
+    ],
+    "files_read": [
+      "src/marshmallow/fields.py"
+    ],
+    "fixed_files": [
+      "src/marshmallow/fields.py"
+    ],
+    "named": "src/marshmallow/fields.py:299",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "Loading data with `sentinel` set to null was rejected with 'Field may not be null.' I can't see a bug in the library code. This looks like the expected result for a field that doesn't allow null.",
+    "real_cause": "fields.Constant set load_default/dump_default after Field.__init__ had already computed allow_none from a missing default, so a None constant was rejected as null on load.",
+    "seconds": 13,
+    "cost_usd": 0.0497
+  },
+  {
+    "repo": "python-attrs/attrs",
+    "issue": "https://github.com/python-attrs/attrs/issues/1284",
+    "fix": "https://github.com/python-attrs/attrs/pull/1319",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/attr/_make.py",
+      "src/attr/_next_gen.py"
+    ],
+    "lookups": [
+      "search_code {\"text\":\"pre_init\"}",
+      "find_definition {\"name\":\"_attrs_to_init_script\"}",
+      "read_lines {\"path\":\"src/attr/_make.py\",\"start\":2063,\"end\":2260}"
+    ],
+    "files_read": [],
+    "fixed_files": [
+      "src/attr/_make.py"
+    ],
+    "named": "src/attr/_make.py:2210",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "A class that uses a `__attrs_pre_init__` hook with arguments and has a keyword-only field with a default value can't be created. The `@define` decorator fails with a SyntaxError when the app imports the module. The code attrs generates for that class is invalid Python.",
+    "real_cause": "_attrs_to_init_script() built the __attrs_pre_init__ call from kw_only argument strings that still included '=default', generating invalid code like a=attr_dict['a'].default=a=....",
+    "seconds": 19,
+    "cost_usd": 0.0727
+  },
+  {
+    "repo": "celery/celery",
+    "issue": "https://github.com/celery/celery/issues/6164",
+    "fix": "https://github.com/celery/celery/pull/10406",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "celery/backends/base.py",
+      "celery/backends/redis.py",
+      "celery/backends/asynchronous.py"
+    ],
+    "lookups": [
+      "search_code {\"text\":\"def __del__\"}",
+      "search_code {\"text\":\"def get_key_for_task\"}",
+      "read_lines {\"path\":\"celery/result.py\",\"start\":436,\"end\":456}",
+      "read_lines {\"path\":\"celery/backends/base.py\",\"start\":1015,\"end\":1027}",
+      "find_definition {\"name\":\"AsyncResult.__del__\"}"
+    ],
+    "files_read": [
+      "celery/result.py"
+    ],
+    "fixed_files": [
+      "celery/backends/base.py"
+    ],
+    "named": "celery/result.py:447",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "guess",
+    "cause_plain": "Celery crashed with an empty-message TypeError while cleaning up a task result object that was being garbage-collected. This is most likely to happen when the app or interpreter is shutting down. The cleanup runs in a destructor, so the error is only printed as noise and the user's work isn't affected. I couldn't confirm the exact trigger.",
+    "real_cause": "BaseKeyValueStoreBackend._get_key_for() passed the task id straight to key_t(), so a uuid.UUID task id made the bytes join raise TypeError.",
+    "seconds": 15,
+    "cost_usd": 0.0394
+  }
+]
