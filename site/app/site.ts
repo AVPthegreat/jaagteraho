@@ -21,7 +21,7 @@ export const TEAM: Array<{ name: string; role: string; href?: string }> = [
   { name: "Ido", role: "AI code reviewer" },
 ];
 /* The founder's LinkedIn. Empty hides the link. */
-export const LINKEDIN_URL = "";
+export const LINKEDIN_URL = "https://www.linkedin.com/in/avpthegreat";
 
 /* The services JaagteRaho runs on, shown as a logo row in the footer. Logos: public/logos (see CREDITS.md). */
 export const BUILT_WITH: Array<{ name: string; label: string; logo: string; href: string; h?: number }> = [
