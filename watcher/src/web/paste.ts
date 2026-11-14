@@ -8,10 +8,10 @@ import type { AI } from "../ai/claude.js";
 import type { DB } from "../db/db.js";
 import type { CleanFrame } from "../intake/allowlist.js";
 import { clip, mask } from "../intake/mask.js";
-import { runDiagnosis, type SourceFile } from "../pipeline/diagnose.js";
+import { runDiagnosis, traceFiles } from "../pipeline/diagnose.js";
 import { runGate } from "../pipeline/gate.js";
 import { relatedFiles } from "../source/related.js";
-import { GitHubSource, locate } from "../source/source.js";
+import { GitHubSource } from "../source/source.js";
 import { clientIp, Window } from "./public.js";
 import { parseV8Stack } from "../selfwatch.js";
 
@@ -122,23 +122,29 @@ export function pasteRoutes(db: DB, ai: AI | null) {
     if (!ipLimits.allow(clientIp(c), PER_VISITOR_PER_DAY * 2, 86_400_000)) return c.json({ error: "Too many diagnoses from this network today. Try again tomorrow." }, 429);
     if (all >= PER_DAY) return c.json({ error: "Today's free diagnoses are used up. Try again tomorrow." }, 429);
 
-    const src = new GitHubSource(repo, process.env.JR_GITHUB_PUBLIC_READ_TOKEN || undefined);
-    const files: SourceFile[] = [];
-    for (const f of [...parsed.frames].reverse()) {
-      if (!f.in_app || files.length >= 3) continue;
-      const found = await locate(src, f.abs_path ?? "");
-      if (!found) continue;
-      const known = files.find((x) => x.path === found.path);
-      if (known) known.focus = [...(known.focus ?? []), ...(f.lineno ? [f.lineno] : [])];
-      else files.push({ ...found, focus: f.lineno ? [f.lineno] : [] });
-    }
+    // Every attempt that reaches GitHub counts against the visitor's and the day's quota, even if it fails.
+    const failed = (reason: string) =>
+      db.prepare("INSERT INTO pastes (id, session_id, repo, created_at, result) VALUES (?, ?, ?, ?, ?)").run(`failed-${randomBytes(6).toString("hex")}`, session, repo, new Date().toISOString(), JSON.stringify({ failed: reason }));
+
+    const src = new GitHubSource(repo, process.env.JR_GITHUB_PUBLIC_READ_TOKEN || undefined, "paste");
+    const { files } = await traceFiles(src, parsed.frames);
     if (files.length === 0) {
+      failed("no files");
       return c.json({ error: `None of the files in the traceback were found in ${repo}. Is the repository public, and is this its code?` }, 404);
     }
-    for (const r of await relatedFiles(src, files)) files.push({ ...r, related: true });
+    // The repository is downloaded only once the traceback is known to belong to it.
+    const [related, index] = await Promise.all([
+      relatedFiles(src, files),
+      process.env.JR_DIAGNOSIS_LOOKUPS !== "0" ? src.index().catch(() => null) : Promise.resolve(null),
+    ]);
+    for (const r of related) files.push({ ...r, related: true });
 
-    const out = await runDiagnosis(ai, { exception_type: parsed.exception_type, message: parsed.message, transaction: null, frames: parsed.frames }, files, false);
-    if ("error" in out) return c.json({ error: "The diagnosis did not finish. Try again in a minute." }, 502);
+    const out = await runDiagnosis(ai, { exception_type: parsed.exception_type, message: parsed.message, transaction: null, frames: parsed.frames }, files, false, null, index);
+    if ("error" in out) {
+      failed("diagnosis");
+      return c.json({ error: "The diagnosis did not finish. Try again in a minute." }, 502);
+    }
+    files.push(...out.files_read);
 
     // The same three-level gate as live incidents: recommended, use with care, or withheld.
     const gate = await runGate(ai, out.result, files);
@@ -167,7 +173,8 @@ export function pasteRoutes(db: DB, ai: AI | null) {
   });
 
   app.get("/public/paste/:id", (c) => {
-    const row = db.prepare("SELECT result FROM pastes WHERE id = ?").get(c.req.param("id")) as { result: string } | undefined;
+    // Failed attempts are kept only to count against the quota; they are never shown.
+    const row = db.prepare("SELECT result FROM pastes WHERE id = ? AND id NOT LIKE 'failed-%'").get(c.req.param("id")) as { result: string } | undefined;
     return row ? c.json({ id: c.req.param("id"), ...JSON.parse(row.result) }) : c.json({ error: "not found" }, 404);
   });
 

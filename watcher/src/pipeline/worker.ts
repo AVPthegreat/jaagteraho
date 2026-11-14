@@ -55,7 +55,7 @@ export function tokenFor(project: ProjectRow): GitHubToken {
 export function sourceFor(project: ProjectRow): SourceProvider | null {
   if (!project.repo) return null;
   if (project.repo.startsWith("local:")) return new LocalSource(project.repo.slice(6));
-  return new GitHubSource(project.repo, tokenFor(project));
+  return new GitHubSource(project.repo, tokenFor(project), `project:${project.id}`);
 }
 
 export class Worker {
@@ -332,13 +332,18 @@ export class Worker {
     }
 
     const src = sourceFor(project);
-    const [{ files, sourceMoved }, change] = await Promise.all([
+    const [{ files, sourceMoved }, change, index] = await Promise.all([
       src ? gatherFiles(this.db, src, project.id, event.frames, release) : Promise.resolve({ files: [], sourceMoved: false }),
       this.changeFor(project, incidentId, event.frames, release),
+      // The repository's code, so the diagnosis can look up what the stack trace does not show.
+      src?.index && process.env.JR_DIAGNOSIS_LOOKUPS !== "0" ? src.index(release).catch(() => null) : Promise.resolve(null),
     ]);
     if (change) feed("change", { ...change });
     const started = Date.now();
-    const out = await runDiagnosis(this.ai!, event, files, sourceMoved, change);
+    // Lookup rounds stop as soon as the owner's credit falls under the floor checked above.
+    const out = await runDiagnosis(this.ai!, event, files, sourceMoved, change, files.length ? index : null, {
+      budgetOk: () => creditLeftForProject(this.db, project.id) >= 0.02,
+    });
     if ("error" in out) {
       feed("cause", { unavailable: `Diagnosis failed: ${out.error}` });
       return;
@@ -354,6 +359,7 @@ export class Worker {
     feed("cause", { ...out.result, diagnosis_id: diagnosisId, seconds: Math.round((Date.now() - started) / 1000), model: out.model });
     await this.refreshCard(incidentId, false);
 
+    files.push(...out.files_read);
     const gate = await runGate(this.ai, out.result, files);
     // At most 3 fix proposals per real app per day, so a bad night cannot flood the owner with diffs.
     if (gate.passed && project.kind !== "sandbox" && this.fixesShownToday(project.id) >= MAX_FIXES_PER_DAY) {

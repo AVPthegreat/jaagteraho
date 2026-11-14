@@ -59,7 +59,7 @@ flowchart LR
 
 ## Measured
 
-Every number is produced by a script in this repository. Measured 13 Nov 2026.
+Every number is produced by a script in this repository. Measured 13 and 14 Nov 2026.
 
 **JR-Bench: 20 planted bugs and 4 noise errors in 7 sample apps** ([`bench`](bench)): six Python apps of 21 to 101 files and one Node.js app. Each bug is planted as if a commit introduced it and triggered for real; a hidden test JaagteRaho never sees judges the fix.
 

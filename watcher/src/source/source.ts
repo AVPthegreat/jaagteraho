@@ -2,10 +2,13 @@
 
 import { readFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
+import { cachedIndex, indexFromFolder, indexFromTarball, type RepoIndex } from "./repo.js";
 
 export interface SourceProvider {
   name: string;
   getFile(path: string, ref?: string | null): Promise<string | null>;
+  /** The whole repository's code at `ref`, for lookups beyond the stack trace. Null if unavailable. */
+  index?(ref?: string | null): Promise<RepoIndex | null>;
 }
 
 const cleanPath = (p: string) => {
@@ -17,6 +20,9 @@ const cleanPath = (p: string) => {
 export class LocalSource implements SourceProvider {
   name = "local";
   constructor(private root: string) {}
+  index(): Promise<RepoIndex | null> {
+    return cachedIndex(`local:${resolve(this.root)}`, () => indexFromFolder(this.root));
+  }
   async getFile(path: string): Promise<string | null> {
     const rel = cleanPath(path);
     if (!rel) return null;
@@ -30,12 +36,31 @@ export class LocalSource implements SourceProvider {
   }
 }
 
+/** A branch, tag or commit name safe to put in a URL: no "..", no "//", no leading or trailing "/" or ".". */
+export function safeRef(ref: string): boolean {
+  return /^[A-Za-z0-9_][\w.\/-]{0,99}$/.test(ref) && !ref.includes("..") && !ref.includes("//") && !/[./]$/.test(ref) && !ref.endsWith(".lock");
+}
+
 /** A fixed token, or a function that mints one (GitHub App installation tokens). */
 export type GitHubToken = string | undefined | (() => Promise<string | undefined>);
 
 export class GitHubSource implements SourceProvider {
   name = "github";
-  constructor(private repo: string, private tokenSource?: GitHubToken) {}
+  /** cacheScope: who the token belongs to (e.g. "project:12"), so cached private code stays with its owner. */
+  constructor(private repo: string, private tokenSource?: GitHubToken, private cacheScope?: string) {}
+  index(ref?: string | null): Promise<RepoIndex | null> {
+    const at = ref && safeRef(ref) ? ref : "";
+    // A copy read with a token belongs to whoever owns that token: the cache key carries its scope, so a
+    // private repository is never served to another app or to the public paste page.
+    const scope = this.tokenSource ? (this.cacheScope ?? "token") : "public";
+    return cachedIndex(`github:${scope}:${this.repo}@${at}`, async () => {
+      const token = typeof this.tokenSource === "function" ? await this.tokenSource() : this.tokenSource;
+      const headers: Record<string, string> = { accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28", ...(token ? { authorization: `Bearer ${token}` } : {}) };
+      const url = (r: string) => `https://api.github.com/repos/${this.repo}/tarball${r ? `/${r.split("/").map(encodeURIComponent).join("/")}` : ""}`;
+      // A release name that is not a ref falls back to the default branch, as getFile does.
+      return (await indexFromTarball(url(at), headers)) ?? (at ? indexFromTarball(url(""), headers) : null);
+    });
+  }
   async getFile(path: string, ref?: string | null): Promise<string | null> {
     const rel = cleanPath(path);
     if (!rel) return null;
