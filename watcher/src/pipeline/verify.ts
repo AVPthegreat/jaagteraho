@@ -87,7 +87,7 @@ _deny = ("/proc", "/sys", "/run", "/var/run", "/data", "/dev", "/root", "/home")
 _dev_ok = {"/dev/null", "/dev/urandom", "/dev/zero"}
 _blocked = {"subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn", "os.fork", "os.forkpty", "os.kill", "os.killpg",
             "socket.connect", "socket.bind", "socket.sendto", "socket.sendmsg", "socket.getaddrinfo", "ctypes.dlopen", "ctypes.dlsym", "ctypes.cdata",
-            "os.putenv", "os.unsetenv"}
+            }
 _wflags = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_APPEND | os.O_TRUNC
 _busy = [False]
 def _bad_path(p):
@@ -109,8 +109,18 @@ def _hook(event, args):
             p = os.path.realpath(os.fsdecode(path))
         finally:
             _busy[0] = False
-        if _bad_path(p):
+        # rename, link, symlink and copyfile have a destination too.
+        dest = None
+        if event in ("os.rename", "os.link", "os.symlink", "shutil.copyfile") and len(args) > 1 and isinstance(args[1], (str, bytes)):
+            _busy[0] = True
+            try:
+                dest = os.path.realpath(os.fsdecode(args[1]))
+            finally:
+                _busy[0] = False
+        if _bad_path(p) or (dest and _bad_path(dest)):
             raise PermissionError("not allowed in a regression test: " + p)
+        if dest and not (dest + os.sep).startswith(_root) and not dest.startswith(_tmp):
+            raise PermissionError("not allowed in a regression test: writing " + dest)
         writes = event != "open" and event not in ("os.listdir", "os.scandir")
         if event == "open":
             mode, flags = (args[1] if len(args) > 1 else None), (args[2] if len(args) > 2 else 0)

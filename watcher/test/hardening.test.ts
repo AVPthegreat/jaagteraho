@@ -81,6 +81,15 @@ describe("rate limits", () => {
     assert.ok(w.size <= 100, `size ${w.size}`);
   });
 
+  it("allowAll records nothing when one of the limits refuses", () => {
+    const w = new Window();
+    assert.ok(w.allowAll([["ip", 3, 60_000], ["s", 1, 60_000]]));
+    for (let i = 0; i < 5; i++) assert.equal(w.allowAll([["ip", 3, 60_000], ["s", 1, 60_000]]), false);
+    assert.ok(w.allowAll([["ip", 3, 60_000], ["s2", 1, 60_000]]), "the refused session did not use up the address");
+    assert.ok(w.allowAll([["ip", 3, 60_000], ["s3", 1, 60_000]]));
+    assert.equal(w.allowAll([["ip", 3, 60_000], ["s4", 1, 60_000]]), false);
+  });
+
   it("Slots caps open connections per key and in total", () => {
     const s = new Slots(2, 3);
     assert.ok(s.take("a") && s.take("a"));
@@ -291,6 +300,11 @@ describe("fix proof sandbox", () => {
     assert.match(run(wrap("os.listdir('/proc')")), /PermissionError/);
     assert.match(run(wrap("open('/tmp/../etc/jr-x', 'w')")), /not allowed in a regression test: writing/);
     assert.match(run(wrap("os.system('true')")), /not allowed in a regression test: os.system/);
+  });
+
+  it("Django-style setup that sets TZ still runs; a rename out of the copy is refused", () => {
+    assert.match(run(wrap("os.environ['TZ'] = 'Asia/Kolkata'; self.assertEqual(os.environ['TZ'], 'Asia/Kolkata')")), /^OK/m);
+    assert.match(run(wrap("open('a.txt', 'w').write('x'); os.rename('a.txt', '/var/tmp/jr-moved')")), /not allowed in a regression test: writing/);
   });
 
   it("an ordinary test still runs and can write inside its own folder", () => {

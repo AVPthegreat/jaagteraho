@@ -132,12 +132,16 @@ export function pasteRoutes(db: DB, ai: AI | null) {
     if (!parsed) return c.json({ error: "That does not look like a Python traceback or a JavaScript stack trace. Paste the whole error, from the first line to the last." }, 400);
     if (!ai) return c.json({ error: "Diagnosis is switched off right now." }, 503);
 
-    if (!ipLimits.allow(clientIp(c), PER_VISITOR_PER_DAY * 2, 86_400_000)) return c.json({ error: "Too many diagnoses from this network today. Try again tomorrow." }, 429);
+    if (!ipLimits.peek(clientIp(c), PER_VISITOR_PER_DAY * 2, 86_400_000)) return c.json({ error: "Too many diagnoses from this network today. Try again tomorrow." }, 429);
+    // The paste budget (ai/claude.ts) is checked before a slot or a GitHub fetch is used up.
+    if (spendContext.run({ projectId: 0, lane: "paste" }, () => ai.guard.pick(ai.diagnosisModel, ai.decisionModel)) === null)
+      return c.json({ error: "Today's free diagnoses are used up. Try again tomorrow." }, 429);
     // The quota check and the row that uses it up are one transaction, so parallel requests cannot all
     // pass the check while the first diagnosis is still running. Every attempt that reaches GitHub counts.
     const slot = reservePaste(db, session, repo);
     if (slot === "visitor") return c.json({ error: `You have used your ${PER_VISITOR_PER_DAY} diagnoses for today.` }, 429);
     if (slot === "day") return c.json({ error: "Today's free diagnoses are used up. Try again tomorrow." }, 429);
+    ipLimits.allow(clientIp(c), PER_VISITOR_PER_DAY * 2, 86_400_000);
     const failed = (reason: string) => db.prepare("UPDATE pastes SET id = ?, result = ? WHERE id = ?").run(`failed-${randomBytes(6).toString("hex")}`, JSON.stringify({ failed: reason }), slot.id);
 
     const run = async () => {

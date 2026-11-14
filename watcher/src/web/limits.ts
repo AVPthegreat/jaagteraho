@@ -42,6 +42,22 @@ export class Window {
     return true;
   }
 
+  /**
+   * Checks every [key, max, ms] first and records a hit on all of them only when all pass, so a request
+   * refused by one limit (say its session) never uses up another (say a whole office's shared address).
+   */
+  allowAll(checks: Array<[string, number, number]>, now = Date.now()): boolean {
+    if (!checks.every(([k, max, ms]) => this.peek(k, max, ms, now))) return false;
+    for (const [k, max, ms] of checks) this.allow(k, max, ms, now);
+    return true;
+  }
+
+  /** True if one more hit on key would be allowed; records nothing. */
+  peek(key: string, max: number, ms: number, now = Date.now()): boolean {
+    const e = this.hits.get(key);
+    return !e || e.at.filter((t) => now - t < ms).length < max;
+  }
+
   /** Forgets keys with no hit inside their window; if still full, the least recently used. */
   prune(now = Date.now()) {
     for (const [k, e] of this.hits) if (e.at.length === 0 || now - e.at[e.at.length - 1] >= e.ms) this.hits.delete(k);

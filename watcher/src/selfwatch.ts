@@ -71,7 +71,8 @@ export function ensureSelfProject(db: DB, root: string): number {
       db.prepare("DELETE FROM owners WHERE project_id = ?").run(selfId);
       db.prepare("INSERT INTO owners (project_id, chat_id, user_id, linked_at) VALUES (?, ?, ?, ?)").run(selfId, admin, admin, new Date().toISOString());
     }
-  }
+  } else if (!db.prepare("SELECT 1 FROM owners WHERE project_id = ?").get(selfId))
+    console.warn("self-watch: JR_ADMIN_CHAT_ID is not set, so alerts about JaagteRaho's own errors reach nobody");
   return selfId;
 }
 

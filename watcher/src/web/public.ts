@@ -77,9 +77,10 @@ export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins,
     const flow = body.flow as Flow;
     if (!SESSION.test(session) || !(typeof flow === "string" && Object.hasOwn(FLOWS, flow))) return c.json({ error: "Choose a flow to break." }, 400);
     // Fresh sessions are free to make, so the network address is checked first.
-    if (!limits.allow(`ip:${clientIp(c)}`, 30, 3_600_000)) return c.json({ error: "Easy there. Try again in a while." }, 429);
-    if (!limits.allow(`s:${session}`, 6, 60_000)) return c.json({ error: "Easy there. Try again in a minute." }, 429);
-    if (!limits.allow("global", 240, 3_600_000)) return c.json({ error: "The demo is busy. Try again in a few minutes." }, 429);
+    // A hit counts against the address, the session and the whole demo only when all three allow it.
+    if (!limits.peek(`ip:${clientIp(c)}`, 30, 3_600_000)) return c.json({ error: "Easy there. Try again in a while." }, 429);
+    if (!limits.peek(`s:${session}`, 6, 60_000)) return c.json({ error: "Easy there. Try again in a minute." }, 429);
+    if (!limits.allowAll([[`ip:${clientIp(c)}`, 30, 3_600_000], [`s:${session}`, 6, 60_000], ["global", 240, 3_600_000]])) return c.json({ error: "The demo is busy. Try again in a few minutes." }, 429);
     const country = typeof body.country === "string" && COUNTRY.test(body.country) ? body.country : null;
     touchVisitor(session, country);
     // The visitor's own heal rule for this session: approve each fix, or let a proved fix heal on its own.
@@ -166,7 +167,7 @@ export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins,
     const body = ((await c.req.json().catch(() => ({}))) ?? {}) as { session?: string; flow?: string; fix_id?: number };
     const flow = body.flow as Flow;
     if (!SESSION.test(body.session ?? "") || !(typeof flow === "string" && Object.hasOwn(FLOWS, flow)) || !Number.isInteger(body.fix_id)) return c.json({ error: "bad request" }, 400);
-    if (!limits.allow(`aip:${clientIp(c)}`, 120, 3_600_000) || !limits.allow(`a:${body.session}`, 20, 60_000)) return c.json({ error: "Easy there. Try again in a minute." }, 429);
+    if (!limits.allowAll([[`aip:${clientIp(c)}`, 120, 3_600_000], [`a:${body.session}`, 20, 60_000]])) return c.json({ error: "Easy there. Try again in a minute." }, 429);
     const fix = db
       .prepare(
         `SELECT f.status, f.gate_result, i.transaction_name FROM fixes f JOIN diagnoses d ON d.id = f.diagnosis_id JOIN incidents i ON i.id = d.incident_id
@@ -183,7 +184,7 @@ export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins,
   app.post("/public/undo", async (c) => {
     const body = ((await c.req.json().catch(() => ({}))) ?? {}) as { session?: string; heal_id?: number };
     if (!SESSION.test(body.session ?? "") || !Number.isInteger(body.heal_id)) return c.json({ error: "bad request" }, 400);
-    if (!limits.allow(`uip:${clientIp(c)}`, 60, 3_600_000) || !limits.allow(`u:${body.session}`, 10, 60_000)) return c.json({ error: "Easy there. Try again in a minute." }, 429);
+    if (!limits.allowAll([[`uip:${clientIp(c)}`, 60, 3_600_000], [`u:${body.session}`, 10, 60_000]])) return c.json({ error: "Easy there. Try again in a minute." }, 429);
     if (!healer?.undoSession(body.heal_id!, body.session!)) return c.json({ error: "Nothing to undo." }, 409);
     return c.json({ ok: true });
   });
@@ -191,7 +192,7 @@ export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins,
   app.post("/public/sign", async (c) => {
     const body = ((await c.req.json().catch(() => ({}))) ?? {}) as { session?: string; name?: string; country?: string; live_app?: boolean };
     if (!SESSION.test(body.session ?? "")) return c.json({ error: "bad session" }, 400);
-    if (!limits.allow(`gip:${clientIp(c)}`, 30, 3_600_000) || !limits.allow(`g:${body.session}`, 5, 60_000)) return c.json({ error: "Easy there. Try again in a minute." }, 429);
+    if (!limits.allowAll([[`gip:${clientIp(c)}`, 30, 3_600_000], [`g:${body.session}`, 5, 60_000]])) return c.json({ error: "Easy there. Try again in a minute." }, 429);
     const name = (typeof body.name === "string" ? body.name : "").replace(/[<>]/g, "").trim().slice(0, 40);
     const country = (typeof body.country === "string" ? body.country : "").replace(/[<>]/g, "").trim().slice(0, 40);
     if (!name || !country) return c.json({ error: "Add a name or handle and a country." }, 400);
