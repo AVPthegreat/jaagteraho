@@ -1,0 +1,23 @@
+{
+  "name": "jaagteraho",
+  "version": "0.1.0",
+  "description": "Connect your app to JaagteRaho, an AI night watchman: one command adds the open-source Sentry SDK, points it at JaagteRaho and sends a test error.",
+  "type": "module",
+  "bin": {
+    "jaagteraho": "bin/jaagteraho.mjs"
+  },
+  "files": [
+    "bin",
+    "lib"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "qrcode-terminal": "^0.12.0"
+  },
+  "license": "MIT"
+}
