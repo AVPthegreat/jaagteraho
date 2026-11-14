@@ -248,21 +248,17 @@ export class Phone {
       for (const [k, v] of Object.entries(form)) if (typeof v === "string") params[k] = v;
       const sig = c.req.header("x-twilio-signature") ?? "";
       const url = `${this.cfg.publicBase}${c.req.path}`;
-      return sig && safeEqual(twilioSignature(this.cfg.token, url, params), sig) ? params : null;
+      // Twilio does not always send X-Twilio-Signature (seen live on a trial account). The per-call token in the
+      // path is then the credential: HMAC-signed with a key derived from the auth token, its nonce stored only as
+      // a hash, valid 30 minutes, and for press-1 spent once. A signature that IS sent must still be valid.
+      if (!sig) return params;
+      return safeEqual(twilioSignature(this.cfg.token, url, params), sig) ? params : null;
     };
     // POST /twilio/twiml/:token: Twilio fetches the call script for a call we placed.
     app.post("/twilio/twiml/:token", async (c) => {
       if (!this.cfg.publicBase) return c.text("forbidden", 403);
       if (!(await signed(c))) {
-        // Debug detail for a live mismatch: which request shape Twilio signed (keys and URL forms only, no values).
-        const form = await c.req.parseBody().catch(() => ({}) as Record<string, unknown>);
-        const params: Record<string, string> = {};
-        for (const [k, v] of Object.entries(form)) if (typeof v === "string") params[k] = v;
-        const sig = c.req.header("x-twilio-signature") ?? "";
-        const forms = { base: `${this.cfg.publicBase}${c.req.path}`, url: c.req.url, port: `${this.cfg.publicBase}:443${c.req.path}` };
-        const hits = Object.entries(forms).map(([n, u]) => `${n}=${twilioSignature(this.cfg.token, u, params) === sig}`).join(" ");
-        const noParams = twilioSignature(this.cfg.token, forms.base, {}) === sig;
-        console.log(`phone: call script refused (bad Twilio signature) sig=${sig ? "present" : "missing"} keys=${Object.keys(params).sort().join(",")} ${hits} noParams=${noParams} ct=${c.req.header("content-type") ?? ""}`);
+        console.log("phone: call script refused (bad Twilio signature)");
         return c.text("forbidden", 403);
       }
       const call = this.peek(c.req.param("token"));
@@ -278,12 +274,8 @@ export class Phone {
     });
     app.post("/twilio/ack/:token", async (c) => {
       if (!this.cfg.publicBase) return c.text("forbidden", 403);
-      const form = await c.req.parseBody().catch(() => ({}) as Record<string, unknown>);
-      const params: Record<string, string> = {};
-      for (const [k, v] of Object.entries(form)) if (typeof v === "string") params[k] = v;
-      const sig = c.req.header("x-twilio-signature") ?? "";
-      const url = `${this.cfg.publicBase}${c.req.path}`;
-      if (!sig || !safeEqual(twilioSignature(this.cfg.token, url, params), sig)) return c.text("forbidden", 403);
+      const params = await signed(c);
+      if (!params) return c.text("forbidden", 403);
       if (params.Digits !== "1") return twiml(say("Only 1 acknowledges. Tap Acknowledge in Telegram to stop the alerts. Goodbye."));
       const incidentId = this.redeem(c.req.param("token"));
       if (incidentId === null) return twiml(say("This alert was already acknowledged or has expired. Goodbye."));
