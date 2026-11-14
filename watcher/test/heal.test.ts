@@ -20,8 +20,10 @@ function facts(over: Partial<HealFacts> = {}): HealFacts {
     incident_status: "open",
     owner_paused: false,
     fix_status: "shown",
-    gate: { passed: true, level: "recommended", test_run: null },
+    gate: { passed: true, level: "recommended", test_run: null, review: { unanimous: true } },
     files: ["portal/submissions.py"],
+    risky: [],
+    authenticated: true,
     heals_last_night: 0,
     now: Date.now(),
     ...over,
@@ -87,7 +89,7 @@ describe("heal rules", () => {
 
   it("the demo portal needs a proving regression test", () => {
     assert.match(healBlocker(facts({ kind: "sandbox" }))!, /test did not prove/);
-    assert.equal(healBlocker(facts({ kind: "sandbox", gate: { passed: true, level: "recommended", test_run: { verdict: "proved" } } })), null);
+    assert.equal(healBlocker(facts({ kind: "sandbox", gate: { passed: true, level: "recommended", test_run: { verdict: "proved" }, review: { unanimous: true } } })), null);
   });
 
   it("the owner's own approval skips the auto rule, never the safety rules", () => {
@@ -99,7 +101,10 @@ describe("heal rules", () => {
     assert.equal(notImproved(10, 0), false);
     assert.equal(notImproved(10, 3), false);
     assert.equal(notImproved(10, 5), true);
-    assert.equal(notImproved(0, 1), true);
+    assert.equal(notImproved(0, 1), false, "one stray error never undoes a fix");
+    assert.equal(notImproved(0, 2), false);
+    assert.equal(notImproved(0, 3), true);
+    assert.equal(notImproved(20, 4), false);
     assert.deepEqual(reverseEdits([{ file: "a.py", find: "x", replace: "y" }]), [{ file: "a.py", find: "y", replace: "x" }]);
   });
 });
@@ -112,7 +117,7 @@ function fakeTg() {
   return { tg, sent };
 }
 
-function fakeGitHub(opts: { autoMerge?: "on" | "clean" | "refused" } = {}) {
+function fakeGitHub(opts: { autoMerge?: "on" | "clean" | "refused"; requiredChecks?: boolean } = {}) {
   const calls: string[] = [];
   const prs = new Map<number, { merged_at: string | null; state: string; edits: unknown }>();
   let n = 40;
@@ -123,8 +128,9 @@ function fakeGitHub(opts: { autoMerge?: "on" | "clean" | "refused" } = {}) {
       calls.push(`open:${num}:${o.title}`);
       return { ok: true, url: `https://github.com/acme/app/pull/${num}`, number: num };
     },
-    autoMerge: async (_r, _t, num) => {
-      calls.push(`automerge:${num}`);
+    autoMerge: async (_r, _t, num, requireChecks) => {
+      calls.push(`automerge:${num}:${requireChecks ? "checks" : "any"}`);
+      if (requireChecks && opts.requiredChecks === false) return { ok: false, error: "the repository requires no status checks, so it is left for you to merge" };
       if (opts.autoMerge === "refused") return { ok: false, error: "auto-merge is not allowed for this repository" };
       if (opts.autoMerge === "clean") {
         prs.get(num)!.merged_at = iso(Date.now());
@@ -132,7 +138,8 @@ function fakeGitHub(opts: { autoMerge?: "on" | "clean" | "refused" } = {}) {
       }
       return { ok: true, merged: false };
     },
-    state: async (_r, _t, num) => prs.get(num) ?? null,
+    disableAutoMerge: async (_r, _t, num) => void calls.push(`disable:${num}`),
+    state: async (_r, _t, num) => (prs.has(num) ? { ...prs.get(num)! } : null),
     close: async (_r, _t, num) => (calls.push(`close:${num}`), (prs.get(num)!.state = "closed"), true),
   };
   return { github, calls, prs };
@@ -140,7 +147,10 @@ function fakeGitHub(opts: { autoMerge?: "on" | "clean" | "refused" } = {}) {
 
 const EDIT = { file: "portal/submissions.py", find: '    language = data["language"]', replace: '    language = data.get("language", "python")' };
 
-function seed(db: DB, o: { kind?: "faurus" | "sandbox"; level?: string; proved?: boolean; file?: string; action?: string; wokeAgoMs?: number; acked?: number; repo?: string | null } = {}) {
+function seed(
+  db: DB,
+  o: { kind?: "faurus" | "sandbox"; level?: string; proved?: boolean; file?: string; replace?: string; action?: string; wokeAgoMs?: number; acked?: number; repo?: string | null; authed?: boolean; unanimous?: boolean; release?: string | null } = {},
+) {
   const now = Date.now();
   const kind = o.kind ?? "faurus";
   const pid = 1000 + Math.floor(Math.random() * 1e6);
@@ -149,23 +159,27 @@ function seed(db: DB, o: { kind?: "faurus" | "sandbox"; level?: string; proved?:
   const inc = Number(
     db.prepare("INSERT INTO incidents (project_id, fingerprint, exception_type, transaction_name, first_seen, last_seen, hits) VALUES (?, 'fp', 'KeyError', '/api/submit', ?, ?, 4)").run(pid, iso(now - 600_000), iso(now)).lastInsertRowid,
   );
-  for (let i = 0; i < 4; i++) addEvent(db, pid, inc, now - (i + 1) * 60_000);
+  for (let i = 0; i < 4; i++) addEvent(db, pid, inc, now - (i + 1) * 60_000, o.authed ?? true, o.release ?? null);
   const woke = iso(now - (o.wokeAgoMs ?? 0));
   db.prepare("INSERT INTO decisions (incident_id, facts, votes, rule_number, rule_text, action, engine, created_at) VALUES (?, '{}', '{}', 2, 'critical', ?, 'claude', ?)").run(inc, o.action ?? "wake", woke);
   db.prepare("INSERT INTO alerts (incident_id, chat_id, message_id, action, acked, pings, last_ping_at) VALUES (?, 7, 55, ?, ?, 3, ?)").run(inc, o.action ?? "wake", o.acked ?? 0, woke);
-  const result = { cause_plain: "No language is sent.", cause_technical: "t", file: EDIT.file, line: 14, confidence_words: "sure", test_hint: "h", edits: [{ ...EDIT, file: o.file ?? EDIT.file }] };
+  const result = { cause_plain: "No language is sent.", cause_technical: "t", file: EDIT.file, line: 14, confidence_words: "sure", test_hint: "h", edits: [{ ...EDIT, file: o.file ?? EDIT.file, replace: o.replace ?? EDIT.replace }] };
   const d = Number(db.prepare("INSERT INTO diagnoses (incident_id, model, result, created_at) VALUES (?, 'm', ?, ?)").run(inc, JSON.stringify(result), iso(now)).lastInsertRowid);
-  const gate = { passed: true, level: o.level ?? "recommended", reasons: [], changed_lines: 2, test_run: o.proved ? { verdict: "proved", note: "ok" } : null };
+  const gate = {
+    passed: true, level: o.level ?? "recommended", reasons: [], changed_lines: 2, test_run: o.proved ? { verdict: "proved", note: "ok" } : null,
+    review: { fix_quality: "3", touches_sensitive: "no", could_break: "no", votes: 3, unanimous: o.unanimous ?? true },
+  };
   const fix = Number(db.prepare("INSERT INTO fixes (diagnosis_id, diff, gate_result, status, created_at) VALUES (?, '--- a\n+++ b', ?, 'shown', ?)").run(d, JSON.stringify(gate), iso(now)).lastInsertRowid);
   process.env[`JR_GITHUB_HEAL_TOKEN_${pid}`] = "test-token";
+  process.env[`JR_GITHUB_HEAL_REPO_${pid}`] = "acme/app";
   return { pid, inc, fix };
 }
 
 let evN = 0;
-function addEvent(db: DB, pid: number, inc: number, at: number) {
+function addEvent(db: DB, pid: number, inc: number, at: number, authed = true, release: string | null = null) {
   db.prepare(
-    "INSERT INTO events (event_id, project_id, incident_id, received_at, occurred_at, level, exception_type, message_masked, frames, tags) VALUES (?, ?, ?, ?, ?, 'error', 'KeyError', 'm', '[]', '{}')",
-  ).run(`e${++evN}`, pid, inc, iso(at), iso(at));
+    "INSERT INTO events (event_id, project_id, incident_id, received_at, occurred_at, level, exception_type, message_masked, frames, tags, authenticated, release) VALUES (?, ?, ?, ?, ?, 'error', 'KeyError', 'm', '[]', '{}', ?, ?)",
+  ).run(`e${++evN}`, pid, inc, iso(at), iso(at), authed ? 1 : 0, release);
 }
 
 describe("healer: real apps", () => {
@@ -224,6 +238,8 @@ describe("healer: real apps", () => {
     const applied = Date.parse(row!.applied_at!);
     for (let i = 0; i < 4; i++) addEvent(db, s.pid, s.inc, applied + GRACE_MS + 60_000 + i * 1000);
     await h.tick(applied + GRACE_MS + 5 * 60_000);
+    assert.equal(h.get(row!.id)!.status, "applied", "too soon to judge: under 10 min watched");
+    await h.tick(applied + GRACE_MS + 11 * 60_000);
     const after = h.get(row!.id)!;
     assert.equal(after.status, "rolled_back");
     assert.ok(calls.some((c) => c.startsWith("open:") && c.includes("Undo JaagteRaho fix")), "a revert PR is opened");
@@ -288,7 +304,8 @@ describe("healer: real apps", () => {
     const mk = () => {
       const inc = Number(db.prepare("INSERT INTO incidents (project_id, fingerprint, exception_type, transaction_name, first_seen, last_seen) VALUES (?, ?, 'E', '/x', ?, ?)").run(a.pid, `f${Math.random()}`, iso(Date.now()), iso(Date.now())).lastInsertRowid);
       const d = Number(db.prepare("INSERT INTO diagnoses (incident_id, model, result, created_at) VALUES (?, 'm', ?, ?)").run(inc, JSON.stringify({ edits: [EDIT], cause_plain: "c", cause_technical: "t", test_hint: "h", file: "f", line: 1 }), iso(Date.now())).lastInsertRowid);
-      db.prepare("INSERT INTO fixes (diagnosis_id, diff, gate_result, status, created_at) VALUES (?, 'd', ?, 'shown', ?)").run(d, JSON.stringify({ passed: true, level: "recommended", reasons: [] }), iso(Date.now()));
+      db.prepare("INSERT INTO fixes (diagnosis_id, diff, gate_result, status, created_at) VALUES (?, 'd', ?, 'shown', ?)").run(d, JSON.stringify({ passed: true, level: "recommended", reasons: [], review: { unanimous: true } }), iso(Date.now()));
+      addEvent(db, a.pid, inc, Date.now() - 1000);
       return inc;
     };
     assert.equal((await h.onFix(a.inc, { session: null, action: "wake" }))?.status, "merging");
@@ -320,7 +337,7 @@ describe("healer: real apps", () => {
     savePolicy(db, s.pid, { mode: "auto-now" });
     const row = await h.onFix(s.inc, { session: null, action: "wake" });
     assert.equal(row?.status, "pr_open");
-    assert.ok(sent.some((m) => m.text.includes("merge it yourself")));
+    assert.ok(sent.some((m) => m.text.includes("Merge it to heal")));
   });
 
   it("Undo before the merge closes the PR; after the merge opens a revert", async () => {
@@ -331,7 +348,8 @@ describe("healer: real apps", () => {
     const s = seed(db);
     savePolicy(db, s.pid, { mode: "auto-now" });
     const row = await h.onFix(s.inc, { session: null, action: "wake" });
-    assert.match(await h.undo(row!.id, "owner"), /Closed the pull request/);
+    assert.match((await h.undo(row!.id, "owner")).message, /Closed the pull request/);
+    assert.ok(calls.includes(`disable:${row!.pr_number}`), "auto-merge is turned off before closing");
     assert.ok(calls.includes(`close:${row!.pr_number}`));
     assert.equal(h.get(row!.id)!.status, "undone");
     assert.equal((db.prepare("SELECT status FROM fixes WHERE id = ?").get(s.fix) as { status: string }).status, "shown");
@@ -341,9 +359,9 @@ describe("healer: real apps", () => {
     const r2 = await h.onFix(s2.inc, { session: null, action: "wake" });
     prs.get(r2!.pr_number!)!.merged_at = iso(Date.now());
     await h.tick();
-    assert.match(await h.undo(r2!.id, "owner"), /Undo pull request/);
+    assert.match((await h.undo(r2!.id, "owner")).message, /Undo pull request/);
     assert.equal(h.get(r2!.id)!.status, "undone");
-    assert.match(await h.undo(r2!.id, "owner"), /Nothing to undo/);
+    assert.match((await h.undo(r2!.id, "owner")).message, /Nothing to undo/);
   });
 });
 
@@ -403,7 +421,7 @@ describe("alert card", () => {
     savePolicy(db, s.pid, { mode: "auto-now" });
     await h.onFix(s.inc, { session: null, action: "wake" });
     const card = renderCard(db, s.inc)!;
-    assert.match(card.text, /Self-heal:<\/b> merging when your checks pass/);
+    assert.match(card.text, /Self-heal:<\/b> merging when your required checks pass/);
     assert.ok(card.markup.inline_keyboard.flat().some((b) => b.text === "Undo"));
     assert.ok(!card.markup.inline_keyboard.flat().some((b) => b.text === "Approve fix"), "already applied");
   });
@@ -418,12 +436,211 @@ describe("public demo endpoints", () => {
     const app = publicRoutes({ db, voice: null, twinBroken: "http://127.0.0.1:9", twinFixed: "http://127.0.0.1:9", allowedOrigins: [], healer });
     const post = (path: string, body: unknown) => app.request(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     await post("/public/break", { session: "visitor-zz0001", flow: "submit", heal: true }); // the portal is unreachable here; the choice is still stored
-    assert.equal((db.prepare("SELECT value FROM kv WHERE key = 'heal_session:visitor-zz0001'").get() as { value: string }).value, "auto-now");
+    assert.ok(db.prepare("SELECT 1 FROM heal_sessions WHERE session_id = 'visitor-zz0001'").get());
     const s = seed(db, { kind: "sandbox", proved: true });
     const row = await healer.onFix(s.inc, { session: "visitor-zz0001", action: "wake" });
     assert.equal(row?.status, "verified");
     assert.equal((await post("/public/undo", { session: "visitor-other1", heal_id: row!.id })).status, 409);
     assert.equal((await post("/public/undo", { session: "visitor-zz0001", heal_id: row!.id })).status, 200);
     assert.equal((await post("/public/undo", { session: "visitor-zz0001", heal_id: row!.id })).status, 409);
+  });
+});
+
+describe("security review fixes", () => {
+  it("1a. errors without the server secret never make a fix apply itself (the owner can still approve)", async () => {
+    assert.match(healBlocker(facts({ authenticated: false }))!, /server secret/);
+    assert.equal(healBlocker(facts({ authenticated: false, trigger: "owner" })), null);
+    assert.equal(healBlocker(facts({ authenticated: false, kind: "sandbox", gate: { passed: true, level: "recommended", test_run: { verdict: "proved" }, review: { unanimous: true } } })), null, "the demo writes no code");
+    const db = openDb(":memory:");
+    const { tg } = fakeTg();
+    const { github, calls } = fakeGitHub();
+    const h = new Healer(db, tg, { twinFixed: "http://x", github });
+    const s = seed(db, { authed: false });
+    savePolicy(db, s.pid, { mode: "auto-now" });
+    assert.equal(await h.onFix(s.inc, { session: null, action: "wake" }), null);
+    // One forged (unauthenticated) error mixed into an authenticated incident is enough to refuse.
+    const t = seed(db);
+    savePolicy(db, t.pid, { mode: "auto-now" });
+    addEvent(db, t.pid, t.inc, Date.now(), false);
+    assert.equal(await h.onFix(t.inc, { session: null, action: "wake" }), null);
+    assert.equal(calls.length, 0);
+  });
+
+  it("1b. intake marks an event authenticated only with the server secret", async () => {
+    const { carriesSecret } = await import("../src/intake/route.js");
+    assert.equal(carriesSecret("s3cret", "s3cret", undefined), true);
+    assert.equal(carriesSecret("s3cret", undefined, "Sentry sentry_key=pub, sentry_version=7, sentry_secret=s3cret"), true);
+    assert.equal(carriesSecret("s3cret", undefined, "Sentry sentry_key=pub, sentry_version=7"), false);
+    assert.equal(carriesSecret("s3cret", "wrong!", undefined), false);
+    assert.equal(carriesSecret(null, "anything", undefined), false);
+    const { secretDsnFor, ingestSecretFor } = await import("../src/pipeline/heal.js");
+    const db = openDb(":memory:");
+    const s = seed(db);
+    const secret = ingestSecretFor(db, s.pid);
+    assert.equal(ingestSecretFor(db, s.pid), secret, "stable");
+    assert.match(secretDsnFor(db, s.pid), new RegExp(`^https?://k${s.pid}:${secret}@[^/]+/${s.pid}$`));
+  });
+
+  it("1c. risky added code and wider protected areas block every kind of apply", async () => {
+    const { riskyAdditions, HEAL_PROTECTED } = await import("../src/pipeline/gate.js");
+    assert.deepEqual(riskyAdditions([EDIT]), []);
+    const bad: Array<[string, RegExp]> = [
+      ["import subprocess", /import/],
+      ["    __import__('os').system('id')", /dynamic code/],
+      ["    importlib.import_module(m)", /dynamic code|import/],
+      ["    const cp = require('child_process')", /module at run time/],
+      ["    await import(u)", /module at run time/],
+      ["    eval(x)", /dynamic code/],
+      ["    pickle.loads(b)", /unsafe loading/],
+      ["    requests.post(u, data)", /network/],
+      ["    fetch(u)", /network/],
+      ["    fs.writeFileSync(p, d)", /writes files/],
+      ["    data = base64.b64decode(s)", /decodes/],
+      ["    bytes.fromhex(s)", /decodes/],
+      ["    u = 'ht' + 'tp://evil'", /URL/],
+      ["    u = 'https://evil.example'", /URL/],
+      ["    k = os.environ['KEY']", /secrets|processes/],
+    ];
+    for (const [line, why] of bad) {
+      const r = riskyAdditions([{ find: "x", replace: line }]);
+      assert.ok(r.some((w) => why.test(w)), `${line} -> ${r.join(", ")}`);
+    }
+    for (const f of ["api/session.py", "auth/jwt.ts", "app/oauth.py", "admin/views.py", "users/roles.py", "app/middleware.py", "exam/start.py", "Dockerfile", "docker-compose.yml", "k8s/deploy.yaml", "infra/main.tf", ".gitlab-ci.yml", "Jenkinsfile", "nginx/site.conf", "Caddyfile", ".env.production", "app/tokens.py"]) {
+      assert.ok(HEAL_PROTECTED.test(f), f);
+      assert.match(healBlocker(facts({ files: [f], trigger: "owner" }))!, /protected area/, f);
+    }
+    assert.ok(!HEAL_PROTECTED.test("portal/submissions.py"));
+    assert.match(healBlocker(facts({ risky: ["talks to the network"], trigger: "owner" }))!, /talks to the network/);
+  });
+
+  it("1d. auto-apply needs every reviewer vote to agree", () => {
+    assert.match(healBlocker(facts({ gate: { passed: true, level: "recommended", review: { unanimous: false } } }))!, /every reviewer vote/);
+    assert.match(healBlocker(facts({ gate: { passed: true, level: "recommended" } }))!, /every reviewer vote/);
+    assert.equal(healBlocker(facts({ trigger: "owner", gate: { passed: true, level: "recommended", review: { unanimous: false } } })), null);
+  });
+
+  it("2. without required checks on the branch, a heal is left as a PR for the owner and paging goes on", async () => {
+    const db = openDb(":memory:");
+    const { tg, sent } = fakeTg();
+    const { github, calls, prs } = fakeGitHub({ requiredChecks: false, autoMerge: "clean" });
+    const h = new Healer(db, tg, { twinFixed: "http://x", github });
+    const s = seed(db);
+    savePolicy(db, s.pid, { mode: "auto-now" });
+    const row = await h.onFix(s.inc, { session: null, action: "wake" });
+    assert.equal(row?.status, "pr_open");
+    assert.ok(calls.includes(`automerge:${row!.pr_number}:checks`));
+    assert.equal(prs.get(row!.pr_number!)!.merged_at, null, "never merged");
+    assert.ok(sent.some((m) => /will not merge by itself.*requires no status checks/s.test(m.text)));
+    assert.equal((db.prepare("SELECT pings FROM alerts WHERE incident_id = ?").get(s.inc) as { pings: number }).pings, 0);
+  });
+
+  it("3. a failed rollback is reported once, not every tick", async () => {
+    const db = openDb(":memory:");
+    const { tg, sent } = fakeTg();
+    const gh = fakeGitHub({ autoMerge: "clean" });
+    const h = new Healer(db, tg, { twinFixed: "http://x", github: gh.github });
+    const s = seed(db);
+    savePolicy(db, s.pid, { mode: "auto-now" });
+    const row = await h.onFix(s.inc, { session: null, action: "wake" });
+    const applied = Date.parse(row!.applied_at!);
+    for (let i = 0; i < 5; i++) addEvent(db, s.pid, s.inc, applied + GRACE_MS + 60_000 + i);
+    gh.github.openPr = async () => ({ ok: false, error: "GitHub is down" });
+    for (let k = 0; k < 4; k++) await h.tick(applied + GRACE_MS + (11 + k) * 60_000);
+    assert.equal(h.get(row!.id)!.status, "undo_failed");
+    assert.equal(sent.filter((m) => m.text.includes("the heal did not help")).length, 1);
+    assert.match(sent.find((m) => m.text.includes("the heal did not help"))!.text, /Revert #\d+ on GitHub/);
+  });
+
+  it("4. an owner Undo and a rollback at the same moment open one revert", async () => {
+    const db = openDb(":memory:");
+    const { tg } = fakeTg();
+    const { github, calls } = fakeGitHub({ autoMerge: "clean" });
+    const h = new Healer(db, tg, { twinFixed: "http://x", github });
+    const s = seed(db);
+    savePolicy(db, s.pid, { mode: "auto-now" });
+    const row = await h.onFix(s.inc, { session: null, action: "wake" });
+    const [a, b] = await Promise.all([h.undo(row!.id, "owner"), h.undo(row!.id, "no improvement")]);
+    assert.equal([a, b].filter((x) => x.done).length, 1);
+    assert.equal(calls.filter((c) => c.includes("Undo JaagteRaho fix")).length, 1);
+  });
+
+  it("4b. a PR that merges while being closed gets a revert instead", async () => {
+    const db = openDb(":memory:");
+    const { tg } = fakeTg();
+    const gh = fakeGitHub();
+    const h = new Healer(db, tg, { twinFixed: "http://x", github: gh.github });
+    const s = seed(db);
+    savePolicy(db, s.pid, { mode: "auto-now" });
+    const row = await h.onFix(s.inc, { session: null, action: "wake" });
+    gh.github.close = async (_r, _t, num) => ((gh.prs.get(num)!.merged_at = iso(Date.now())), true); // auto-merge won the race
+    const out = await h.undo(row!.id, "owner");
+    assert.match(out.message, /Undo pull request/);
+    assert.equal(h.get(row!.id)!.status, "undone");
+  });
+
+  it("5. a stray error or two does not undo a fix; old-release errors after a deploy do not count", async () => {
+    const db = openDb(":memory:");
+    const { tg } = fakeTg();
+    const { github } = fakeGitHub({ autoMerge: "clean" });
+    const h = new Healer(db, tg, { twinFixed: "http://x", github });
+    const s = seed(db, { release: "v1" });
+    savePolicy(db, s.pid, { mode: "auto-now" });
+    const row = await h.onFix(s.inc, { session: null, action: "wake" });
+    assert.equal(row?.release_before, "v1");
+    const merged = Date.parse(row!.applied_at!);
+    // Old instances keep failing before the deploy: no deploy seen yet, nothing judged.
+    for (let i = 0; i < 6; i++) addEvent(db, s.pid, s.inc, merged + 60_000 + i, true, "v1");
+    await h.tick(merged + 20 * 60_000);
+    assert.equal(h.get(row!.id)!.status, "applied");
+    assert.equal(h.get(row!.id)!.deployed_at, null);
+    // v2 reports in (an unrelated error), then two stray repeats of the fixed error.
+    const other = Number(db.prepare("INSERT INTO incidents (project_id, fingerprint, exception_type, first_seen, last_seen) VALUES (?, 'o', 'E', ?, ?)").run(s.pid, iso(merged), iso(merged)).lastInsertRowid);
+    addEvent(db, s.pid, other, merged + 21 * 60_000, true, "v2");
+    addEvent(db, s.pid, s.inc, merged + 25 * 60_000, true, "v2");
+    addEvent(db, s.pid, s.inc, merged + 26 * 60_000, true, "v1"); // a straggler from the old release
+    addEvent(db, s.pid, s.inc, merged + 27 * 60_000, false, "v2"); // forged: no secret
+    await h.tick(merged + 40 * 60_000);
+    assert.equal(h.get(row!.id)!.status, "applied");
+    await h.tick(merged + 21 * 60_000 + WATCH_MS + 1000);
+    assert.equal(h.get(row!.id)!.status, "verified");
+  });
+
+  it("5b. a release-tagged app with no deploy in a day ends unconfirmed", async () => {
+    const db = openDb(":memory:");
+    const { tg, sent } = fakeTg();
+    const { github } = fakeGitHub({ autoMerge: "clean" });
+    const h = new Healer(db, tg, { twinFixed: "http://x", github });
+    const s = seed(db, { release: "v1" });
+    savePolicy(db, s.pid, { mode: "auto-now" });
+    const row = await h.onFix(s.inc, { session: null, action: "wake" });
+    await h.tick(Date.parse(row!.applied_at!) + 25 * 3_600_000);
+    assert.equal(h.get(row!.id)!.status, "unconfirmed");
+    assert.ok(sent.some((m) => m.text.includes("Heal not confirmed")));
+  });
+
+  it("6. the write token is bound to one repository", async () => {
+    const { writeTokenFor } = await import("../src/pipeline/heal.js");
+    process.env.JR_GITHUB_HEAL_TOKEN_77 = "t";
+    process.env.JR_GITHUB_HEAL_REPO_77 = "Acme/App";
+    assert.equal(writeTokenFor({ id: 77, kind: "faurus", repo: "acme/app" }), "t");
+    assert.equal(writeTokenFor({ id: 77, kind: "faurus", repo: "evil/other" }), null, "after /repo changes the repository");
+    delete process.env.JR_GITHUB_HEAL_REPO_77;
+    assert.equal(writeTokenFor({ id: 77, kind: "faurus", repo: "acme/app" }), null, "a token with no bound repository is not used");
+    delete process.env.JR_GITHUB_HEAL_TOKEN_77;
+  });
+
+  it("8. demo heal choices expire and are capped; Undo is throttled", async () => {
+    const db = openDb(":memory:");
+    Healer.setSessionMode(db, "visitor-old00001", true, Date.now() - 25 * 3_600_000);
+    Healer.setSessionMode(db, "visitor-new00001", true);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM heal_sessions").get() as { n: number }).n, 1, "expired rows pruned on write");
+    Healer.setSessionMode(db, "visitor-new00001", false);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM heal_sessions").get() as { n: number }).n, 0, "approve-by-hand stores nothing");
+    const { publicRoutes } = await import("../src/web/public.js");
+    const healer = new Healer(db, null, { twinFixed: "http://x" });
+    const app = publicRoutes({ db, voice: null, twinBroken: "http://127.0.0.1:9", twinFixed: "http://127.0.0.1:9", allowedOrigins: [], healer });
+    const codes: number[] = [];
+    for (let i = 0; i < 12; i++) codes.push((await app.request("/public/undo", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session: "visitor-thr00001", heal_id: 1 }) })).status);
+    assert.equal(codes.filter((c) => c === 429).length, 2);
   });
 });

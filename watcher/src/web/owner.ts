@@ -159,7 +159,7 @@ ul{margin:0;padding-left:18px}footer{font-size:13px;color:var(--muted);border-to
 <div class="grid">
 <section class="card"><h2>Cause</h2>${r ? `<p style="margin:0">${esc(r.cause_plain)}</p><p class="dim" style="margin:0;font-size:14px">${esc(r.cause_technical)}</p><span class="mono dim" style="font-size:13px">${esc(r.file)} · line ${r.line} · ${esc(r.confidence_words)} · ${esc(diag!.model)}${diag!.cost_usd ? ` · $${diag!.cost_usd.toFixed(4)}` : ""}</span>` : '<p class="dim" style="margin:0">No diagnosis yet.</p>'}</section>
 <section class="card"><h2>What the AI was not allowed to do</h2><ul>
-<li>Apply a fix unless you approved it or your heal rule allows it, and then only through a pull request your repository's checks must pass</li><li>Touch login, payments, grading, exams or settings</li>
+<li>Apply a fix unless you approved it or your heal rule allows it, and then only through a pull request that merges by itself only behind your required checks</li><li>Touch login, payments, grading, exams or settings</li>
 <li>See request bodies, cookies, user details or local variables</li><li>Run any tool or command</li></ul></section>
 </div>
 

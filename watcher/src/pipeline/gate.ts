@@ -12,6 +12,50 @@ export const MAX_FILES = 3;
 export const MAX_CHANGED_LINES = 40;
 export const SENSITIVE = /(auth|login|logout|password|permission|payment|billing|invoice|checkout|grading|grader|grade|proctor|migration|settings|secret|\.env|requirements|package\.json|lock|\.github|workflow|dockerfile|docker-compose|deploy)/i;
 
+/**
+ * Wider list for applying a fix without a person reading it first (self-healing and one-tap Approve).
+ * The gate's SENSITIVE list above decides what is shown; this one decides what may ever go in by itself.
+ */
+export const HEAL_PROTECTED = new RegExp(
+  [
+    SENSITIVE.source,
+    "exam", "session", "token", "jwt", "oauth", "saml", "sso", "admin", "roles?\\b", "acl", "middleware", "crypt", "csrf", "cors", "secur",
+    "config", "\\.env", "\\.ya?ml$", "\\.toml$", "\\.ini$", "\\.cfg$", "\\.sh$", "makefile",
+    "k8s", "kube", "helm", "terraform", "\\.tf$", "ansible", "gitlab-ci", "jenkins", "circleci", "travis", "azure-pipelines", "buildkite", "bitbucket-pipelines",
+    "nginx", "caddy", "apache", "htaccess", "procfile", "vercel\\.json", "netlify", "fly\\.toml", "render\\.yaml", "infra",
+  ].join("|"),
+  "i",
+);
+
+// Added code a self-applied fix may never contain: process, network, file-writing, dynamic code,
+// decoding of hidden payloads, built-up URLs, and any new import.
+const RISKY_ADDED: Array<[RegExp, string]> = [
+  [/^\s*(import\s|from\s+\S+\s+import\s)/, "adds an import"],
+  [/\brequire\s*\(|\bimport\s*\(/, "loads a module at run time"],
+  [/\b(exec|eval|compile|execfile|__import__|globals|getattr|setattr|Function)\s*\(|\b(importlib|__import__|__builtins__|__globals__|__subclasses__)\b|\bnew\s+Function\b/, "runs dynamic code"],
+  [/\b(subprocess|child_process|os\.(system|popen|exec\w*|spawn\w*|fork|kill|remove|unlink|rmdir|rename|chmod|chown)|execSync|spawnSync|execFile)\b/, "starts processes or changes files"],
+  [/\b(socket|urllib|urlopen|httpx|requests|aiohttp|http\.client|https?\.(get|request)|fetch|axios|XMLHttpRequest|WebSocket|net\.connect|dgram|smtplib|ftplib|paramiko)\b/, "talks to the network"],
+  [/\b(pickle|marshal|ctypes|cffi|shelve|dill|yaml\.load)\b/, "uses unsafe loading"],
+  [/\b(fs\.(write|append|rm|unlink|create|copy|rename|mkdir|chmod)\w*|writeFile\w*|open\s*\([^)]*["'][wax+])/, "writes files"],
+  [/\b(base64|b64decode|b32decode|atob|btoa|binascii|unhexlify|fromhex|codecs\.decode|fromCharCode|chr\s*\(|decodeURIComponent|Buffer\.from\s*\([^)]*,\s*["'](hex|base64))/, "decodes hidden data"],
+  [/:\/\/|["'`](h|ht|htt|https?|ftp|www)["'`.:]?\s*\+|\+\s*["'`](t|tp|ttp|ps?|s?:\/*)["'`]/, "builds a URL"],
+  [/\bprocess\.env\b|\bos\.environ\b|\bos\.getenv\b/, "reads secrets from the environment"],
+];
+
+/** Reasons a fix must not be applied without a person: risky code on any added line. */
+export function riskyAdditions(edits: Array<{ find: string; replace: string }>): string[] {
+  const out = new Set<string>();
+  for (const e of edits) {
+    const before = new Set(e.find.split("\n").map((l) => l.trim()));
+    for (const line of e.replace.split("\n")) {
+      const l = line.trim();
+      if (!l || before.has(l)) continue;
+      for (const [re, why] of RISKY_ADDED) if (re.test(line)) out.add(why);
+    }
+  }
+  return [...out];
+}
+
 export type GateResult = {
   /** recommended: every check passed. caution: shown with the reviewer's concerns spelled out, never approvable. withheld: not shown. */
   level?: "recommended" | "caution" | "withheld";
@@ -20,7 +64,7 @@ export type GateResult = {
   changed_lines: number;
   diff: string;
   patched: Record<string, string>;
-  review?: { fix_quality: string; touches_sensitive: string; could_break: string; votes: number };
+  review?: { fix_quality: string; touches_sensitive: string; could_break: string; votes: number; unanimous?: boolean };
 };
 
 const countLines = (s: string) => (s === "" ? 0 : s.split("\n").length);
@@ -158,7 +202,9 @@ export async function reviewFix(ai: AI, cause: string, diff: string, files: Sour
     for (const a of answers) c.set(a[k], (c.get(a[k]) ?? 0) + 1);
     return [...c.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? 1 : -1))[0][0];
   };
-  return { fix_quality: major("fix_quality"), touches_sensitive: major("touches_sensitive"), could_break: major("could_break"), votes: answers.length };
+  // Every vote asked was answered and every one said: removes the cause, nothing sensitive, nothing breaks.
+  const unanimous = answers.length === votes && answers.every((a) => a.fix_quality === "3" && a.touches_sensitive === "no" && a.could_break === "no");
+  return { fix_quality: major("fix_quality"), touches_sensitive: major("touches_sensitive"), could_break: major("could_break"), votes: answers.length, unanimous };
 }
 
 export async function runGate(ai: AI | null, d: DiagnosisResult, shown: SourceFile[]): Promise<GateResult> {

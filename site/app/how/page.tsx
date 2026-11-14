@@ -71,7 +71,7 @@ const NIGHT = [
   },
   {
     t: "You approve it, or it heals under your rule",
-    d: "Tap \"Show fix\" to see the exact change. By default you decide: apply it yourself, or tap Approve where you gave write access. If your rule allows it and nobody acknowledges the wake-up in time, a recommended fix goes in on its own as a pull request your own checks must pass, and you get \"Healed while you were away\" with the proof and one-tap Undo. Tap \"Diagnosis right\" or \"wrong\" so we learn how often it is right.",
+    d: "Tap \"Show fix\" to see the exact change. By default you decide: apply it yourself, or tap Approve where you gave write access. If your rule allows it and nobody acknowledges the wake-up in time, a recommended fix goes in on its own as a pull request that merges only after your required checks pass, and you get \"Healed while you were away\" with the proof and one-tap Undo. Tap \"Diagnosis right\" or \"wrong\" so we learn how often it is right.",
     meta: "your rule decides",
   },
   {
@@ -288,10 +288,12 @@ export default function How() {
           </ul>
           <p>Rules that hold whatever you pick:</p>
           <ul>
-            <li>Only <b>recommended</b> fixes heal on their own: all six code checks and the review passed. Login, payments, grading, migrations, settings and CI are never touched.</li>
+            <li>Only <b>recommended</b> fixes heal on their own: all six code checks passed and every review vote agreed. A fix that adds an import, a network call, a process, a file write or decodes hidden data never does.</li>
+            <li>Never in login, sessions, tokens, admin and roles, payments, exams, grading, migrations, settings and config, CI or infrastructure files.</li>
+            <li>Only for errors your server sends with its secret (the bot gives you a server-only address). Errors that come with only the public key, which web pages can see, are still alerted and explained, but never heal on their own.</li>
             <li>At most 2 heals per app a night, unless you change it (up to 5).</li>
-            <li>On your app a heal is a pull request with GitHub auto-merge, so your own tests still decide. It needs write access you give for that one repository; that is set up with us by hand for now. Without it you get the ready-to-apply diff and the wake-up calls go on.</li>
-            <li>After a heal it watches the error for 40 minutes. If it does not drop by at least half, the fix is rolled back, you are woken again and self-healing stops for 12 hours.</li>
+            <li>On your app a heal is a pull request. It merges by itself only if your branch requires status checks, and only once they pass; otherwise it waits for you to merge and the wake-up calls go on. It needs write access you give for that one repository; that is set up with us by hand for now. Without it you get the ready-to-apply diff.</li>
+            <li>After your deploy (a new release reporting in, or 10 minutes after the merge if you don&apos;t tag releases) it watches the error for 30 minutes. If it comes back at least 3 times and is not down by half, the fix is rolled back, you are woken again and self-healing stops for 12 hours.</li>
             <li>You get &ldquo;Healed while you were away&rdquo;: what broke, what changed, the proof, and one-tap Undo. Every step is in the logbook.</li>
           </ul>
           <p>On the demo portal, healing switches your session to the portal&apos;s fixed build and sends the failing request again to prove it works.</p>
@@ -301,7 +303,7 @@ export default function How() {
       <section className="section" aria-labelledby="never-h">
         <h2 id="never-h">What it never does</h2>
         <ul className="prose muted">
-          <li>Deploy, restart servers or push straight to your main branch. A heal is always a pull request your checks must pass.</li>
+          <li>Deploy, restart servers or push straight to your main branch. A heal is always a pull request, and it merges by itself only behind your required checks.</li>
           <li>Apply a fix you did not allow, a fix with open concerns, or a fix that failed its check.</li>
           <li>Keep your users&apos; emails, passwords or cookies.</li>
           <li>Let the AI overrule the rules for exams, payments or login.</li>

@@ -270,7 +270,8 @@ export default async function Home() {
             <span>
               A small fix must pass 6 code checks (it applies cleanly, stays small, avoids login, payment and grading code, adds no packages or
               links, is still valid code) and a second Claude review. Then your rule decides: you approve it, or, if you sleep through the wake-up,
-              it goes in on its own as a pull request your own checks must pass. If the errors don&apos;t drop, it is undone and you are woken again.
+              it goes in on its own as a pull request that merges only after your required checks pass. If the errors don&apos;t drop after your
+              deploy, it is undone and you are woken again.
             </span>
           </li>
         </ol>
@@ -412,16 +413,22 @@ export default async function Home() {
             Set it with <code className="mono">/heal</code> on Telegram or when you connect.
           </li>
           <li>
-            <b>Only fully checked fixes heal on their own.</b> All six code checks and the review must pass. Login, payments, grading, migrations,
-            settings and CI are never touched. At most 2 heals a night unless you change it.
+            <b>Only fully checked fixes heal on their own.</b> All six code checks pass and every review vote agrees. No new imports, network
+            calls, processes, file writes or hidden data. Login, sessions, tokens, admin, payments, exams, grading, migrations, settings, config, CI
+            and infrastructure are never touched. At most 2 heals a night unless you change it.
           </li>
           <li>
-            <b>Through your own checks, with write access you choose to give.</b> On your app a heal is a pull request with GitHub auto-merge, so
-            your tests still decide. Without write access you get the ready-to-apply diff and it keeps calling you.
+            <b>Only for errors your server signs.</b> Errors must carry your app&apos;s server-only secret, so nobody who copies the public key from
+            a web page can steer a fix.
           </li>
           <li>
-            <b>Proved, or undone.</b> If the error does not drop after a heal, it rolls the fix back, wakes you again and stops healing for 12
-            hours. Every heal comes with one-tap Undo.
+            <b>Through your own checks, with write access you choose to give.</b> On your app a heal is a pull request that merges by itself only
+            when your branch requires status checks and they pass. Otherwise it waits for you, and so does the wake-up call. Without write access
+            you get the ready-to-apply diff.
+          </li>
+          <li>
+            <b>Proved, or undone.</b> After your deploy it watches the error for 30 minutes. If it comes back at least 3 times and is not down by
+            half, it rolls the fix back, wakes you again and stops healing for 12 hours. Every heal comes with one-tap Undo.
           </li>
           <li>
             <b>Reads only what it needs.</b> Just the files an error points to. Its GitHub app is read-only.

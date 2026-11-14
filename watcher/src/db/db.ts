@@ -182,6 +182,9 @@ function migrate(db: DB) {
   const has = (table: string, col: string) => (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).some((c) => c.name === col);
   if (!has("spend", "project_id")) db.exec("ALTER TABLE spend ADD COLUMN project_id INTEGER");
   if (!has("projects", "github_installation")) db.exec("ALTER TABLE projects ADD COLUMN github_installation INTEGER");
+  // Self-healing: a server-only secret per app, and whether each event carried it (heal.ts).
+  if (!has("projects", "ingest_secret")) db.exec("ALTER TABLE projects ADD COLUMN ingest_secret TEXT");
+  if (!has("events", "authenticated")) db.exec("ALTER TABLE events ADD COLUMN authenticated INTEGER NOT NULL DEFAULT 0");
 }
 
 export function openDb(path: string): DB {

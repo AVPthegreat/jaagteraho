@@ -6,7 +6,7 @@ import { installUrl } from "../github/app.js";
 import { openFixPullRequest } from "../github/pr.js";
 import { getSettings, kvGet, kvSet, setSettings, type DB } from "../db/db.js";
 import type { Worker } from "../pipeline/worker.js";
-import { describePolicy, parseHealArgs, policyOf, savePolicy, writeTokenFor } from "../pipeline/heal.js";
+import { describePolicy, parseHealArgs, policyOf, ingestSecretFor, savePolicy, secretDsnFor, writeTokenFor } from "../pipeline/heal.js";
 import { esc, type Telegram, type TgCallback, type TgMessage, type TgUpdate } from "./api.js";
 import { renderWhy } from "./card.js";
 import { buildDigest, istNow } from "./digest.js";
@@ -287,15 +287,23 @@ export class Bot {
         if (parsed !== "show") for (const o of editable) savePolicy(this.db, o.project_id, parsed.patch);
         const lines = editable.map((o) => {
           const p = this.db.prepare("SELECT id, kind, repo FROM projects WHERE id = ?").get(o.project_id) as { id: number; kind: string; repo: string | null };
-          const write = writeTokenFor(p) ? "write access set: heals open a pull request with auto-merge" : "no write access: heals arrive as a ready-to-apply diff and paging goes on";
-          return `<b>${esc(o.name)}</b>: ${esc(describePolicy(policyOf(this.db, o.project_id)))}\n${write}`;
+          const policy = policyOf(this.db, o.project_id);
+          const write = writeTokenFor(p)
+            ? "write access set: a heal opens a pull request that merges by itself only if your branch requires status checks"
+            : "no write access: heals arrive as a ready-to-apply diff and paging goes on";
+          // Only errors carrying the server-only secret can make a fix apply itself (the public key ships in browsers).
+          const secret =
+            policy.mode === "auto-after" || policy.mode === "auto-now"
+              ? `\nSelf-healing acts only on errors sent with your server secret. On your server (never in browser code) use\n<code>SENTRY_DSN=${esc(secretDsnFor(this.db, o.project_id))}</code>\nNode.js: keep the normal DSN and add <code>transportOptions: { headers: { "x-jr-ingest-secret": "${esc(ingestSecretFor(this.db, o.project_id))}" } }</code>. Errors without it are still alerted and diagnosed.`
+              : "";
+          return `<b>${esc(o.name)}</b>: ${esc(describePolicy(policy))}\n${write}${secret}`;
         });
         return reply(
           [
             parsed === "show" ? "<b>Self-healing</b>" : "<b>Saved.</b>",
             ...lines,
             "",
-            "Rules that always hold: only fixes that passed all six code checks and the review heal on their own; never in login, payments, grading, migrations, settings or CI; if the errors don't drop after a heal, it is undone, you are woken again and self-healing pauses for 12 hours. Every heal comes with one-tap Undo.",
+            "Rules that always hold: only fixes that passed all six code checks with every review vote agreeing heal on their own; never in login, sessions, tokens, admin, payments, exams, grading, migrations, settings, config, CI or infrastructure; no new imports, processes, network calls, file writes or decoding; at most your nightly cap; if the errors don't drop after your deploy, it is undone, you are woken again and self-healing pauses for 12 hours. Every heal comes with one-tap Undo.",
             "",
             "/heal ask · /heal auto 10m · /heal now · /heal now /api/submit · /heal off · /heal max 2",
           ].join("\n"),
@@ -393,8 +401,8 @@ export class Bot {
       const h = this.worker.healer?.get(id);
       if (!h || h.session_id || !this.ownsIncident(q.from.id, h.incident_id)) return this.tg.answer(q.id, "Not found.");
       await this.tg.answer(q.id, "Undoing…");
-      const msg = await this.worker.healer!.undo(id, "owner");
-      if (q.message) await this.tg.send(q.message.chat.id, `<b>Undo</b>: ${esc(msg)}`);
+      const out = await this.worker.healer!.undo(id, "owner");
+      if (q.message) await this.tg.send(q.message.chat.id, `<b>Undo</b>: ${esc(out.message)}`);
       await this.worker.refreshCard(h.incident_id, false);
       return;
     }

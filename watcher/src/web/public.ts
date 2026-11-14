@@ -174,6 +174,7 @@ export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins,
   app.post("/public/undo", async (c) => {
     const body = ((await c.req.json().catch(() => ({}))) ?? {}) as { session?: string; heal_id?: number };
     if (!SESSION.test(body.session ?? "") || !Number.isInteger(body.heal_id)) return c.json({ error: "bad request" }, 400);
+    if (!limits.allow(`u:${body.session}`, 10, 60_000) || !limits.allow(`uip:${clientIp(c)}`, 60, 3_600_000)) return c.json({ error: "Easy there. Try again in a minute." }, 429);
     if (!healer?.undoSession(body.heal_id!, body.session!)) return c.json({ error: "Nothing to undo." }, 409);
     return c.json({ ok: true });
   });
