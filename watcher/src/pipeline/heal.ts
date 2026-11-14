@@ -1,6 +1,8 @@
-// Self-healing under rules the owner sets. By default the owner approves every fix ("ask").
-// The owner can instead let a checked fix go in on its own: right away ("auto-now"), or when a
-// WAKE alert is not acknowledged within N minutes ("auto-after").
+// Self-healing under rules the owner sets. Defaults (founder, 14 Nov): a SMALL bug (decision NOTIFY) whose
+// fix passes every guard below is fixed on its own right away, and the owner gets a quiet note after the
+// fact ("minor": "auto", at most 5 a night, /heal minor off to stop it); a BIG one (WAKE) calls the owner and
+// heals on its own if nobody answers in 3 minutes ("auto-after"). The owner can also approve every big fix
+// ("ask"), heal right away ("auto-now") or turn applying off entirely ("off", which also stops small ones).
 //
 // A fix may go in without a person only when ALL of these hold (healBlocker below):
 // - the gate marked it "recommended"; on a real app every reviewer vote agreed (quality 3, nothing sensitive,
@@ -34,10 +36,12 @@ export type HealPolicy = {
   after_min: number; // auto-after: minutes a WAKE may stay unacknowledged
   max_per_night: number; // heals per app in any 12 hours
   flows: string[]; // auto-now: only these route prefixes ([] = any route)
+  minor: "auto" | "off"; // small bugs (NOTIFY): fixed on their own right away when every guard passes
+  max_minor_per_night: number; // small-bug heals per app in any 12 hours (counted apart from max_per_night)
   suspended_until?: string | null; // set after a heal that did not help
   suspended_reason?: string | null;
 };
-export type HealTrigger = "auto-now" | "auto-after" | "owner";
+export type HealTrigger = "auto-now" | "auto-after" | "auto-minor" | "owner";
 export type HealStatus =
   | "skipped" // not applied: a rule said no (reason in detail)
   | "diff_sent" // no write access: the diff went to the owner, paging goes on
@@ -54,7 +58,9 @@ export type HealStatus =
 
 // Default (founder, 14 Nov): a WAKE that nobody answers in 3 minutes heals on its own, but only with a fix that passed
 // every check and its own test, never in a protected area (payments, login...), at most 2 a night, always with Undo.
-export const DEFAULT_POLICY: HealPolicy = { mode: "auto-after", after_min: 3, max_per_night: 2, flows: [] };
+// Small bugs (founder, 14 Nov, a deliberate loosening): a NOTIFY whose fix passes the same guards fixes itself at
+// once, at most 5 a night (separate from the 2 big ones), with a quiet note and Undo. /heal minor off stops it.
+export const DEFAULT_POLICY: HealPolicy = { mode: "auto-after", after_min: 3, max_per_night: 2, flows: [], minor: "auto", max_minor_per_night: 5 };
 export const NIGHT_MS = 12 * 3_600_000;
 export const SUSPEND_MS = 12 * 3_600_000;
 /** Real apps without release tags: the deploy is assumed this long after the merge. */
@@ -85,6 +91,8 @@ export function normalisePolicy(raw: Partial<HealPolicy>): HealPolicy {
     after_min: clamp(raw.after_min, 3, 240, DEFAULT_POLICY.after_min),
     max_per_night: clamp(raw.max_per_night, 1, 5, DEFAULT_POLICY.max_per_night),
     flows: Array.isArray(raw.flows) ? raw.flows.filter((f) => typeof f === "string" && /^\/[\w\-./]{0,80}$/.test(f)).slice(0, 10) : [],
+    minor: raw.minor === "off" ? "off" : "auto",
+    max_minor_per_night: clamp(raw.max_minor_per_night, 1, 10, DEFAULT_POLICY.max_minor_per_night),
     suspended_until: raw.suspended_until ?? null,
     suspended_reason: raw.suspended_reason ?? null,
   };
@@ -98,7 +106,7 @@ export function savePolicy(db: DB, projectId: number, patch: Partial<HealPolicy>
 
 /**
  * Reads the words after /heal. Returns a patch to save, or an error to show, or "show" for no words.
- *   /heal off | /heal ask | /heal auto [3m] | /heal now [/route ...] | /heal max 2
+ *   /heal off | /heal ask | /heal auto [3m] | /heal now [/route ...] | /heal max 2 | /heal minor on|off
  */
 export function parseHealArgs(args: string[]): { patch: Partial<HealPolicy> } | { error: string } | "show" {
   const [word, ...rest] = args.map((a) => a.trim()).filter(Boolean);
@@ -121,13 +129,19 @@ export function parseHealArgs(args: string[]): { patch: Partial<HealPolicy> } | 
       if (bad) return { error: "Routes start with /, like /heal now /api/submit (or /heal now for any route)." };
       return { patch: { mode: "auto-now", flows: rest.slice(0, 10), ...resume } };
     }
+    case "minor": {
+      const v = (rest[0] ?? "").toLowerCase();
+      if (v === "off") return { patch: { minor: "off" } };
+      if (v === "on" || v === "auto") return { patch: { minor: "auto", ...resume } };
+      return { error: "Use /heal minor off (you approve small fixes too) or /heal minor on (small bugs fix themselves)." };
+    }
     case "max": {
       const n = Number(rest[0]);
       if (!Number.isInteger(n) || n < 1 || n > 5) return { error: "Give a number from 1 to 5: /heal max 2" };
       return { patch: { max_per_night: n } };
     }
     default:
-      return { error: "Use /heal ask, /heal auto 3m, /heal now, /heal off or /heal max 2." };
+      return { error: "Use /heal ask, /heal auto 3m, /heal now, /heal off, /heal max 2 or /heal minor off." };
   }
 }
 
@@ -141,7 +155,9 @@ export function describePolicy(p: HealPolicy, now = Date.now()): string {
           ? `heal on its own if a wake-up is not acknowledged within ${p.after_min} min`
           : `heal on its own right away${p.flows.length ? ` on ${p.flows.join(", ")}` : ""}`;
   const paused = p.suspended_until && Date.parse(p.suspended_until) > now ? ` · paused until ${p.suspended_until.slice(11, 16)} UTC (${p.suspended_reason ?? "a heal did not help"})` : "";
-  return `${base} · at most ${p.max_per_night} per night${paused}`;
+  const minor =
+    p.mode === "off" ? "" : p.minor === "auto" ? ` · small bugs: fixed on their own, at most ${p.max_minor_per_night} a night, with a quiet note` : " · small bugs: you approve them too";
+  return `${base} · at most ${p.max_per_night} per night${minor}${paused}`;
 }
 
 // ---------- the rules ----------
@@ -158,7 +174,8 @@ export type HealFacts = {
   files: string[];
   risky: string[]; // riskyAdditions of the fix's edits
   authenticated: boolean; // every error in the incident carried the app's ingest secret
-  heals_last_night: number;
+  heals_last_night: number; // big heals (every trigger but auto-minor) in the last 12 hours
+  minor_heals_last_night?: number; // small-bug heals in the last 12 hours
   now: number;
 };
 
@@ -166,16 +183,25 @@ export type HealFacts = {
 export function healBlocker(f: HealFacts): string | null {
   const p = f.policy;
   if (f.kind === "paste") return "pasted errors are not live apps";
-  if (f.trigger !== "owner") {
+  if (f.trigger === "auto-minor") {
+    // No rule needed for a small bug, but "off" (nothing is applied from here) and "/heal minor off" are respected.
+    if (p.mode === "off") return "your rule is that nothing is applied from here";
+    if (p.minor !== "auto") return "your rule is to approve small fixes yourself";
+    if ((f.minor_heals_last_night ?? 0) >= p.max_minor_per_night) return `${p.max_minor_per_night} small fixes already in 12 hours, the limit`;
+    // Its own regression test must not have failed to prove it (where a test ran; real apps are proved by their own required checks).
+    if (f.gate.test_run && f.gate.test_run.verdict !== "proved") return "its regression test did not prove it";
+  } else if (f.trigger !== "owner") {
     if (p.mode === "off" || p.mode === "ask") return "your rule is to approve every fix yourself";
     if (f.trigger === "auto-after" && p.mode !== "auto-after") return "your rule does not heal after a wait";
     if (f.trigger === "auto-now") {
       if (p.mode !== "auto-now") return "your rule waits for you first";
       if (p.flows.length && !(f.route && p.flows.some((r) => f.route!.startsWith(r)))) return "this route is not one you chose to heal right away";
     }
+    if (f.heals_last_night >= p.max_per_night) return `${p.max_per_night} heals already in 12 hours, your limit`;
+  }
+  if (f.trigger !== "owner") {
     if (p.suspended_until && Date.parse(p.suspended_until) > f.now) return "self-healing is paused after a heal that did not help";
     if (f.owner_paused) return "you paused JaagteRaho";
-    if (f.heals_last_night >= p.max_per_night) return `${p.max_per_night} heals already in 12 hours, your limit`;
     if (f.kind !== "sandbox" && !f.authenticated) return "these errors did not carry your app's server secret, so they could have been sent by anyone";
   }
   if (f.incident_status !== "open") return "the incident is no longer open";
@@ -434,11 +460,13 @@ export class Healer {
     return r?.id ?? null;
   }
 
-  private healsSince(projectId: number, session: string | null, sinceMs: number): number {
+  /** minor: count only small-bug heals (auto-minor); otherwise every other heal. The two caps are separate. */
+  private healsSince(projectId: number, session: string | null, sinceMs: number, minor = false): number {
     const since = new Date(sinceMs).toISOString();
+    const which = minor ? "AND trigger = 'auto-minor'" : "AND trigger != 'auto-minor'";
     return session
-      ? (this.db.prepare(`SELECT COUNT(*) AS n FROM heals WHERE session_id = ? AND status IN ${COUNTED} AND created_at > ?`).get(session, since) as { n: number }).n
-      : (this.db.prepare(`SELECT COUNT(*) AS n FROM heals WHERE project_id = ? AND session_id IS NULL AND status IN ${COUNTED} AND created_at > ?`).get(projectId, since) as { n: number }).n;
+      ? (this.db.prepare(`SELECT COUNT(*) AS n FROM heals WHERE session_id = ? AND status IN ${COUNTED} ${which} AND created_at > ?`).get(session, since) as { n: number }).n
+      : (this.db.prepare(`SELECT COUNT(*) AS n FROM heals WHERE project_id = ? AND session_id IS NULL AND status IN ${COUNTED} ${which} AND created_at > ?`).get(projectId, since) as { n: number }).n;
   }
 
   /** Every error in the incident carried the app's ingest secret (and there was at least one). */
@@ -468,6 +496,7 @@ export class Healer {
       risky: [...new Set([...riskyAdditions(edits), ...((JSON.parse(info.gate_result) as { risky?: string[] }).risky ?? [])])],
       authenticated: this.incidentAuthenticated(info.incident_id),
       heals_last_night: this.healsSince(info.project_id, session, now - NIGHT_MS),
+      minor_heals_last_night: this.healsSince(info.project_id, session, now - NIGHT_MS, true),
       now,
     });
     return { blocker, info, policy };
@@ -529,10 +558,11 @@ export class Healer {
     bus.publish(session, { type, at: new Date().toISOString(), incident_id: incidentId, data });
   }
 
-  private async tell(projectId: number, text: string, markup?: Markup) {
+  /** quiet: no sound (small-bug notes are read in the morning, never wake anyone). */
+  private async tell(projectId: number, text: string, markup?: Markup, quiet = false) {
     const owner = this.db.prepare("SELECT chat_id FROM owners WHERE project_id = ?").get(projectId) as { chat_id: number } | undefined;
     if (!owner || !this.tg) return;
-    await this.tg.send(owner.chat_id, text, markup).catch((e) => console.error("heal tell:", e));
+    await this.tg.send(owner.chat_id, text, markup, quiet ? { quiet: true } : {}).catch((e) => console.error("heal tell:", e));
   }
 
   /** Keeps the wake-up going: the repeats start again, because nobody fixed it yet. */
@@ -552,9 +582,11 @@ export class Healer {
       return this.healSandbox(fixId, ctx.session);
     }
     if (this.latestFor(incidentId)) return null; // one try per incident
-    const { blocker } = this.check(fixId, "auto-now", null);
-    if (blocker) return null; // "ask" and "auto-after" wait; nothing to record yet
-    return this.healReal(fixId, "auto-now");
+    // A small bug (NOTIFY) fixes itself when every guard passes; otherwise the owner's rule decides as before.
+    const trigger: HealTrigger = ctx.action === "notify" && !this.check(fixId, "auto-minor", null).blocker ? "auto-minor" : "auto-now";
+    const { blocker } = this.check(fixId, trigger, null);
+    if (blocker) return null; // "ask" and "auto-after" wait; a small fix that a guard stopped waits for the owner's tap
+    return this.healReal(fixId, trigger);
   }
 
   // ---------- demo portal ----------
@@ -623,18 +655,23 @@ export class Healer {
       return this.get(id)!;
     }
     const what = `${info.exception_type} on ${info.transaction_name ?? "the app"}`;
+    // A small bug (auto-minor) never pages anyone: its notes are quiet, and a failure leaves the fix for the owner's tap.
+    const minor = trigger === "auto-minor";
+    const pages = trigger !== "owner" && !minor;
     const token = writeTokenFor({ id: info.project_id, kind: info.kind, repo: info.repo });
     if (!token || !info.repo) {
       const id = this.insert(info, trigger, "diff_sent", "no write access to the repository", null, null);
-      if (trigger !== "owner") this.keepPaging(info.incident_id);
+      if (pages) this.keepPaging(info.incident_id);
       await this.tell(
         info.project_id,
         [
-          `<b>Ready to heal, but I can't write to ${esc(info.project_name)}</b>`,
+          `<b>${minor ? "A small fix is ready" : "Ready to heal"}, but I can't write to ${esc(info.project_name)}</b>`,
           `${esc(what)}. The fix passed every check. Apply this diff and deploy:`,
           `<pre>${esc(info.diff.slice(0, 3000))}</pre>`,
-          trigger === "owner" ? "" : "I'll keep paging you until someone acknowledges.",
+          pages ? "I'll keep paging you until someone acknowledges." : "",
         ].filter(Boolean).join("\n"),
+        undefined,
+        minor,
       );
       return this.get(id)!;
     }
@@ -642,7 +679,7 @@ export class Healer {
     if (this.db.prepare("UPDATE fixes SET status = 'approved' WHERE id = ? AND status = 'shown'").run(fixId).changes !== 1) return null;
     const id = this.insert(info, trigger, "pr_open", null, null, null);
     const r = JSON.parse(info.result) as { cause_plain: string; cause_technical: string; test_hint: string; edits: Edit[] };
-    const by = trigger === "owner" ? "approved by the owner on Telegram" : trigger === "auto-after" ? "opened on its own: the owner did not answer the wake-up, and their heal rule allows it" : "opened on its own under the owner's heal rule";
+    const by = trigger === "owner" ? "approved by the owner on Telegram" : minor ? "opened on its own: a small bug whose fix passed every guard (the owner's default rule for small bugs)" : trigger === "auto-after" ? "opened on its own: the owner did not answer the wake-up, and their heal rule allows it" : "opened on its own under the owner's heal rule";
     const pr = await this.github.openPr({
       repo: info.repo,
       token,
@@ -658,8 +695,8 @@ export class Healer {
     if (!pr.ok) {
       this.db.prepare("UPDATE fixes SET status = 'shown' WHERE id = ?").run(fixId);
       this.update(id, "failed", pr.error, { ended_at: new Date().toISOString() });
-      if (trigger !== "owner") this.keepPaging(info.incident_id);
-      await this.tell(info.project_id, `<b>Could not heal ${esc(info.project_name)}</b>: ${esc(pr.error)}. Still waiting for you.`);
+      if (pages) this.keepPaging(info.incident_id);
+      await this.tell(info.project_id, `<b>Could not ${minor ? "fix a small bug in" : "heal"} ${esc(info.project_name)}</b>: ${esc(pr.error)}. ${minor ? "The fix waits for your tap on the alert." : "Still waiting for you."}`, undefined, minor);
       return this.get(id)!;
     }
     this.db.prepare("UPDATE fixes SET pr_url = ? WHERE id = ?").run(pr.url, fixId);
@@ -667,11 +704,12 @@ export class Healer {
     const merge = await this.github.autoMerge(info.repo, token, pr.number, trigger !== "owner");
     if (!merge.ok) {
       this.update(id, "pr_open", `not set to merge by itself: ${merge.error}`, { pr_url: pr.url, pr_number: pr.number });
-      if (trigger !== "owner") this.keepPaging(info.incident_id);
+      if (pages) this.keepPaging(info.incident_id);
       await this.tell(
         info.project_id,
-        `<b>Fix ready as a pull request</b> · ${esc(info.project_name)}: ${esc(pr.url)}\nIt will not merge by itself (${esc(merge.error)}). Merge it to heal.${trigger === "owner" ? "" : " Still paging you."}`,
+        `<b>Fix ready as a pull request</b> · ${esc(info.project_name)}: ${esc(pr.url)}\nIt will not merge by itself (${esc(merge.error)}). Merge it to heal.${pages ? " Still paging you." : ""}`,
         this.undoMarkup(id),
+        minor,
       );
       return this.get(id)!;
     }
@@ -680,7 +718,12 @@ export class Healer {
       await this.reportApplied(id);
     } else {
       this.update(id, "merging", "auto-merge on: merges when the repository's required checks pass", { pr_url: pr.url, pr_number: pr.number });
-      await this.tell(info.project_id, `<b>Healing ${esc(info.project_name)}</b>: pull request ${esc(pr.url)} merges on its own once your required checks pass. Then I watch the errors after your deploy.`, this.undoMarkup(id));
+      await this.tell(
+        info.project_id,
+        `<b>${minor ? "Fixing a small bug on its own" : "Healing"} ${esc(info.project_name)}</b>: pull request ${esc(pr.url)} merges on its own once your required checks pass. Then I watch the errors after your deploy.`,
+        this.undoMarkup(id),
+        minor,
+      );
     }
     return this.get(id)!;
   }
@@ -695,6 +738,20 @@ export class Healer {
     const info = this.fixInfo(h.fix_id)!;
     const r = JSON.parse(info.result) as { cause_plain: string; file: string; line: number };
     const g = JSON.parse(info.gate_result) as { changed_lines?: number };
+    if (h.trigger === "auto-minor") {
+      // The quiet morning note: what was fixed, and one tap to undo it.
+      await this.tell(
+        h.project_id,
+        [
+          `<b>Fixed a small bug on its own</b> · ${esc(info.project_name)}`,
+          `${esc(r.cause_plain)}`,
+          `<code>${esc(r.file)}:${r.line}</code>, ${g.changed_lines ?? "?"} lines${h.pr_url ? ` · ${esc(h.pr_url)}` : ""}. I watch the error after your deploy and undo it if it does not drop. /heal minor off to approve small fixes yourself.`,
+        ].join("\n"),
+        this.undoMarkup(healId),
+        true,
+      );
+      return;
+    }
     await this.tell(
       h.project_id,
       [
@@ -814,7 +871,7 @@ export class Healer {
           else {
             if (now - merged >= DEPLOY_WAIT_MS) {
               this.update(id, "unconfirmed", "no newer release reported within a day, so the fix could not be checked", { ended_at: new Date(now).toISOString() });
-              await this.tell(h.project_id, `<b>Heal not confirmed</b> · ${esc(info.project_name)}: the fix merged, but no newer release reported in, so I could not check it.`, this.undoMarkup(id));
+              await this.tell(h.project_id, `<b>Heal not confirmed</b> · ${esc(info.project_name)}: the fix merged, but no newer release reported in, so I could not check it.`, this.undoMarkup(id), h.trigger === "auto-minor");
             }
             continue;
           }
@@ -834,6 +891,14 @@ export class Healer {
         const out = await this.undo(id, "no improvement");
         if (!out.done && this.get(id)?.status !== "undo_failed") continue; // someone else is undoing it
         savePolicy(this.db, h.project_id, { suspended_until: new Date(now + SUSPEND_MS).toISOString(), suspended_reason: "a heal did not bring the errors down" });
+        if (h.trigger === "auto-minor") {
+          // A small bug stays small: no wake-up, one message (with sound) that it was undone.
+          await this.tell(
+            h.project_id,
+            `<b>Undid a small fix</b> · ${esc(info.project_name)}: ${esc(info.exception_type)} came back ${after} times after the deploy. ${esc(out.message)}\nSelf-healing is paused for 12 hours. /heal to change it.`,
+          );
+          continue;
+        }
         this.keepPaging(h.incident_id);
         await this.tell(
           h.project_id,
@@ -842,7 +907,7 @@ export class Healer {
       } else if (watched >= WATCH_MS) {
         this.update(id, "verified", `${after} repeats of the error in the ${WATCH_MS / 60_000} min after the deploy`, { ended_at: new Date(now).toISOString() });
         this.db.prepare("UPDATE fixes SET status = 'merged' WHERE id = ?").run(h.fix_id);
-        await this.tell(h.project_id, `✅ <b>Heal confirmed</b> · ${esc(info.project_name)}: ${after ? `only ${after}` : "no"} ${esc(info.exception_type)} in the ${WATCH_MS / 60_000} min after the deploy.`, this.undoMarkup(id));
+        await this.tell(h.project_id, `✅ <b>Heal confirmed</b> · ${esc(info.project_name)}: ${after ? `only ${after}` : "no"} ${esc(info.exception_type)} in the ${WATCH_MS / 60_000} min after the deploy.`, this.undoMarkup(id), h.trigger === "auto-minor");
       }
     }
   }

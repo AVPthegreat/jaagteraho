@@ -22,9 +22,11 @@ export class Telegram {
     return body.result as T;
   }
 
-  send(chatId: number, text: string, markup?: Markup) {
+  /** quiet: delivered without a sound or vibration (Telegram's disable_notification). */
+  send(chatId: number, text: string, markup?: Markup, opts: { quiet?: boolean } = {}) {
     return this.call<TgMessage>("sendMessage", {
       chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, ...(markup ? { reply_markup: markup } : {}),
+      ...(opts.quiet ? { disable_notification: true } : {}),
     });
   }
 

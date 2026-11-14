@@ -125,7 +125,8 @@ export function ConnectForm({ initialName = "" }: { initialName?: string }) {
             <b>Your heal rule:</b>{" "}
             {result.heal === "auto-after"
               ? "heal on its own if a wake-up is not acknowledged in 3 minutes. Send /heal on Telegram for your server-only address: only errors sent with it can heal on their own. Until write access to your repository is set up, a heal arrives as a ready-to-apply diff and the calls go on."
-              : "you approve every fix."}{" "}
+              : "you approve every big fix."}{" "}
+            Small bugs are fixed on their own with a quiet note (<code>/heal minor off</code> to stop it).{" "}
             Change it any time with <code>/heal</code>.
           </p>
         </div>
@@ -144,6 +145,10 @@ export function ConnectForm({ initialName = "" }: { initialName?: string }) {
       <input className="input" id="repo" name="repo" type="url" placeholder="https://github.com/you/your-app" />
       <fieldset>
         <legend>If a wake-up goes unanswered</legend>
+        <p className="small soft">
+          Either way, small bugs (a message, not a call) are fixed on their own when the fix passes every check, and you get a quiet note; send{" "}
+          <code>/heal minor off</code> to approve those too.
+        </p>
         <label htmlFor="heal-ask" className="check">
           <input id="heal-ask" name="heal" type="radio" value="ask" defaultChecked />
           <span>
