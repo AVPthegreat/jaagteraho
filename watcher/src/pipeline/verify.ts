@@ -10,8 +10,8 @@ import { join, resolve, sep } from "node:path";
 
 export type TestRun = {
   verdict: "proved" | "not_proved" | "skipped";
-  before?: "failed" | "passed";
-  after?: "failed" | "passed";
+  before?: "failed" | "passed" | "error";
+  after?: "failed" | "passed" | "error";
   note: string;
 };
 
@@ -100,13 +100,40 @@ function djangoSettings(root: string): string | null {
   return readFileSync(manage, "utf8").match(/DJANGO_SETTINGS_MODULE["']\s*,\s*["']([\w.]+)["']/)?.[1] ?? null;
 }
 
-function runIn(dir: string, settings: string | null): "passed" | "failed" {
+/**
+ * "failed" only when the tests actually ran and at least one failed. A test file that cannot even be
+ * imported, a crash, a timeout or a resource-limit kill is "error": it says nothing about the bug.
+ */
+export function readOutcome(status: number | null, signal: string | null, output: string): "passed" | "failed" | "error" {
+  if (signal || status === null) return "error";
+  const ran = /^Ran [1-9]\d* tests? in /m.test(output);
+  if (status === 0) return ran && /^OK\b/m.test(output) ? "passed" : "error";
+  return ran && /^FAILED \(/m.test(output) ? "failed" : "error";
+}
+
+function runIn(dir: string, settings: string | null): "passed" | "failed" | "error" {
   const py = process.env.JR_TEST_PYTHON ?? "python3";
   const env: Record<string, string> = { PATH: process.env.PATH ?? "/usr/bin:/bin", PYTHONDONTWRITEBYTECODE: "1", LANG: "C.UTF-8" };
   if (settings) env.DJANGO_SETTINGS_MODULE = settings;
   const r = spawnSync(py, ["-E", "-s", "-c", RUNNER], { cwd: dir, env, encoding: "utf8", timeout: 20_000, killSignal: "SIGKILL" });
-  return r.status === 0 ? "passed" : "failed";
+  return readOutcome(r.status, r.signal, `${r.stdout ?? ""}\n${r.stderr ?? ""}`);
 }
+
+// The fixed code runs too (the test imports it), so the lines the fix adds get a check of their own:
+// nothing that reaches the file system, processes, the network or dynamic code.
+const RISKY_IN_FIX =
+  /\b(os|sys|subprocess|socket|shutil|ctypes|importlib|pathlib|pickle|marshal|signal|threading|multiprocessing|asyncio|http|urllib|requests|httpx|open|eval|exec|compile|__import__|getattr|setattr|delattr|globals|locals|vars|breakpoint|input)\b/;
+
+export function riskyFixLines(original: string, patched: string): string[] {
+  const before = new Set(original.split("\n").map((l) => l.trim()));
+  return patched
+    .split("\n")
+    .map((l) => l.trim())
+    // Double-underscore names (__class__, __globals__, __subclasses__...) reach the same places by another road.
+    .filter((l) => l && !l.startsWith("#") && !before.has(l) && (RISKY_IN_FIX.test(l) || /__(?!name__)\w+__/.test(l)));
+}
+
+const said = (o: "passed" | "failed" | "error") => (o === "error" ? "could not run" : o);
 
 /** root: the project's local folder. patched: repository path -> full fixed file text (from the gate). */
 export function proveFix(root: string, patched: Record<string, string>, test: { file: string; code: string } | undefined): TestRun {
@@ -119,6 +146,12 @@ export function proveFix(root: string, patched: Record<string, string>, test: { 
   if (problems.length) return { verdict: "skipped", note: `Test not run: ${problems.slice(0, 3).join(", ")}.` };
 
   const base = resolve(root);
+  for (const [path, text] of Object.entries(patched)) {
+    const file = resolve(base, path);
+    if (!file.startsWith(base + sep)) return { verdict: "skipped", note: "Test not run: a fixed file is outside the project." };
+    const risky = riskyFixLines(existsSync(file) ? readFileSync(file, "utf8") : "", text);
+    if (risky.length) return { verdict: "skipped", note: `Test not run: the fix adds code that reaches outside the program (${risky[0].slice(0, 60)}).` };
+  }
   const dirs: string[] = [];
   try {
     const copy = () => {
@@ -144,7 +177,7 @@ export function proveFix(root: string, patched: Record<string, string>, test: { 
       after,
       note: proved
         ? "The regression test fails on the current code and passes with the fix."
-        : `The regression test ${before} on the current code and ${after} with the fix, so it does not prove the fix.`,
+        : `The regression test ${said(before)} on the current code and ${said(after)} with the fix, so it does not prove the fix.`,
     };
   } finally {
     for (const d of dirs) rmSync(d, { recursive: true, force: true });

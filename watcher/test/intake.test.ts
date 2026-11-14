@@ -153,3 +153,14 @@ describe("intake: performance traces", () => {
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM events").get() as { n: number }).n, 1);
   });
 });
+
+describe("masking stays fast on hostile input", () => {
+  it("masks a 1 MB message in milliseconds, not minutes", () => {
+    for (const s of ["a".repeat(1_000_000), "a-".repeat(500_000), `x@${"a".repeat(1_000_000)}`]) {
+      const t = performance.now();
+      mask(s);
+      assert.ok(performance.now() - t < 500, "masking took too long");
+    }
+    assert.equal(mask("write to riya.k@quizkart.in"), "write to [email]");
+  });
+});

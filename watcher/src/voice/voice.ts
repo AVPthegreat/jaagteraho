@@ -50,6 +50,9 @@ function transcode(input: Buffer, args: string[]): Promise<Buffer> {
     const out: Buffer[] = [];
     ff.stdout.on("data", (d: Buffer) => out.push(d));
     ff.on("error", reject);
+    // If ffmpeg exits before reading all its input, writing fails with EPIPE; without this the
+    // stream error would be unhandled and stop the whole server.
+    ff.stdin.on("error", reject);
     ff.on("close", (code) => (code === 0 ? resolve(Buffer.concat(out)) : reject(new Error(`ffmpeg exited ${code}`))));
     ff.stdin.end(input);
   });
