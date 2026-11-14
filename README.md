@@ -36,6 +36,7 @@ Students, freelancers and solo founders now ship real products, often written wi
    The command finds Django, Flask, FastAPI, Express or Next.js, shows every change before writing it, adds the free open-source Sentry SDK and two lines, and sends a test error. A ✅ arrives on Telegram. Deploy as usual.
    No code at all? Point your host's log drain at the logs address instead; JaagteRaho picks out Python and Node.js errors and drops every other line.
 2. **Sleep.** JaagteRaho wakes you (Telegram message plus a voice note in Hindi or English, repeated until you tap Acknowledge) only for what matters: a critical route failing during an exam, an outage, an error hitting many people. Everything else waits for the 08:00 summary.
+   Where the owner has turned on phone calls (a Twilio account and their number in the settings), a wake also rings their phone: the call says which app and flow are failing, and pressing 1 acknowledges it like the Telegram button. It repeats with the Telegram pings, at most 3 call wakes a night per app.
 3. **Fix.** The alert says what broke for users, why, which file and line, which recent commit probably caused it, and shows a small fix that passed six code checks and a review. On the demo portal the fix is also proved by a test that fails before and passes after.
 4. **Or let it heal.** `/heal` sets your rule (also offered on the Connect page): `ask` (default: you approve every fix), `auto 10m` (heal if a wake-up is not acknowledged in 10 minutes), `now` (heal right away, optionally only on routes you name) or `off`. See [Self-healing](#self-healing).
 
@@ -143,6 +144,7 @@ Sentry, PostHog and others diagnose errors for paying teams; Reticle and similar
 - **Vultr (hackathon sponsor):** the backend (intake, worker, Telegram bot, database and the demo portal) runs on a Vultr Compute instance.
 - **Claude through Anthropic's API:** decisions and fix review (Claude Haiku 5.5) and diagnosis (Claude Sonnet 5.5).
 - **Gnani:** speaks the wake-up call in Hindi or English (Timbre text-to-speech), sent as a Telegram voice note.
+- **Twilio (optional):** places the real phone call on a wake, when it is set up (`JR_TWILIO_*` in `watcher/.env`).
 - **Telegram** for alerts, **Vercel** for the website.
 
 ## Repository
