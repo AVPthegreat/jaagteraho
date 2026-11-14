@@ -4,7 +4,6 @@ import Link from "next/link";
 import { BENCH_ALL, benchInr, BUILT_WITH, HACKATHON, HACKATHON_ABOUT, HACKATHON_LOGO, HACKATHON_TRACK, HOSTED_ON, LINKEDIN_URL, REPO, TEAM } from "./site";
 import { CHUNK_GUARD_JS } from "./ui/chunk-reload";
 import { Headroom } from "./ui/headroom";
-import { SmoothScroll } from "./ui/smooth-scroll";
 import { Lantern } from "./ui/lantern";
 import { Motion } from "./ui/motion";
 import { SiteNav } from "./ui/nav-links";
@@ -127,7 +126,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </footer>
         <Motion />
         <Headroom />
-        <SmoothScroll />
       </body>
     </html>
   );

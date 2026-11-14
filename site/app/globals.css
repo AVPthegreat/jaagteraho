@@ -62,6 +62,13 @@ html {
   background: var(--bg);
   scroll-padding-top: 80px;
 }
+/* Native scrolling everywhere (no wheel smoothing library: it made the page feel floaty and lag the pointer);
+   only in-page links glide. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
 html,
 body {
   margin: 0;
@@ -957,12 +964,12 @@ button {
   overflow-x: auto;
   max-width: 100%;
 }
+/* Code lines wrap inside their box instead of running off a phone behind a sideways scroll. */
 .diff span {
   display: block;
   padding: 0 12px;
-  white-space: pre;
-  width: max-content;
-  min-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .diff .h {
   color: var(--faint);
@@ -977,7 +984,8 @@ button {
 }
 .see {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  /* 118px columns broke each line into three or four words: wider cards, two rows where needed. */
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 8px;
   counter-reset: see;
 }
@@ -1799,6 +1807,8 @@ table.nums {
   border: 1px solid var(--line);
   overflow-x: auto;
   font-size: 0.875rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .never {
   display: grid;
@@ -1924,10 +1934,10 @@ table.nums {
 .bar.quiet {
   background: #3a4458;
 }
-.js .bars:not(.in) .bar {
+.bars.rv-wait:not(.in) .bar {
   transform: scaleY(0);
 }
-.js .bars .bar {
+.bars.rv-wait .bar {
   transition: transform 0.7s var(--ease);
   transition-delay: calc(var(--i) * 30ms);
 }
@@ -2016,13 +2026,14 @@ table.nums {
 @media (prefers-reduced-motion: no-preference) {
   /* The entrance is an animation, not a transition: once it ends the element's own hover lift and
      transitions work again (".in { transform: none }" used to override them for good). */
-  .js [data-rv]:not(.in) {
+  /* Only content that starts below the fold waits for its entrance (motion.tsx marks it .rv-wait once script
+     runs). Anything already on screen is never hidden, so nothing is blank while the page's script loads. */
+  [data-rv].rv-wait:not(.in) {
     opacity: 0;
-    transform: translateY(14px);
   }
-  .js [data-rv].in {
-    animation: rv-in 0.8s var(--ease) backwards;
-    animation-delay: calc(var(--d, 0) * 80ms);
+  [data-rv].rv-wait.in {
+    animation: rv-in 0.45s var(--ease) backwards;
+    animation-delay: calc(min(var(--d, 0), 3) * 50ms);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -2081,11 +2092,10 @@ table.nums {
 :where(.watch-card, .pl-steps button, .shield-list button, .pl-btn, .nav-toggle, .flow, .try-tabs button, .pg2-seg button, .pg2-steps button, .pg2-switch, .chip-btn, .tg-keys button, .pl-sound-cta, .play, .pg2-app, .pg2-bug, .film-steps button, .film-btn, .film-sound):not(:disabled):active {
   scale: 0.98;
 }
-/* Looping animations rest while their section is off-screen (motion.tsx sets data-idle). */
-[data-idle] *,
-[data-idle] *::before,
-[data-idle] *::after {
-  animation-play-state: paused !important;
+/* Looping animations rest while their section is off-screen (motion.tsx sets data-idle). Only the loops:
+   a pause on everything also froze entrances that started a frame before the section was marked in view. */
+[data-idle] :is(.rd-core, .call-dot, .pill.wake i, .eyebrow.live i, .live-strip-tag i, .wc-pulse path, .pg2-pulse, .pg2-ico) {
+  animation-play-state: paused;
 }
 @keyframes rise {
   from {
@@ -2413,20 +2423,6 @@ main > .page-head:first-child {
   }
 }
 
-/* Lenis smooth scrolling */
-html.lenis,
-html.lenis body {
-  height: auto;
-}
-.lenis.lenis-smooth {
-  scroll-behavior: auto !important;
-}
-.lenis.lenis-smooth [data-lenis-prevent] {
-  overscroll-behavior: contain;
-}
-.lenis.lenis-stopped {
-  overflow: hidden;
-}
 
 /* ------- v5: footer ------- */
 .site-footer {
@@ -2536,6 +2532,6 @@ html.lenis body {
 @keyframes rv-in {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(8px);
   }
 }

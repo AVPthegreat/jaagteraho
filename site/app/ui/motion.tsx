@@ -5,14 +5,15 @@ import { useEffect } from "react";
 
 /*
   The page's motion layer, kept in one place: parts marked data-rv rise in once as they enter the view
-  (staggered by --d), and the benchmark bars grow when the chart comes into view.
-  Content is visible without script: the hiding styles only apply under html.js, and never with reduced motion.
+  (staggered by --d), the benchmark bars grow and the shield's rings draw when they come into view.
+  Nothing is ever hidden while the script loads: only parts that start below the fold are marked to wait
+  (.rv-wait), and with reduced motion nothing waits at all. Off-screen sections pause their looping animations.
 */
 export function Motion() {
   const path = usePathname();
 
   useEffect(() => {
-    const SELECTOR = "[data-rv]:not(.in), .bars:not(.in), [data-flow]:not(.in)";
+    const SELECTOR = "[data-rv]:not(.in), .bars:not(.in), [data-flow]:not(.in), [data-draw]:not(.in)";
     if (!("IntersectionObserver" in window)) {
       document.documentElement.classList.remove("js");
       return;
@@ -26,7 +27,8 @@ export function Motion() {
           }
         }
       },
-      { rootMargin: "0px 0px -6% 0px", threshold: 0.01 },
+      // As soon as an element enters the screen, so the short entrance is done before you start reading it.
+      { rootMargin: "0px", threshold: 0 },
     );
     // Sections out of view (with a margin) pause their looping animations: see [data-idle] in globals.css.
     const idle = new IntersectionObserver(
@@ -37,9 +39,17 @@ export function Motion() {
     );
     const seen = new WeakSet<Element>();
     const scan = () => {
+      const fold = window.innerHeight;
       document.querySelectorAll(SELECTOR).forEach((el) => {
         if (seen.has(el)) return;
         seen.add(el);
+        // On screen (or already scrolled past) when the script arrives: shown as it is, never hidden.
+        if (el.getBoundingClientRect().top < fold) {
+          el.classList.add("in");
+          return;
+        }
+        // Below the fold: waits, then plays its short entrance as it comes into view.
+        el.classList.add("rv-wait");
         io.observe(el);
       });
       document.querySelectorAll("main section").forEach((el) => {

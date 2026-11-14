@@ -42,38 +42,18 @@ export function Clips() {
   const [muted, setMuted] = useState(true);
   const [still, setStill] = useState(false);
   const [userPaused, setUserPaused] = useState(false);
-  const interacted = useRef(false);
-  const userMuted = useRef(false);
+  const wantSound = useRef(false);
   const visible = useRef(false);
 
   useEffect(() => {
     setStill(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    // Any real interaction on the page lets the browser play sound: remember it.
-    const mark = (e: Event) => {
-      interacted.current = true;
-      // The film's own sound buttons handle themselves.
-      if (e.target instanceof Element && e.target.closest(".film-sound, .film-btn")) return;
-      // The first touch or key anywhere lets the browser play sound: turn it on if the film is playing muted.
-      const v = video.current;
-      if (v && !v.paused && v.muted && !userMuted.current) {
-        v.muted = false;
-        setMuted(false);
-      }
-    };
-    window.addEventListener("pointerdown", mark, { once: true, passive: true });
-    window.addEventListener("keydown", mark, { once: true });
-    return () => {
-      window.removeEventListener("pointerdown", mark);
-      window.removeEventListener("keydown", mark);
-    };
   }, []);
 
-  /** Plays with sound when allowed; if the browser refuses, plays muted and shows "Tap for sound". */
+  /** Plays muted unless the visitor turned the sound on with the sound button (never on its own). */
   const start = async () => {
     const v = video.current;
     if (!v) return;
-    // Sound unless the visitor muted it themselves.
-    v.muted = userMuted.current;
+    v.muted = !wantSound.current;
     try {
       await v.play();
       setMuted(v.muted);
@@ -119,7 +99,7 @@ export function Clips() {
     const v = video.current;
     if (!v) return;
     v.muted = !v.muted;
-    userMuted.current = v.muted;
+    wantSound.current = !v.muted;
     setMuted(v.muted);
     if (v.paused) {
       setUserPaused(false);

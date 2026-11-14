@@ -187,27 +187,24 @@ const STEPS: Array<{ t: string; ampm: string; title: string; text: React.ReactNo
 
 export function NightStory() {
   return (
-    <section className="section screen story4" aria-labelledby="night-h">
+    <section className="section screen story4" aria-labelledby="night-h" data-story>
       <div className="frame">
-        <div className="story-pin" data-story>
-          <div className="story-top">
-            <div>
-              <p className="eyebrow" data-rv>
-                One night
-              </p>
-              <h2 id="night-h" className="h-section" data-rv style={{ "--d": 1 } as React.CSSProperties}>
-                From a crash to a checked fix, <em>in about twelve seconds.</em>
-              </h2>
-            </div>
-            <p className="story-clock" aria-hidden="true">
-              <span data-clock>{STEPS[0].t}</span>
-              <small>am</small>
-            </p>
-          </div>
-          <div className="story-track">
+        <div className="story-top">
+          <p className="eyebrow" data-rv>
+            One night
+          </p>
+          <h2 id="night-h" className="h-section" data-rv style={{ "--d": 1 } as React.CSSProperties}>
+            From a crash to a checked fix, <em>in about twelve seconds.</em>
+          </h2>
+        </div>
+        {/* Native scrolling, no pinning: on wide screens the moments scroll past a stage that stays in view
+            (position: sticky), and the moment crossing the middle of the screen picks the scene. On phones,
+            tablets and without script, each scene sits under its moment. Nothing here changes size or place
+            once the page has loaded. */}
+        <div className="story-grid">
           <ol className="story-steps">
             {STEPS.map((s, i) => (
-              <li key={s.t} className={i === 0 ? "on" : undefined} data-step={i} data-time={s.t} data-rv>
+              <li key={s.t} className={i === 0 ? "on" : undefined} data-step={i} data-time={s.t}>
                 <div className="st-text">
                   <time>
                     {s.t} {s.ampm}
@@ -215,18 +212,25 @@ export function NightStory() {
                   <h3>{s.title}</h3>
                   <p>{s.text}</p>
                 </div>
-                <div className="st-scene" aria-hidden="true">
-                  {s.scene}
-                </div>
+                <div className="st-scene">{s.scene}</div>
               </li>
             ))}
           </ol>
-          <span className="story-bar" aria-hidden="true">
-            <i data-bar />
-          </span>
+          <div className="story-stage">
+            <p className="story-clock" aria-hidden="true">
+              <span data-clock>{STEPS[0].t}</span>
+              <small>am</small>
+            </p>
+            <div className="stage-scenes">
+              {STEPS.map((s, i) => (
+                <div key={s.t} className={`stage-scene${i === 0 ? " on" : ""}`} data-scene={i}>
+                  {s.scene}
+                </div>
+              ))}
+            </div>
           </div>
-          <p className="story-note small soft">One run on our demo exam portal, at the speeds we measured there. Your own rules decide the wake-up and the heal.</p>
         </div>
+        <p className="story-note small soft">One run on our demo exam portal, at the speeds we measured there. Your own rules decide the wake-up and the heal.</p>
       </div>
     </section>
   );

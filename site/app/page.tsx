@@ -55,7 +55,7 @@ export default function Home() {
       {/* 3. What it watches */}
       {/* The anchor id sits on the host: while pinned, the section itself is fixed and its offset is wrong. */}
       <div className="pin-host" id="watches">
-      <section className="section screen watch-band" aria-labelledby="watch-h" data-pin-steps="4">
+      <section className="section screen watch-band" aria-labelledby="watch-h">
         <div className="frame">
           <div className="section-head">
             <p className="eyebrow" data-rv>
@@ -90,7 +90,7 @@ export default function Home() {
 
       {/* 5. How safe is it */}
       <div className="pin-host" id="safety">
-      <section className="section screen safe-band" aria-labelledby="safe-h" data-pin-steps="5">
+      <section className="section screen safe-band" aria-labelledby="safe-h">
         <div className="frame">
           <div className="section-head">
             <p className="eyebrow" data-rv>

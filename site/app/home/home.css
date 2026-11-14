@@ -35,6 +35,8 @@
 }
 .hero4-grid {
   display: grid;
+  /* One column that can shrink: an auto column took the radar's width and pushed the words 12px off a 360px phone. */
+  grid-template-columns: minmax(0, 1fr);
   gap: clamp(40px, 6vw, 72px);
   align-items: center;
 }
@@ -218,14 +220,7 @@
   background: linear-gradient(180deg, var(--bg) 0%, #08101f 50%, var(--bg) 100%);
   border-block: 1px solid var(--line);
 }
-.story-pin {
-  position: relative;
-}
 .story-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 24px;
   margin-bottom: clamp(32px, 4vw, 56px);
 }
 .story-top .h-section {
@@ -292,101 +287,95 @@
 .st-text p {
   color: var(--soft);
 }
-.story-bar {
-  display: none;
-}
 .story-note {
   margin-top: 24px;
 }
 
-/* Pinned mode (set by GSAP on wide screens): one moment at a time, the scene on the right. */
-.story-pin[data-pinned] {
-  height: calc(100vh - 64px);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding-block: 24px;
+/* Wide screens with script: the moments scroll natively past a stage that stays in view (position: sticky).
+   The script only marks which moment crosses the middle of the screen; the layout is the same before and
+   after it runs, so nothing jumps, and nothing here is ever moved by a library. */
+.story-stage {
+  display: none;
 }
-.story-pin[data-pinned] .story-clock {
-  display: block;
-}
-.story-pin[data-pinned] .story-steps {
-  position: relative;
-  gap: 4px;
-  padding-left: 28px;
-  padding-right: 54%;
-}
-.story-pin[data-pinned] .story-steps > li {
-  display: block;
-  padding: 12px 0;
-  border: 0;
-  background: none;
-}
-.story-pin[data-pinned] .story-steps > li:not(.on) .st-text time,
-.story-pin[data-pinned] .story-steps > li:not(.on) .st-text h3 {
-  color: var(--faint);
-}
-.story-pin[data-pinned] .st-text time,
-.story-pin[data-pinned] .st-text h3 {
-  transition: color 0.4s var(--ease);
-}
-.story-pin[data-pinned] .st-text h3 {
-  font-size: 1.25rem;
-  margin: 2px 0 0;
-}
-/* The open moment's text always takes the same height (three lines), so the list, the scene centred on it
-   and the note under it hold still from step to step; one opens as the other closes. */
-.story-pin[data-pinned] .st-text p {
-  height: 0;
-  overflow: hidden;
-  opacity: 0;
-  margin-top: 0;
-  transition: height 0.5s var(--ease), margin-top 0.5s var(--ease), opacity 0.4s var(--ease);
-  font-size: 0.95rem;
-  line-height: 1.6;
-}
-.story-pin[data-pinned] li.on .st-text p {
-  height: 4.8em;
-  opacity: 1;
-  margin-top: 6px;
-}
-.story-pin[data-pinned] .st-scene {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  width: 50%;
-  opacity: 0;
-  transform: translateY(-46%) scale(0.97);
-  transition: opacity 0.2s var(--ease), transform 0.6s var(--ease);
-  pointer-events: none;
-}
-.story-pin[data-pinned] li.on .st-scene {
-  opacity: 1;
-  transform: translateY(-50%);
-  transition: opacity 0.5s var(--ease) 0.1s, transform 0.6s var(--ease);
-}
-.story-track {
-  position: relative;
-}
-.story-pin[data-pinned] .story-bar {
-  display: block;
-  position: absolute;
-  left: 0;
-  /* The track runs the length of the list, so the last moment is on it too. */
-  top: 8px;
-  bottom: 8px;
-  width: 2px;
-  background: var(--line-2);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.story-bar i {
-  display: block;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(180deg, var(--lantern), var(--ok));
-  transform-origin: top;
-  transform: scaleY(0);
+@media (min-width: 960px) {
+  .js .story-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+    gap: clamp(40px, 5vw, 80px);
+    align-items: start;
+  }
+  .js .story-steps {
+    gap: 0;
+  }
+  .js .story-steps > li {
+    /* Each moment gets about half a screen of scrolling; its words sit in the middle of that stretch. */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: min(52vh, 460px);
+    padding: 0 0 0 26px;
+    border: 0;
+    border-left: 2px solid var(--line-2);
+    border-radius: 0;
+    background: none;
+    transition: border-color 0.35s var(--ease);
+  }
+  .js .story-steps > li.past {
+    border-left-color: rgba(122, 167, 255, 0.4);
+  }
+  .js .story-steps > li.on {
+    border-left-color: var(--lantern);
+  }
+  .js .story-steps > li .st-scene {
+    display: none;
+  }
+  .js .story-steps .st-text :is(time, h3, p) {
+    transition: color 0.35s var(--ease);
+  }
+  .js .story-steps > li:not(.on) .st-text :is(time, h3, p) {
+    color: var(--faint);
+  }
+  .js .story-steps .st-text h3 {
+    font-size: clamp(1.3rem, 0.9rem + 0.9vw, 1.6rem);
+    margin: 6px 0 8px;
+  }
+  .js .story-steps .st-text p {
+    max-width: 34em;
+  }
+  .js .story-stage {
+    display: block;
+    position: sticky;
+    /* Centred in the screen while the moments pass; never under the floating header. */
+    top: max(84px, calc(50vh - 15.5rem));
+  }
+  .js .story-clock {
+    display: block;
+    margin-bottom: 18px;
+  }
+  .stage-scenes {
+    display: grid;
+  }
+  /* All five scenes share one cell (the stage keeps the tallest one's size); the chosen one fades up. */
+  /* A quick handover: the old scene is gone in 100ms while the new one, on top, rises in; every scene fills
+     the same frame, so the stage never changes size or shows two screens at once. */
+  .stage-scene {
+    grid-area: 1 / 1;
+    display: grid;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(6px);
+    transition: opacity 0.1s ease-out, transform 0s linear 0.1s, visibility 0s linear 0.1s;
+  }
+  .stage-scene.on {
+    z-index: 1;
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition: opacity 0.22s var(--ease) 0.05s, transform 0.3s var(--ease) 0.05s;
+  }
+  .stage-scene > .sc {
+    height: 100%;
+  }
 }
 
 /* The scenes */
@@ -460,6 +449,15 @@
 }
 .sc-fields dt {
   color: var(--faint);
+}
+@media (max-width: 420px) {
+  .sc-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .sc-fields dd + dt {
+    margin-top: 8px;
+  }
 }
 .sc-fields dd {
   color: var(--text);
@@ -984,6 +982,16 @@
   stroke-dashoffset: 0;
   transition: stroke 0.3s, fill 0.3s, filter 0.3s;
 }
+/* The rings draw themselves once, as the shield comes into view (no script: they are simply drawn). */
+@media (prefers-reduced-motion: no-preference) {
+  [data-draw].rv-wait .sh-ring {
+    stroke-dashoffset: 1;
+  }
+  [data-draw].rv-wait.in .sh-ring {
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset 1.4s var(--ease) calc(var(--i, 0) * 120ms), stroke 0.3s, fill 0.3s, filter 0.3s;
+  }
+}
 .sh-ring.past {
   stroke: rgba(122, 167, 255, 0.55);
 }
@@ -1389,14 +1397,6 @@
   margin-top: 10px;
   font-size: var(--step-body);
 }
-.story-pin[data-pinned] {
-  /* As tall as its content, anchored from the top: a full-screen block left a blank band when the pin ended,
-     and centring moved the heading and the list a little at every step. */
-  height: auto;
-  justify-content: flex-start;
-  padding-top: max(84px, calc(50vh - 21rem));
-  padding-bottom: 24px;
-}
 .story-steps {
   gap: 12px;
 }
@@ -1414,10 +1414,6 @@
 }
 
 /* Pinned scroll steps: show which step the scroll is on */
-.screen[data-pinned] .watch-card[aria-selected="true"],
-.screen[data-pinned] .shield-list > li:has(button[aria-expanded="true"]) {
-  transition: border-color 0.3s, background 0.3s, box-shadow 0.3s;
-}
 .shield-list {
   min-height: 0;
 }
@@ -1578,7 +1574,7 @@
 }
 @media (min-width: 1000px) {
   .real-code {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
     align-items: center;
   }
   .real-code .rc-tag,

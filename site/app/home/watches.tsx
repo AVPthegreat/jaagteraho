@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useScrollStep } from "./use-step";
 import { Icon } from "../ui/icons";
 
 /*
@@ -77,7 +76,6 @@ const CASES: Array<{
 export function Watches() {
   const [on, setOn] = useState(0);
   const box = useRef<HTMLDivElement | null>(null);
-  useScrollStep(box, setOn);
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
 
   const onKey = (e: React.KeyboardEvent) => {
