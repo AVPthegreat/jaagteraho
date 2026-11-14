@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import film from "./film.json";
 
 /*
   "See it work": one continuous 30-second film. It starts when the section comes into view (with sound
@@ -9,16 +10,10 @@ import { useEffect, useRef, useState } from "react";
   follows the film; clicking a step jumps there. With reduced motion nothing plays on its own.
 */
 
-/* The film and its steps. Start times (seconds) come from the 30 s plan (jr-video/final/plan30.json + its .srt). */
-const FILM = { src: "/clips/jaagteraho-30s", poster: "/clips/jaagteraho-30s.jpg" };
-const STEPS: Array<{ at: number; title: string; line: string }> = [
-  { at: 0, title: "It breaks at 2 am", line: "Your exam portal crashes while you sleep." },
-  { at: 7.6, title: "It calls you", line: "Something serious? Your phone rings. Press 1." },
-  { at: 11.5, title: "The cause is waiting", line: "Plain words, file and line, on Telegram." },
-  { at: 14.0, title: "It fixes itself", line: "No answer? A fix checked three ways, one tap to undo." },
-  { at: 20.8, title: "Watch it live", line: "A real bug, fixed live in our playground." },
-  { at: 24.3, title: "62 fixes for $1.19", line: "Bugs fixed with proof, for $1.19 of AI in total." },
-];
+/* The film and its steps live in film.json, so swapping the film is a file copy plus that small file. */
+type Step = { at: number; title: string; line: string };
+const FILM = { src: String(film.src), poster: String(film.poster), label: String(film.label ?? "JaagteRaho") };
+const STEPS: Step[] = (film.steps as Step[]).filter((s) => typeof s.at === "number" && typeof s.title === "string").sort((x, y) => x.at - y.at);
 
 function SpeakerIcon({ on }: { on: boolean }) {
   return (
@@ -160,7 +155,7 @@ export function Clips() {
             width={1920}
             height={1080}
             controls={still}
-            aria-label="JaagteRaho in 30 seconds"
+            aria-label={FILM.label}
             onTimeUpdate={(e) => setT(e.currentTarget.currentTime)}
             onLoadedMetadata={(e) => Number.isFinite(e.currentTarget.duration) && setDur(e.currentTarget.duration)}
             onPlay={() => setPlaying(true)}

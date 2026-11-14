@@ -1,0 +1,14 @@
+{
+  "_note": "The home 'See it work' film. To swap the film, copy its .mp4/.webm/.jpg into site/public/clips/ and edit this file (src without extension, poster, steps with start seconds).",
+  "src": "/clips/jaagteraho-30s",
+  "poster": "/clips/jaagteraho-30s.jpg",
+  "label": "JaagteRaho in 30 seconds",
+  "steps": [
+    { "at": 0, "title": "It breaks at 2 am", "line": "Your exam portal crashes while you sleep." },
+    { "at": 7.6, "title": "It calls you", "line": "Something serious? Your phone rings. Press 1." },
+    { "at": 11.5, "title": "The cause is waiting", "line": "Plain words, file and line, on Telegram." },
+    { "at": 14.0, "title": "It fixes itself", "line": "No answer? A fix checked three ways, one tap to undo." },
+    { "at": 20.8, "title": "Watch it live", "line": "A real bug, fixed live in our playground." },
+    { "at": 24.3, "title": "62 fixes for $1.19", "line": "Bugs fixed with proof, for $1.19 of AI in total." }
+  ]
+}
