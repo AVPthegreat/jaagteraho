@@ -511,3 +511,17 @@ describe("protected areas in the playground copy (Ledgerly GST)", () => {
     pg.stop();
   });
 });
+
+describe("playground instances used by scripts", () => {
+  it("a never-started instance runs visitors' bugs (no ticker); a stopped one refuses them", async () => {
+    const db = openDb(":memory:");
+    const { ai } = fakeAI(db);
+    const pg = new Playground(db, ai, { dir, canSpend: () => true, maxConcurrent: 3, cleanTemp: false });
+    const r = pg.startOwn({ session: "script-session-1", caseId: CASE_ID, exam: false, heal: "ask" }, "messmenu");
+    assert.ok("run_id" in r);
+    await pg.settle();
+    assert.equal(pg.ownRun("script-session-1", (r as { run_id: number }).run_id)?.state, "broken");
+    pg.stop();
+    assert.deepEqual(pg.startOwn({ session: "script-session-2", caseId: CASE_ID, exam: false, heal: "ask" }, "messmenu"), { error: "full" });
+  });
+});
