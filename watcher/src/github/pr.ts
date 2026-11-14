@@ -1,5 +1,6 @@
-// Opens a pull request with an approved fix on the sandbox repository. Never merges:
-// merging stays with the owner on GitHub, and the demo's main branch keeps its planted faults.
+// Opens a pull request with a fix. It never merges by itself: on the sandbox repository merging
+// stays with the owner (the demo's main branch keeps its planted faults); for self-healing a real
+// app, heal.ts turns on GitHub auto-merge so the repository's own checks decide.
 
 type Edit = { file: string; find: string; replace: string };
 
@@ -12,6 +13,7 @@ export async function openFixPullRequest(opts: {
   branch: string; // e.g. jr/fix-12
   title: string;
   body: string;
+  commitNote?: string; // second paragraph of the commit message
 }): Promise<PrResult> {
   const api = async <T>(method: string, path: string, body?: unknown): Promise<T> => {
     const res = await fetch(`https://api.github.com/repos/${opts.repo}${path}`, {
@@ -54,7 +56,7 @@ export async function openFixPullRequest(opts: {
     await api("POST", "/git/refs", { ref: `refs/heads/${opts.branch}`, sha: baseSha });
     for (const f of updated) {
       await api("PUT", `/contents/${f.path.split("/").map(encodeURIComponent).join("/")}`, {
-        message: `${opts.title}\n\nProposed by JaagteRaho, approved by the owner.`,
+        message: `${opts.title}\n\n${opts.commitNote ?? "Proposed by JaagteRaho, approved by the owner."}`,
         content: Buffer.from(f.content, "utf8").toString("base64"),
         sha: f.sha,
         branch: opts.branch,

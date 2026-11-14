@@ -12,7 +12,8 @@ export type StoreResult =
 
 type IncidentRow = { id: number; status: string; last_seen: string; hits: number };
 
-export function storeEvent(db: DB, projectId: number, ev: CleanEvent, now = new Date()): StoreResult {
+/** authenticated: the event carried the app's server-only ingest secret (needed before a fix may apply itself). */
+export function storeEvent(db: DB, projectId: number, ev: CleanEvent, now = new Date(), authenticated = false): StoreResult {
   const fp = fingerprint(projectId, ev);
   const nowIso = now.toISOString();
 
@@ -56,11 +57,11 @@ export function storeEvent(db: DB, projectId: number, ev: CleanEvent, now = new 
 
     db.prepare(
       `INSERT INTO events (event_id, project_id, incident_id, received_at, occurred_at, level, release, environment,
-         exception_type, message_masked, transaction_name, frames, tags, sdk)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         exception_type, message_masked, transaction_name, frames, tags, sdk, authenticated)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       ev.event_id, projectId, incidentId, nowIso, ev.timestamp, ev.level, ev.release, ev.environment,
-      ev.exception_type, ev.message, ev.transaction, JSON.stringify(ev.frames), JSON.stringify(ev.tags), ev.sdk,
+      ev.exception_type, ev.message, ev.transaction, JSON.stringify(ev.frames), JSON.stringify(ev.tags), ev.sdk, authenticated ? 1 : 0,
     );
 
     db.prepare(

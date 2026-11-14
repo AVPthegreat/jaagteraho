@@ -5,6 +5,7 @@ import { severityWord, usersAffected, type Decision } from "../pipeline/decide.j
 import type { TestRun } from "../pipeline/verify.js";
 import { describeChange, loadChange } from "../source/changes.js";
 import { ownerLink } from "../web/owner.js";
+import { healLine, policyOf, writeTokenFor, type HealRow } from "../pipeline/heal.js";
 import { esc, type Markup } from "./api.js";
 
 const LABEL: Record<string, string> = { wake: "🔴 WAKE", notify: "🟠 NOTIFY", log: "LOG", ignore: "IGNORED" };
@@ -15,11 +16,11 @@ type GateResult = { passed: boolean; level?: "recommended" | "caution" | "withhe
 export function renderCard(db: DB, incidentId: number): { text: string; markup: Markup } | null {
   const inc = db
     .prepare(
-      `SELECT i.id, i.hits, i.first_seen, i.last_seen, i.transaction_name, i.exception_type, p.name AS project, p.kind
+      `SELECT i.id, i.hits, i.first_seen, i.last_seen, i.transaction_name, i.exception_type, p.name AS project, p.kind, p.id AS project_id, p.repo
        FROM incidents i JOIN projects p ON p.id = i.project_id WHERE i.id = ?`,
     )
     .get(incidentId) as
-    | { id: number; hits: number; first_seen: string; last_seen: string; transaction_name: string | null; exception_type: string; project: string; kind: string }
+    | { id: number; hits: number; first_seen: string; last_seen: string; transaction_name: string | null; exception_type: string; project: string; kind: string; project_id: number; repo: string | null }
     | undefined;
   if (!inc) return null;
   const dRow = db.prepare("SELECT facts, votes, rule_number, rule_text, action, engine FROM decisions WHERE incident_id = ? ORDER BY id DESC LIMIT 1").get(incidentId) as
@@ -76,13 +77,22 @@ export function renderCard(db: DB, incidentId: number): { text: string; markup: 
   } else if (dRow.action === "notify" || dRow.action === "wake") {
     lines.push("", "<b>Cause:</b> <i>working on it…</i>");
   }
+  // Self-healing (heal.ts): the table exists once the healer has started.
+  const hasHeals = !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'heals'").get();
+  const heal = hasHeals ? (db.prepare("SELECT * FROM heals WHERE incident_id = ? AND session_id IS NULL ORDER BY id DESC LIMIT 1").get(incidentId) as HealRow | undefined) : undefined;
+  const hl = healLine(heal);
+  if (hl) lines.push(hl);
   if (alert?.acked) lines.push("", "✔️ Acknowledged");
 
   const row1 = [{ text: "Why?", callback_data: `w:${incidentId}` }];
   if (fix && fix.status !== "rejected") row1.push({ text: "Show fix", callback_data: `f:${fix.id}` });
   buttons.push(row1);
   const row2 = [];
-  const approvable = fix && fix.status === "shown" && inc.kind === "sandbox" && (JSON.parse(fix.gate_result) as GateResult).level !== "caution";
+  // Real apps get Approve only where write access was given (it opens a pull request with auto-merge).
+  const canWrite = inc.kind === "faurus" && !!writeTokenFor({ id: inc.project_id, kind: inc.kind, repo: inc.repo }) && policyOf(db, inc.project_id).mode !== "off";
+  const level = fix ? (JSON.parse(fix.gate_result) as GateResult).level : undefined;
+  const approvable = fix && fix.status === "shown" && ((inc.kind === "sandbox" && level !== "caution") || (canWrite && level === "recommended"));
+  if (heal && ["pr_open", "merging", "applied", "verified"].includes(heal.status)) row1.push({ text: "Undo", callback_data: `u:${heal.id}` });
   if (fix && approvable) row2.push({ text: "Approve fix", callback_data: `p:${fix.id}` });
   if (!alert?.acked && (dRow.action === "wake" || dRow.action === "notify")) row2.push({ text: "Acknowledge", callback_data: `a:${incidentId}` });
   if (row2.length) buttons.push(row2);

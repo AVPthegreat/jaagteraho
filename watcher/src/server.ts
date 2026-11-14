@@ -7,6 +7,7 @@ import { makeAI } from "./ai/claude.js";
 import { openDb } from "./db/db.js";
 import { intakeRoutes } from "./intake/route.js";
 import { Worker } from "./pipeline/worker.js";
+import { Healer } from "./pipeline/heal.js";
 import { Telegram } from "./telegram/api.js";
 import { Bot } from "./telegram/bot.js";
 import { publicRoutes } from "./web/public.js";
@@ -42,7 +43,12 @@ const ai = makeAI(db);
 const tg = process.env.JR_TELEGRAM_BOT_TOKEN ? new Telegram(process.env.JR_TELEGRAM_BOT_TOKEN) : null;
 const voice = makeVoice(`${dataDir}/voice`);
 const worker = new Worker(db, ai, tg, voice);
+const twinBroken = process.env.JR_TWIN_BROKEN_URL ?? "http://127.0.0.1:8001";
+const twinFixed = process.env.JR_TWIN_FIXED_URL ?? "http://127.0.0.1:8002";
+const healer = new Healer(db, tg, { twinFixed });
+worker.healer = healer;
 worker.start();
+healer.start();
 const bot = tg && process.env.JR_BOT !== "off" ? new Bot(db, tg, worker) : null;
 void bot?.run();
 
@@ -66,8 +72,9 @@ app.route(
   publicRoutes({
     db,
     voice,
-    twinBroken: process.env.JR_TWIN_BROKEN_URL ?? "http://127.0.0.1:8001",
-    twinFixed: process.env.JR_TWIN_FIXED_URL ?? "http://127.0.0.1:8002",
+    twinBroken,
+    twinFixed,
+    healer,
     allowedOrigins: (process.env.JR_SITE_ORIGINS ?? "http://localhost:3000").split(",").filter(Boolean),
   }),
 );
@@ -81,6 +88,7 @@ serve({ fetch: app.fetch, port, hostname: host }, () =>
 const shutdown = () => {
   bot?.stop();
   worker.stop();
+  healer.stop();
   db.close();
   process.exit(0);
 };

@@ -30,8 +30,8 @@ const SETUP = [
     d: (
       <>
         A public repository: give its name. A private one: send <code className="mono">/github</code> and install our GitHub app.{" "}
-        <b>Read-only</b>: we can read your code to find the cause, never change it. Without this you still get alerts and the likely cause, but
-        no exact fix.
+        <b>Read-only</b>: our GitHub app reads your code to find the cause and cannot change it. Without this you still get alerts and the likely cause, but
+        no exact fix. Self-healing needs write access as well, which you give separately for one repository (see &ldquo;Your heal rule&rdquo; below).
       </>
     ),
   },
@@ -70,9 +70,9 @@ const NIGHT = [
     meta: "a few seconds",
   },
   {
-    t: "You decide",
-    d: "Tap \"Show fix\" to see the exact change. You apply it yourself and deploy, the way you always do. JaagteRaho never merges, deploys or writes to your code. Tap \"Diagnosis right\" or \"wrong\" so we learn how often it is right.",
-    meta: "when you are ready",
+    t: "You approve it, or it heals under your rule",
+    d: "Tap \"Show fix\" to see the exact change. By default you decide: apply it yourself, or tap Approve where you gave write access. If your rule allows it and nobody acknowledges the wake-up in time, a recommended fix goes in on its own as a pull request that merges only after your required checks pass, and you get \"Healed while you were away\" with the proof and one-tap Undo. Tap \"Diagnosis right\" or \"wrong\" so we learn how often it is right.",
+    meta: "your rule decides",
   },
   {
     t: "Morning summary",
@@ -89,7 +89,8 @@ const COMMANDS: Array<[string, string]> = [
   ["/critical /api/checkout checkout", "Mark a page as critical, so failures there always reach you"],
   ["/github and /repo", "Give read access to your code, or change which repository"],
   ["/credits", "How much of your $5 is left"],
-  ["/pause and /resume", "Stop or restart all AI calls, fixes and wake-ups"],
+  ["/heal", "Your heal rule: /heal ask (approve every fix, the default), /heal auto 10m (heal if a wake-up goes unanswered for 10 min), /heal now, /heal off, /heal max 2"],
+  ["/pause and /resume", "Stop or restart all AI calls, fixes, heals and wake-ups"],
 ];
 
 export default function How() {
@@ -223,7 +224,7 @@ export default function How() {
         <ol className="steps three">
           <li>
             <b className="ok">Recommended</b>
-            <span>Passed every check. You still read it, approve it and apply it yourself. On the demo portal, Approve switches you to a fixed copy so you can see it work.</span>
+            <span>Passed every check. The only kind that can heal on its own, and only if your rule allows it. On the demo portal it must also be proved by its own test.</span>
           </li>
           <li>
             <b>Use with care</b>
@@ -272,11 +273,38 @@ export default function How() {
         </div>
       </section>
 
+      <section className="section" aria-labelledby="heal-h">
+        <h2 id="heal-h">Your heal rule</h2>
+        <div className="prose muted">
+          <p>
+            <b>You approve every fix, or let it heal on its own under rules you set.</b> Pick one with <code className="mono">/heal</code> on
+            Telegram or when you connect:
+          </p>
+          <ul>
+            <li><b>Ask</b> (the default): nothing goes in until you approve it.</li>
+            <li><b>Heal after 10 minutes</b>: if a wake-up is not acknowledged in time (after the repeated calls), the fix goes in on its own. You choose the minutes.</li>
+            <li><b>Heal right away</b>: for the routes you name, or all of them.</li>
+            <li><b>Off</b>: fixes arrive as diffs only.</li>
+          </ul>
+          <p>Rules that hold whatever you pick:</p>
+          <ul>
+            <li>Only <b>recommended</b> fixes heal on their own: all six code checks passed and every review vote agreed. A fix that adds an import, a network call, a process, a file write or decodes hidden data never does.</li>
+            <li>Never in login, sessions, tokens, admin and roles, payments, exams, grading, migrations, settings and config, CI or infrastructure files.</li>
+            <li>Only for errors your server sends with its secret (the bot gives you a server-only address). Errors that come with only the public key, which web pages can see, are still alerted and explained, but never heal on their own.</li>
+            <li>At most 2 heals per app a night, unless you change it (up to 5).</li>
+            <li>On your app a heal is a pull request. It merges by itself only if your branch requires status checks, and only once they pass; otherwise it waits for you to merge and the wake-up calls go on. It needs write access you give for that one repository; that is set up with us by hand for now. Without it you get the ready-to-apply diff.</li>
+            <li>After your deploy (a new release reporting in, or 10 minutes after the merge if you don&apos;t tag releases) it watches the error for 30 minutes. If it comes back at least 3 times and is not down by half, the fix is rolled back, you are woken again and self-healing stops for 12 hours.</li>
+            <li>You get &ldquo;Healed while you were away&rdquo;: what broke, what changed, the proof, and one-tap Undo. Every step is in the logbook.</li>
+          </ul>
+          <p>On the demo portal, healing switches your session to the portal&apos;s fixed build and sends the failing request again to prove it works.</p>
+        </div>
+      </section>
+
       <section className="section" aria-labelledby="never-h">
         <h2 id="never-h">What it never does</h2>
         <ul className="prose muted">
-          <li>Merge, deploy or write to your code. Code access is read-only.</li>
-          <li>Approve a fix on its own, or show a fix that failed its check.</li>
+          <li>Deploy, restart servers or push straight to your main branch. A heal is always a pull request, and it merges by itself only behind your required checks.</li>
+          <li>Apply a fix you did not allow, a fix with open concerns, or a fix that failed its check.</li>
           <li>Keep your users&apos; emails, passwords or cookies.</li>
           <li>Let the AI overrule the rules for exams, payments or login.</li>
         </ul>
@@ -297,8 +325,8 @@ export default function How() {
           <li>
             <span className="num">2</span>
             <div>
-              <strong>Approve the fix</strong>
-              <p>On the demo, a recommended fix can be approved. The portal works again and the page says so.</p>
+              <strong>Watch it heal, or approve it yourself</strong>
+              <p>On the demo, a recommended fix that its test proved heals on its own, and the portal works again. Turn &ldquo;Heal on its own&rdquo; off to approve it yourself, and Undo puts the bug back.</p>
             </div>
           </li>
           <li>

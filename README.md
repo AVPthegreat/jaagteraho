@@ -1,8 +1,10 @@
 # JaagteRaho
 
-**Your app breaks at 2 am. JaagteRaho stays awake for you.**
+**Your app breaks at 2 am. If you don't wake up, JaagteRaho heals it.**
 
-An AI on-call agent for people who run a live app alone. It reads every error from your app, wakes you only when real users are hurt, tells you the cause in plain words with the file and line, and has a checked fix waiting for your approval. It never changes your code on its own.
+**You approve every fix, or let it heal on its own under rules you set.**
+
+An AI on-call agent for people who run a live app alone. It reads every error from your app, wakes you only when real users are hurt, tells you the cause in plain words with the file and line, and writes a fix that must pass six code checks and a review. If you sleep through the wake-up and your rule allows it, the fix goes in on its own as a pull request that merges only behind your required checks; if the errors don't drop after your deploy, it is rolled back and you are woken again.
 
 **Measured on 13 Nov 2026, by scripts in this repository, mistakes included:** 20 of 20 planted bugs reached the owner · 0 wrong fixes among the 19 shown · 4 of 4 harmless errors kept quiet · 1.6 s median to a decision, 11.7 s to a checked fix · about $0.013 per error. [How each number was measured](#measured).
 
@@ -35,8 +37,20 @@ Students, freelancers and solo founders now ship real products, often written wi
    No code at all? Point your host's log drain at the logs address instead; JaagteRaho picks out Python and Node.js errors and drops every other line.
 2. **Sleep.** JaagteRaho wakes you (Telegram message plus a voice note in Hindi or English, repeated until you tap Acknowledge) only for what matters: a critical route failing during an exam, an outage, an error hitting many people. Everything else waits for the 08:00 summary.
 3. **Fix.** The alert says what broke for users, why, which file and line, which recent commit probably caused it, and shows a small fix that passed six code checks and a review. On the demo portal the fix is also proved by a test that fails before and passes after.
+4. **Or let it heal.** `/heal` sets your rule (also offered on the Connect page): `ask` (default: you approve every fix), `auto 10m` (heal if a wake-up is not acknowledged in 10 minutes), `now` (heal right away, optionally only on routes you name) or `off`. See [Self-healing](#self-healing).
 
-Every Telegram account gets $5 of free AI credit (about 500 diagnoses); deciding and alerting are always free. `/github` gives read-only access to a private repository. JaagteRaho never writes to your code: fixes arrive as diffs, and on the demo portal Approve opens a pull request that a person merges.
+Every Telegram account gets $5 of free AI credit (about 500 diagnoses); deciding and alerting are always free. `/github` gives read-only access to a private repository; self-healing needs write access you give separately (below).
+
+## Self-healing
+
+You approve every fix, or let it heal on its own under rules you set ([`heal.ts`](watcher/src/pipeline/heal.ts), tests in [`heal.test.ts`](watcher/test/heal.test.ts)).
+
+- **Only recommended fixes** heal on their own: all six code checks passed and, on a real app, every review vote agreed. A fix that adds an import, a network call, a process, a file write, dynamic code, decoding or a built-up URL never does. Never in login, sessions, tokens, admin and roles, payments, exams, grading, migrations, settings and config, CI or infrastructure (`HEAL_PROTECTED` and `riskyAdditions` in [`gate.ts`](watcher/src/pipeline/gate.ts)). On the demo portal the fix must also be proved by its own regression test.
+- **Only errors your server signs.** The DSN's public key ships in browsers, so it proves nothing. Self-healing acts only on incidents whose every error carried the app's server-only secret (`/heal` gives a `https://KEY:SECRET@…` DSN for Python, or an `x-jr-ingest-secret` header for Node). Other errors are still alerted and diagnosed.
+- **Caps:** at most 2 heals per app in 12 hours by default (`/heal max`, up to 5).
+- **How it goes in.** Demo portal: no code is written; the visitor's session switches to the portal's prebuilt fixed build and the failing request is sent again as proof. Your app: a pull request with GitHub auto-merge, turned on only when the branch requires status checks; otherwise the PR waits for you and the wake-up calls go on. This needs a write token set on the server by hand for now, bound to one repository (`JR_GITHUB_HEAL_TOKEN_<app id>` and `JR_GITHUB_HEAL_REPO_<app id>`); without it, a heal arrives as the ready-to-apply diff.
+- **Proved or undone.** It waits for the deploy (a newer release reporting in, or 10 minutes after the merge without release tags), then watches the error for 30 minutes, counting only signed errors from the new release. If at least 3 come back after 10 minutes or more and they are not down by half, a revert pull request goes in, you are woken again (once) and self-healing pauses for 12 hours.
+- **Told plainly.** "Healed while you were away": what broke, the cause, what changed, how it is being proved, and a one-tap Undo. Every step is in the incident's logbook.
 
 ## What happens to each error
 
@@ -109,7 +123,7 @@ What the benchmark changed: the first fix gate showed a fix only when every revi
 |---|---|
 | Secrets and personal data in errors | Only an allowlist of fields is kept: no request bodies, query strings, headers, cookies, user details, IP addresses or local variables. Emails, phone numbers, tokens and keys in what remains are masked. People are counted only through a one-way hash. Log drains: every line that is not part of a stack trace is dropped unread. |
 | Hidden instructions inside error text | The model has no tools; error text and commit messages are fenced as data; code picks the files and checks every edit; visitors can only press buttons. |
-| Write access to your code | None for real apps: fixes arrive as diffs, and the GitHub app is read-only. On the demo portal, the owner's Approve opens a pull request; merging is always done by a person. |
+| Write access to your code | Off unless you give it. The GitHub app is read-only. Self-healing a real app needs a write token bound to that one repository and errors signed with the app's server-only secret; a heal is then a pull request that merges by itself only behind the branch's required checks, and only recommended fixes outside protected areas with no risky code qualify, at most 2 a night, rolled back if the errors don't drop. On the demo portal, the owner's Approve opens a pull request a person merges. |
 | Running code | Outside apps' code is never run. On the demo portal only, the model's regression test runs in a throwaway copy after a strict check (no files, network, processes or environment). |
 | Runaway cost | Identical errors are grouped before any model call; per-app and daily caps; $5 free credit per account; Haiku-only after $40 and no model calls after $45. |
 
@@ -178,7 +192,7 @@ Send `/start <link code>` to your Telegram bot to receive alerts. Deployment: [d
 
 ## What we do not claim
 
-JaagteRaho is not the first tool to diagnose errors or propose fixes. It is tested end to end on Django and Flask with sentry-sdk 2.71.0 and on Express with @sentry/node 11.12, and its setup command on sample Django, Flask, FastAPI, Express and Next.js apps; Next.js and FastAPI have not been run end to end with a live error yet. Model vote shares are not calibrated probabilities. The benchmark apps are generated and small; the real-bug set is 30 cases. The accuracy figures above are what these runs measured, nothing more.
+JaagteRaho is not the first tool to diagnose errors or propose fixes. It is tested end to end on Django and Flask with sentry-sdk 2.71.0 and on Express with @sentry/node 11.12, and its setup command on sample Django, Flask, FastAPI, Express and Next.js apps; Next.js and FastAPI have not been run end to end with a live error yet. Model vote shares are not calibrated probabilities. The benchmark apps are generated and small; the real-bug set is 30 cases. The accuracy figures above are what these runs measured, nothing more. Self-healing runs for real on the demo portal; on a connected app it has been tested against a stand-in GitHub in the unit tests, not yet on a live repository.
 
 ## How this was built
 

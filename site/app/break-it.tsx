@@ -58,6 +58,7 @@ function Diff({ text }: { text: string }) {
 export function BreakIt({ country }: { country: string | null }) {
   const [session, setSession] = useState<string | null>(null);
   const [exam, setExam] = useState(true);
+  const [heal, setHeal] = useState(true);
   const [flow, setFlow] = useState<Flow | null>(null);
   const [busy, setBusy] = useState(false);
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -68,7 +69,12 @@ export function BreakIt({ country }: { country: string | null }) {
   const [approving, setApproving] = useState(false);
   const [signed, setSigned] = useState(false);
   const [approvedFix, setApprovedFix] = useState<number | null>(null);
+  const [healedFix, setHealedFix] = useState<number | null>(null);
   const startedRef = useRef<number | null>(null);
+  const healRef = useRef(true);
+  useEffect(() => {
+    healRef.current = heal;
+  }, [heal]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
 
@@ -81,12 +87,14 @@ export function BreakIt({ country }: { country: string | null }) {
     const push = (msg: MessageEvent) => {
       const ev = JSON.parse(msg.data) as FeedEvent;
       const t = startedRef.current ? (Date.now() - startedRef.current) / 1000 : 0;
-      if (ev.type === "fix" || ev.type === "fixed") setStopped(Date.now());
+      if (ev.type === "fixed" || ev.type === "heal") setStopped(Date.now());
+      if (ev.type === "fix" && !(ev.data.status !== "rejected" && ev.data.level === "recommended" && healRef.current)) setStopped(Date.now());
+      if (ev.type === "heal" && ev.data.status === "verified") setHealedFix(Number(ev.data.fix_id));
       // The page writes its own line once the fixed build answers, so "fixed" is not repeated.
       if (ev.type === "fixed") return;
       setEntries((list) => [...list, { key: `${ev.type}-${ev.at}-${list.length}`, t, ev }]);
     };
-    for (const type of ["error", "decision", "voice", "cause", "fix", "fixed"]) es.addEventListener(type, push);
+    for (const type of ["error", "decision", "voice", "cause", "fix", "fixed", "heal"]) es.addEventListener(type, push);
     return () => es.close();
   }, [session]);
 
@@ -105,6 +113,7 @@ export function BreakIt({ country }: { country: string | null }) {
       if (!keepLog) {
         setEntries([]);
         setApprovedFix(null);
+        setHealedFix(null);
         startedRef.current = Date.now();
         setStarted(Date.now());
         setStopped(null);
@@ -115,7 +124,7 @@ export function BreakIt({ country }: { country: string | null }) {
         const res = await fetch(`${WATCHER}/public/break`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ session, flow: f, exam, country }),
+          body: JSON.stringify({ session, flow: f, exam, country, heal }),
         });
         const body = (await res.json()) as { error?: string; build?: string; status?: number; result?: { ok?: boolean; error?: string } };
         if (!res.ok) setNote(body.error ?? "Something went wrong.");
@@ -135,8 +144,21 @@ export function BreakIt({ country }: { country: string | null }) {
         setBusy(false);
       }
     },
-    [session, exam, country],
+    [session, exam, country, heal],
   );
+
+  // Undo a heal: this session goes back to the broken build, so the bug is there again.
+  const undo = async (healId: number) => {
+    if (!session) return;
+    const res = await fetch(`${WATCHER}/public/undo`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ session, heal_id: healId }),
+    }).catch(() => null);
+    if (!res?.ok) return setNote("Nothing to undo.");
+    setApprovedFix(null);
+    setHealedFix(null);
+  };
 
   const approve = async (fixId: number) => {
     if (!session || !flow) return;
@@ -191,6 +213,16 @@ export function BreakIt({ country }: { country: string | null }) {
             </span>
             <input id="exam" type="checkbox" checked={exam} onChange={(e) => setExam(e.target.checked)} />
           </label>
+          <label className="switch" htmlFor="heal">
+            <span>
+              <strong>Heal on its own</strong>
+              <small>
+                On: your rule lets a fix go in without you, but only if it passed every check and its own test proved it; then the same request is
+                sent again to prove it works. Off: the fix waits for your Approve.
+              </small>
+            </span>
+            <input id="heal" type="checkbox" checked={heal} onChange={(e) => setHeal(e.target.checked)} />
+          </label>
           <hr className="hr" />
           <p className="eyebrow" style={{ color: "var(--muted)" }}>
             Pick a page of the portal to break
@@ -209,7 +241,7 @@ export function BreakIt({ country }: { country: string | null }) {
             <button type="button" className="linkish" onClick={startOver}>
               Start over
             </button>{" "}
-            clears your run and any fix you approved.
+            clears your run and any fix you approved or healed.
           </p>
         </div>
 
@@ -269,7 +301,7 @@ export function BreakIt({ country }: { country: string | null }) {
                 <li key={key} className="entry">
                   <time>{fmt(t)}</time>
                   <div className="body">
-                    <EntryBody ev={ev} onApprove={approve} approving={approving} approvedFix={approvedFix} audioRef={audioRef} />
+                    <EntryBody ev={ev} onApprove={approve} onUndo={undo} approving={approving} approvedFix={approvedFix} healedFix={healedFix} audioRef={audioRef} />
                   </div>
                 </li>
               ))}
@@ -320,14 +352,18 @@ export function BreakIt({ country }: { country: string | null }) {
 function EntryBody({
   ev,
   onApprove,
+  onUndo,
   approving,
   approvedFix,
+  healedFix,
   audioRef,
 }: {
   ev: FeedEvent;
   onApprove: (fixId: number) => void;
+  onUndo: (healId: number) => void;
   approving: boolean;
   approvedFix: number | null;
+  healedFix: number | null;
   audioRef: React.RefObject<HTMLAudioElement | null>;
 }) {
   const d = ev.data;
@@ -438,7 +474,11 @@ function EntryBody({
               {d.test_code ? <pre className="diff">{String(d.test_code)}</pre> : null}
             </details>
           )}
-          {approvedFix === Number(d.fix_id) ? (
+          {healedFix === Number(d.fix_id) ? (
+            <span className="stamp-row">
+              <span className="tag ok">healed on its own</span>
+            </span>
+          ) : approvedFix === Number(d.fix_id) ? (
             <span className="stamp-row">
               <span className="tag ok">approved for your session</span>
               <span className="muted" style={{ fontSize: 13 }}>
@@ -453,8 +493,8 @@ function EntryBody({
                 </button>
               </span>
               <span className="muted" style={{ fontSize: 13 }}>
-                Approve switches only your session to the fixed copy of the portal, then presses the same button again. On your own app you get
-                this change as a diff and apply it yourself.
+                Approve switches only your session to the fixed copy of the portal, then presses the same button again. On your own app, Approve or
+                a heal opens a pull request your checks must pass (with write access you give), or you get this change as a diff.
               </span>
             </>
           )}
@@ -462,6 +502,40 @@ function EntryBody({
       );
     case "fixed":
       return <span className="title">Fixed. The flow works again.</span>;
+    case "heal": {
+      const proof = d.proof as { status?: number; result?: { error?: string } | null } | undefined;
+      if (d.status === "verified")
+        return (
+          <>
+            <span className="stamp-row">
+              <span className="title">Healed on its own</span>
+              <span className="tag ok">your rule allowed it</span>
+            </span>
+            <span>
+              Your session now runs the fixed build. Proof: the same request was sent again and answered {String(proof?.status ?? "")}
+              {proof?.result?.error ? `, telling the student “${proof.result.error}” instead of crashing` : ", with no crash"}.
+            </span>
+            <span className="actions">
+              <button type="button" className="btn ghost" onClick={() => onUndo(Number(d.heal_id))}>
+                Undo
+              </button>
+            </span>
+          </>
+        );
+      if (d.status === "skipped")
+        return (
+          <>
+            <span className="stamp-row">
+              <span className="title">Not healed on its own</span>
+              <span className="tag warn">rule</span>
+            </span>
+            <span>Held back because {String(d.reason)}. It waits for a person.</span>
+          </>
+        );
+      if (d.status === "rolled_back") return <span className="title">Heal rolled back: {String(d.reason)}.</span>;
+      if (d.status === "undone") return <span className="title">Undone. Your session is back on the broken build; press the button to see the bug again.</span>;
+      return null;
+    }
     default:
       return null;
   }

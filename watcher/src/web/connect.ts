@@ -14,7 +14,7 @@ export function connectRoutes(db: DB) {
   const app = new Hono();
 
   app.post("/public/connect", async (c) => {
-    const body = ((await c.req.json().catch(() => ({}))) ?? {}) as { session?: unknown; name?: unknown; repo?: unknown; consent?: unknown };
+    const body = ((await c.req.json().catch(() => ({}))) ?? {}) as { session?: unknown; name?: unknown; repo?: unknown; consent?: unknown; heal?: unknown };
     const session = typeof body.session === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(body.session) ? body.session : null;
     if (!session) return c.json({ error: "Reload the page and try again." }, 400);
     if (body.consent !== true) return c.json({ error: "Please read and accept the data note first." }, 400);
@@ -29,7 +29,8 @@ export function connectRoutes(db: DB) {
     if (outsideAppsToday(db) >= NEW_APPS_PER_DAY) return c.json({ error: "Today's free spots are taken. Try again tomorrow." }, 429);
     if (repo && !(await isPublicRepo(repo))) return c.json({ error: `We could not read ${repo}. Is it public? For a private repository, install our GitHub app after connecting.` }, 400);
 
-    const made = createOutsideApp(db, name, repo);
+    // The owner's heal rule: approve every fix (default), or heal on its own after an unanswered wake-up.
+    const made = createOutsideApp(db, name, repo, body.heal === "auto-after" ? "auto-after" : "ask");
     const bot = await getBotUsername();
     return c.json({
       project: made.name,
@@ -37,6 +38,7 @@ export function connectRoutes(db: DB) {
       logs_url: made.logs_url,
       telegram: bot ? `https://t.me/${bot}?start=${made.link_code}` : null,
       link_code: made.link_code,
+      heal: body.heal === "auto-after" ? "auto-after" : "ask",
     });
   });
 
