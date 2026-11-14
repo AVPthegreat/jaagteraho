@@ -187,7 +187,7 @@ export default function How() {
                 <li data-rv>
                   <b>This website</b>
                   <span>
-                    To sign up, to <Link href="/#demo">try it on our demo app</Link>, to <Link href="/paste">paste an error</Link> you already have, and to
+                    To sign up, to <Link href="/demo">try it on our demo app</Link>, to <Link href="/paste">paste an error</Link> you already have, and to
                     see our <Link href="/evidence">test results</Link>.
                   </span>
                 </li>
@@ -423,7 +423,7 @@ export default function How() {
               <li data-rv>
                 <strong>Break our demo exam portal</strong>
                 <p>
-                  In the <Link href="/#demo">live demo</Link> on the home page, pick a bug and press its button. You watch the same steps as above happen
+                  In the <Link href="/demo">live demo</Link>, pick a bug and press its button. You watch the same steps as above happen
                   live, with a timer.
                 </p>
               </li>
@@ -452,7 +452,7 @@ export default function How() {
               <Link className="btn" href="/connect">
                 Connect your app <span className="arrow">→</span>
               </Link>
-              <Link className="textlink" href="/#demo">
+              <Link className="textlink" href="/demo">
                 Try the live demo
               </Link>
             </div>

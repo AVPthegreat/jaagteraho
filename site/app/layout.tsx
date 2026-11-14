@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
-import { HACKATHON, HOSTED_ON, REPO, TEAM } from "./site";
+import { HACKATHON, HOSTED_ON, REPO, TEAM, THANKS } from "./site";
 import { Lantern } from "./ui/lantern";
 import { Motion } from "./ui/motion";
 import { SiteNav } from "./ui/nav-links";
@@ -13,9 +13,9 @@ const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")),
-  title: "JaagteRaho: an AI on-call agent that stays awake for your live app",
+  title: "JaagteRaho: the AI night watchman for your live app",
   description:
-    "Your app breaks at 2 am. If you don't wake up, JaagteRaho heals it: an AI agent that reads every error, wakes you only when real users are hurt, explains the cause with file and line, and writes a checked fix. You approve every fix, or let it heal itself under rules you set. 20 of 20 planted bugs reached the owner, 0 wrong fixes among 19 shown.",
+    "Your app breaks at night. JaagteRaho stays awake: it wakes you only when it matters (Telegram, a phone call), finds the cause with file and line, and brings a fix checked by code rules, an AI reviewer and its own test. You approve, or let it heal under your rules. 20 of 20 planted bugs reached the owner, 0 wrong fixes among 19 shown.",
 };
 
 export const viewport: Viewport = { themeColor: "#06080d", viewportFit: "cover" };
@@ -72,15 +72,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </nav>
             </div>
             <div className="footer-bottom">
-              <p>
-                <b>Team</b>{" "}
+              <p className="credits">
+                <b>Built by</b>{" "}
                 {TEAM.map((m, i) => (
                   <span key={m.name}>
-                    {i > 0 && " · "}
+                    {i === 1 ? ", with " : i > 1 ? " and " : ""}
                     {m.href ? <a href={m.href}>{m.name}</a> : m.name}
-                    <span className="soft">, {m.role}</span>
+                    {i > 0 && <span className="soft"> ({m.role})</span>}
                   </span>
                 ))}
+                . <span className="soft">{THANKS}</span>
               </p>
               <p>
                 <b>Built for</b> {HACKATHON}
