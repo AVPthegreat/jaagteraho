@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { Clips } from "./home/clips";
 import { HomeMotion } from "./home/home-motion";
-import { LiveStrip } from "./home/live-strip";
 import { NightStory } from "./home/night-story";
 import { Radar } from "./home/radar";
 import { Shield } from "./home/shield";
 import { Watches } from "./home/watches";
-import { BENCH_ALL, benchFixPct, benchInr, benchInrPerBug, CLIPS } from "./site";
+import { BENCH_ALL, benchFixPct, benchInr, benchInrPerBug, FAURUS_BENCH as FB } from "./site";
 import "./home/home.css";
 
 const d = (n: number) => ({ "--d": n }) as React.CSSProperties;
@@ -20,7 +19,6 @@ export default function Home() {
         <div className="hero4-sky" aria-hidden="true" />
         <div className="frame hero4-grid">
           <div className="hero4-copy">
-            <LiveStrip />
             <p className="eyebrow" data-h style={d(0)}>
               <span className="eyebrow-dot" aria-hidden="true" /> The AI night watchman for your app
             </p>
@@ -86,7 +84,7 @@ export default function Home() {
               Watch it work, <em>start to finish.</em>
             </h2>
           </div>
-          <Clips clips={CLIPS} />
+          <Clips />
         </div>
       </section>
 
@@ -121,6 +119,32 @@ export default function Home() {
               Numbers, <em>not adjectives.</em>
             </h2>
           </div>
+          <Link className="real-code" href="/evidence#faurus-h" data-rv>
+            <span className="rc-tag">Tested on real production code</span>
+            <span className="rc-head">
+              Faurus ({FB.accounts} accounts): {FB.bugs} bugs planted in a private copy of its code.
+            </span>
+            <span className="rc-stats">
+              <span>
+                <b>{FB.fix_pct}%</b> of fixes passed a hidden test
+              </span>
+              <span>
+                <b>
+                  {FB.critical_woke}/{FB.critical}
+                </b>{" "}
+                exam, contest and submission bugs woke the owner
+              </span>
+              <span>
+                <b>
+                  {FB.right_file}/{FB.bugs}
+                </b>{" "}
+                right file
+              </span>
+              <span>
+                <b>${FB.cost_per_bug_usd.toFixed(3)}</b> a bug
+              </span>
+            </span>
+          </Link>
           <ul className="nums nums-cost">
             <li className="num-hero" data-rv>
               <Link href="/evidence#extended-h">
@@ -165,7 +189,8 @@ export default function Home() {
           </ul>
           <p className="nums-note" data-rv>
             Two benchmark runs (the original 24 cases and 50 more) on {BENCH_ALL.bugs} planted bugs (plus 4 harmless errors) across 7 apps we built and run; ₹ at about ₹{BENCH_ALL.inr_per_usd} to the
-            dollar.{" "}
+            dollar. The Faurus test ran on a private copy of its pure-logic backend modules, driven by direct calls, not production traffic;
+            Faurus itself was never changed.{" "}
             <Link className="textlink" href="/evidence">
               How each number was measured →
             </Link>

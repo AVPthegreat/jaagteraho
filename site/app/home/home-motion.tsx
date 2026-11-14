@@ -18,7 +18,8 @@ export function HomeMotion() {
       const mm = gsap.matchMedia();
 
       mm.add("(prefers-reduced-motion: no-preference)", () => {
-        // The hero's entrance is pure CSS (home.css, "Hero entrance"): it must not wait for this script.
+        // The hero's entrance is pure CSS (home.css, "Hero entrance"): it must not wait for this script,
+        // or the headline stays invisible for seconds on a slow phone.
 
         // Shield: the rings draw themselves as the section arrives.
         const rings = gsap.utils.toArray<SVGPathElement>("[data-shield] .sh-ring");
@@ -31,8 +32,9 @@ export function HomeMotion() {
               duration: 1.6,
               ease: "power2.inOut",
               stagger: 0.14,
+              // pathLength is 1, so the offset must not be rounded to whole numbers (the rings jumped to drawn).
               autoRound: false,
-              // Created before the pins below: refresh after them, or the trigger ignores the pin spacing.
+              // Created before the story pin below: refresh after it, or the trigger ignores the pin spacing.
               scrollTrigger: { trigger: "[data-shield]", start: "top 75%", once: true, refreshPriority: -1 },
             },
           );
@@ -90,15 +92,15 @@ export function HomeMotion() {
           if (clock) clock.textContent = steps[i].dataset.time ?? "";
         };
         show(0);
-        const section = pin.closest<HTMLElement>("section") ?? pin;
-        section.dataset.pinned = "";
+        // Pin the story's own inner block, never the <section>: GSAP wraps what it pins in a spacer div,
+        // and if that wrapped a top-level section React could not remove it when you navigate to another
+        // page ("removeChild ... not a child"), which crashed client navigation from the home page.
         const st = ScrollTrigger.create({
-          trigger: section,
+          trigger: pin,
           pin: true,
           start: "top top",
-          end: () => `+=${window.innerHeight * 1.8}`,
-          scrub: 0.4,
-          anticipatePin: 1,
+          end: () => `+=${window.innerHeight * 1.6}`,
+          scrub: true,
           onUpdate: (self) => {
             show(Math.min(steps.length - 1, Math.floor(self.progress * steps.length * 0.999)));
             if (bar) bar.style.transform = `scaleY(${self.progress})`;
@@ -107,25 +109,21 @@ export function HomeMotion() {
         return () => {
           st.kill();
           delete pin.dataset.pinned;
-          delete section.dataset.pinned;
           steps.forEach((s, k) => s.classList.toggle("on", k === 0));
           if (bar) bar.style.transform = "";
         };
       });
 
-      // "What it watches" and "How safe is it": pinned, and scroll walks through the cards / layers.
-      mm.add("(min-width: 960px) and (min-height: 760px) and (prefers-reduced-motion: no-preference)", () => {
+      // "What it watches" and "How safe is it": no pinning (it felt like the page stuck). As the section
+      // scrolls through the view, the active card / layer follows the scroll position.
+      mm.add("(min-width: 960px) and (min-height: 640px) and (prefers-reduced-motion: no-preference)", () => {
         const made = gsap.utils.toArray<HTMLElement>("[data-pin-steps]").map((sec) => {
           const n = Number(sec.dataset.pinSteps) || 1;
           let cur = -1;
-          sec.dataset.pinned = "";
           return ScrollTrigger.create({
             trigger: sec,
-            pin: true,
-            start: "top top",
-            end: () => `+=${window.innerHeight * 0.4 * n}`,
-            scrub: 0.3,
-            anticipatePin: 1,
+            start: "top 60%",
+            end: "bottom 60%",
             onUpdate: (self) => {
               const i = Math.min(n - 1, Math.floor(self.progress * n * 0.999));
               if (i === cur) return;
@@ -134,22 +132,18 @@ export function HomeMotion() {
             },
           });
         });
-        ScrollTrigger.refresh();
-        return () => {
-          made.forEach((st) => st.kill());
-          gsap.utils.toArray<HTMLElement>("[data-pin-steps]").forEach((sec) => delete sec.dataset.pinned);
-        };
+        return () => made.forEach((st) => st.kill());
       });
 
       cleanup = () => mm.revert();
 
-      // A deep link (/#safety, or a header link from another page) was resolved before the pins added
-      // their scroll length, so it landed short. Measure again and go there.
+      // A link from another page (/#safety) was resolved before the story pin added its scroll length, so it
+      // landed about a screen and a half short. Measure again and go there.
       const id = location.hash ? decodeURIComponent(location.hash.slice(1)) : "";
       const target = id ? document.getElementById(id) : null;
       if (target) {
         ScrollTrigger.refresh();
-        requestAnimationFrame(() => target.scrollIntoView({ behavior: "instant", block: "start" }));
+        requestAnimationFrame(() => window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY, behavior: "instant" }));
       }
     })();
     return () => {

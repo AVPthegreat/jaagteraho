@@ -185,12 +185,22 @@ export function Shield() {
             <p id={`sh-${i}`} hidden={i !== on}>
               {l.text}
             </p>
-            <div className="shield-out" data-ui hidden={i !== on}>
+            {/* Under the open layer on phones and tablets (hidden on wide screens, where the copy beside the shield shows). */}
+            <div className="shield-out in-list" data-ui hidden={i !== on}>
               {l.out}
             </div>
           </li>
         ))}
       </ol>
+      {/* Wide screens: the five outputs share one cell over the foot of the shield and cross-fade, so nothing
+          appears, resizes or re-anchors as the page scrolls through the layers. */}
+      <div className="shield-outs" aria-hidden="true">
+        {LAYERS.map((l, i) => (
+          <div key={l.name} className={`shield-out${i === on ? " on" : ""}`} data-ui inert>
+            {l.out}
+          </div>
+        ))}
+      </div>
       <p className="shield-src small soft">
         The rules are code you can read: <a href={GATE_SRC}>gate.ts</a> and <a href={HEAL_SRC}>heal.ts</a>.
       </p>

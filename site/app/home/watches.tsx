@@ -79,7 +79,6 @@ export function Watches() {
   const box = useRef<HTMLDivElement | null>(null);
   useScrollStep(box, setOn);
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
-  const c = CASES[on];
 
   const onKey = (e: React.KeyboardEvent) => {
     const n = CASES.length;
@@ -125,27 +124,41 @@ export function Watches() {
           </button>
         ))}
       </div>
-      <div className="watch-panel" role="tabpanel" id="wt-panel" aria-labelledby={`wt-${c.id}`} key={c.id}>
-        <div className="wp-err">
-          <span className="wp-k">When this fails</span>
-          <code>{c.error}</code>
-        </div>
-        <div className="wp-do">
-          <span className="wp-k">JaagteRaho will</span>
-          <span className="wp-pills">
-            {c.does.map(([k, t]) => (
-              <span key={t} className={`pill ${k}`}>
-                <i />
-                {t}
+      {/* Every panel is laid out in the same cell, so the box is always as tall as the longest one: changing
+          the card (as the page scrolls past, or by tap) never pushes the rest of the page up or down. */}
+      <div className="watch-panels">
+        {CASES.map((w, i) => (
+          <div
+            key={w.id}
+            className={`watch-panel${i === on ? " on" : ""}`}
+            role="tabpanel"
+            id={i === on ? "wt-panel" : undefined}
+            aria-labelledby={`wt-${w.id}`}
+            aria-hidden={i !== on}
+            inert={i !== on}
+          >
+            <div className="wp-err">
+              <span className="wp-k">When this fails</span>
+              <code>{w.error}</code>
+            </div>
+            <div className="wp-do">
+              <span className="wp-k">JaagteRaho will</span>
+              <span className="wp-pills">
+                {w.does.map(([k, t]) => (
+                  <span key={t} className={`pill ${k}`}>
+                    <i />
+                    {t}
+                  </span>
+                ))}
               </span>
-            ))}
-          </span>
-        </div>
-        <p className="wp-why">{c.why}</p>
-        <p className="wp-heal">
-          <Icon name="shield" size={18} />
-          <span>{c.heal}</span>
-        </p>
+            </div>
+            <p className="wp-why">{w.why}</p>
+            <p className="wp-heal">
+              <Icon name="shield" size={18} />
+              <span>{w.heal}</span>
+            </p>
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Diff } from "../ui/alert-card";
 import { WATCHER } from "../watcher";
-import { appTitle, loadSession, TAGLINES, TITLES, type AppInfo, type BugCase, type PlayEvent, type Scorecard } from "./play";
+import { appTitle, loadPlaySession, TAGLINES, TITLES, type AppInfo, type BugCase, type PlayEvent, type Scorecard } from "./play";
 
 /*
   The Live playground, in three steps: pick an app, pick a bug, watch it fix. The stage shows the app as
@@ -25,12 +25,30 @@ function applyStep(r: Run, ev: PlayEvent): Run {
   const next: Run = { ...r, events: [...r.events, ev] };
   if (ev.step === "ready") next.approvable = Boolean(ev.data.approvable);
   if (ev.step === "done") {
-    if (isObj(ev.data.scorecard)) next.scorecard = ev.data.scorecard as Scorecard;
+    const card = toCard(ev.data.scorecard);
+    if (card) next.scorecard = card;
     if (next.state === "running") next.state = "broken";
   }
   if (ev.step === "failed" || ev.step === "undone") next.state = "broken";
   if (ev.step === "hidden_test" && r.state !== "running") next.state = "fixed";
   return next;
+}
+
+/** A scorecard from the wire, made safe for every field the page reads; null if it is not one. */
+function toCard(v: unknown): Scorecard | null {
+  if (!isObj(v) || typeof v.app !== "string") return null;
+  const planted = isObj(v.planted) ? v.planted : {};
+  const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : null);
+  return {
+    ...(v as unknown as Scorecard),
+    planted: { story: typeof planted.story === "string" ? planted.story : "", files: Array.isArray(planted.files) ? planted.files.map(String) : [] },
+    error: typeof v.error === "string" ? v.error : "",
+    cost_usd: num(v.cost_usd) ?? 0,
+    total_seconds: num(v.total_seconds) ?? 0,
+    seconds_to_cause: num(v.seconds_to_cause),
+    seconds_to_proved_fix: num(v.seconds_to_proved_fix),
+    hidden_test: v.hidden_test === "passed" || v.hidden_test === "failed" ? v.hidden_test : "not_run",
+  };
 }
 
 /** Steps arrive as JSON from the wire: keep only well-formed ones. */
@@ -85,7 +103,8 @@ function narrate(ev: PlayEvent | undefined, app: string): string {
     case "own_test":
       return d.verdict === "proved" ? "Its own test proved the fix." : "Its own test could not prove the fix.";
     case "ready":
-      if (!d.approvable) return "This fix cannot be applied.";
+      if (!d.approvable) return String(d.reason ?? "This fix was not applied.");
+      if (d.protected_note) return "Fix ready. It touches a protected area, so it waits for your tap. Approve it to apply it in your copy.";
       return d.heal === "auto" ? "Fix ready. Healing on its own…" : "Fix ready. Approve it to apply it.";
     case "note":
       return String(d.text ?? "");
@@ -171,7 +190,7 @@ export function Playground() {
 
   // The list of apps, retried with backoff while the live server restarts.
   useEffect(() => {
-    setSession(loadSession());
+    setSession(loadPlaySession());
     const fromUrl = new URLSearchParams(window.location.search).get("app");
     if (fromUrl && /^[a-z]{2,20}$/.test(fromUrl)) {
       setApp(fromUrl);
@@ -185,7 +204,16 @@ export function Playground() {
         .then((d: { apps?: AppInfo[] }) => {
           if (!alive) return;
           if (!Array.isArray(d?.apps)) throw new Error("bad list");
-          setApps(d.apps.filter((a) => isObj(a) && typeof a.name === "string").map((a) => ({ ...a, cases: Array.isArray(a.cases) ? a.cases : [] })));
+          setApps(
+            d.apps
+              .filter((a) => isObj(a) && typeof a.name === "string")
+              .map((a) => ({
+                ...a,
+                title: typeof a.title === "string" ? a.title : appTitle(a.name),
+                tree: Array.isArray(a.tree) ? a.tree.map(String) : [],
+                cases: (Array.isArray(a.cases) ? a.cases : []).filter((c): c is BugCase => isObj(c) && typeof c.id === "string" && typeof c.title === "string"),
+              })),
+          );
           setAppsDown(false);
         })
         .catch(() => {
@@ -227,7 +255,17 @@ export function Playground() {
         const s = parse((m as MessageEvent).data);
         const r = isObj(s) && isObj(s.run) ? (s.run as unknown as Run) : null;
         if (r && typeof r.run_id === "number") {
-          const runFixed: Run = { ...r, events: (Array.isArray(r.events) ? r.events : []).map(toEvent).filter((e): e is PlayEvent => e !== null) };
+          if (typeof r.app !== "string") return;
+          const runFixed: Run = {
+            run_id: r.run_id,
+            app: r.app,
+            case_id: typeof r.case_id === "string" ? r.case_id : "",
+            events: (Array.isArray(r.events) ? r.events : []).map(toEvent).filter((e): e is PlayEvent => e !== null),
+            state: r.state === "running" || r.state === "fixed" ? r.state : "broken",
+            approvable: r.approvable === true,
+            heal: r.heal === "auto" ? "auto" : "ask",
+            scorecard: toCard(r.scorecard),
+          };
           setRun(runFixed);
           // A returning visitor lands on their run.
           if (!restored.current) {
@@ -343,10 +381,11 @@ export function Playground() {
   const ready = by.ready?.data;
   const hidden = run && fixed ? by.hidden_test?.data : undefined;
   const reviewer = isObj(gate?.reviewer) ? (gate.reviewer as { fix_quality?: string }) : null;
-  const ticks = [
+  // true passed, false failed, "skip" did not run (shown as –), null still waiting.
+  const ticks: Array<{ name: string; ok: boolean | "skip" | null }> = [
     { name: "Code rules", ok: gate ? gate.code_rules === "passed" : null },
-    { name: "AI review", ok: gate ? (reviewer ? Number(reviewer.fix_quality) >= 2 : false) : null },
-    { name: "Own test", ok: own ? own.verdict === "proved" : null },
+    { name: "AI review", ok: gate ? (reviewer ? Number(reviewer.fix_quality) >= 2 : "skip") : null },
+    { name: "Own test", ok: own ? (own.verdict === "proved" ? true : own.verdict === "not_proved" ? false : "skip") : gate && !gate.diff ? "skip" : null },
   ];
   const canApprove = !!run && run.state === "broken" && run.approvable && !!card;
   const cause = by.cause?.data;
@@ -394,8 +433,9 @@ export function Playground() {
       body: gate ? (
         <span className="pg2-ticks">
           {ticks.map((k) => (
-            <span key={k.name} className={k.ok === null ? "wait" : k.ok ? "ok" : "no"}>
-              {k.ok === null ? "·" : k.ok ? "✓" : "✗"} {k.name}
+            <span key={k.name} className={k.ok === null ? "wait" : k.ok === "skip" ? "skip" : k.ok ? "ok" : "no"} title={k.ok === "skip" ? "not run" : undefined}>
+              {k.ok === null ? "·" : k.ok === "skip" ? "–" : k.ok ? "✓" : "✗"} {k.name}
+              {k.ok === "skip" ? <span className="sr-only"> not run</span> : null}
             </span>
           ))}
         </span>
@@ -408,10 +448,13 @@ export function Playground() {
       t: by.hidden_test?.t,
       body: fixed ? (
         <span>{by.applied?.data.by === "healed" ? "Healed on its own." : "Applied after you approved it."}</span>
-      ) : canApprove && run?.heal === "ask" ? (
-        <button type="button" className="btn btn-sm" onClick={() => act("approve")} disabled={busy !== null}>
-          {busy === "approve" ? "Applying…" : "Approve fix"}
-        </button>
+      ) : canApprove && (run?.heal === "ask" || ready?.protected_note) ? (
+        <>
+          {ready?.protected_note ? <span className="soft pg2-protected">{String(ready.protected_note)} </span> : null}
+          <button type="button" className="btn btn-sm" onClick={() => act("approve")} disabled={busy !== null}>
+            {busy === "approve" ? "Applying…" : "Approve fix"}
+          </button>
+        </>
       ) : by.note ? (
         <span className="soft">
           {String(by.note.data.text ?? "")}{" "}
@@ -422,7 +465,7 @@ export function Playground() {
           ) : null}
         </span>
       ) : ready && !ready.approvable ? (
-        <span className="soft">{String(ready.reason ?? "This fix cannot be applied.")}</span>
+        <span className="soft">{String(ready.reason ?? "This fix was not applied.")}</span>
       ) : by.applied ? (
         <span className="soft">Our hidden test is checking it…</span>
       ) : by.failed ? (

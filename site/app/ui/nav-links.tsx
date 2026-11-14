@@ -20,6 +20,21 @@ export function SiteNav() {
   const isOpen = open === path;
 
   const nav = useRef<HTMLDivElement>(null);
+  // On the home page, the link of the section in view gets the quiet active dot.
+  const [inView, setInView] = useState<string | null>(null);
+  useEffect(() => {
+    if (path !== "/" || !("IntersectionObserver" in window)) return;
+    const ids = LINKS.filter(([h]) => h.startsWith("/#")).map(([h]) => h.slice(2));
+    const els = ids.map((id) => document.getElementById(id)).filter((e): e is HTMLElement => !!e);
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) if (e.isIntersecting) setInView(e.target.id);
+      },
+      { rootMargin: "-45% 0px -50% 0px" },
+    );
+    els.forEach((e) => io.observe(e));
+    return () => io.disconnect();
+  }, [path]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -47,7 +62,15 @@ export function SiteNav() {
       <div className="nav-menu" id="site-menu">
         <nav aria-label="Main" className="nav-links">
           {LINKS.map(([href, label]) => (
-            <Link key={href} href={href} aria-current={href === path ? "page" : undefined} onClick={() => setOpen(null)}>
+            <Link
+              key={href}
+              href={href}
+              aria-current={href === path ? "page" : path === "/" && inView && href === `/#${inView}` ? "location" : undefined}
+              onClick={(e) => {
+                (e.currentTarget as HTMLElement).blur();
+                setOpen(null);
+              }}
+            >
               {label}
             </Link>
           ))}

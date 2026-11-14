@@ -21,7 +21,7 @@ import type { CleanEvent } from "../intake/allowlist.js";
 import { storeEvent } from "../intake/store.js";
 import { decide as realDecide, severityWord, type Decision } from "../pipeline/decide.js";
 import { gatherFiles, runDiagnosis, type DiagnosisOutput, type DiagnosisResult, type SourceFile } from "../pipeline/diagnose.js";
-import { codeChecks, riskyAdditions, runGate, type GateResult } from "../pipeline/gate.js";
+import { codeChecks, riskyAdditions, runGate, SENSITIVE, type GateResult } from "../pipeline/gate.js";
 import { proveFix, riskyFixLines, type TestRun } from "../pipeline/verify.js";
 import { DAILY_DIAGNOSES } from "../pipeline/worker.js";
 import { LocalSource } from "../source/source.js";
@@ -72,6 +72,8 @@ export type Scorecard = {
   cost_usd: number;
   finished_at: string;
   applied_by?: "approved" | "healed"; // a visitor's own run: how the fix went in
+  appliable_in_copy?: boolean; // the fix could be applied to the visitor's copy
+  protected_files?: string[]; // in a real app these make the fix wait for the owner's tap
 };
 
 /** The model-facing steps. Production uses the real pipeline; tests pass fakes (no network, no spend). */
@@ -84,7 +86,8 @@ export type Steps = {
 export const realSteps: Steps = {
   decide: (db, ai, ctx) => realDecide(db, ai, ctx, false),
   diagnose: (ai, ev, files) => (ai ? runDiagnosis(ai, ev, files, false) : Promise.resolve({ error: "no model key" })),
-  gate: (ai, d, files) => runGate(ai, d, files),
+  // The playground's copies are throwaway and run in the isolated runner, so a protected area is noted, not withheld.
+  gate: (ai, d, files) => runGate(ai, d, files, { allowProtected: true }),
 };
 
 export type PlaygroundOptions = {
@@ -97,6 +100,8 @@ export type PlaygroundOptions = {
   maxConcurrent?: number;
   runsPerHour?: number; // live runs per hour, all apps together
   tickMs?: number;
+  /** false: leave other processes' temp copies alone (scripts that run next to the live watcher). */
+  cleanTemp?: boolean;
 };
 
 /** What a visitor chose for their own run: the bug, the time of day, and the heal rule. */
@@ -114,6 +119,7 @@ type Own = {
   state: "running" | "broken" | "fixed";
   patched: Record<string, string> | null;
   approvable: boolean;
+  protectedArea?: boolean;
   proved: boolean;
   busy: boolean;
   card: Scorecard | null;
@@ -128,6 +134,36 @@ export const USE_AT_ONCE = 2;
 const WATCH_TTL_MS = 90_000;
 const OPEN_GAP_MS = 15_000;
 const EVENTS_PER_RUN = 40;
+
+/** What the protected area is, in plain words, for the visitor. */
+export function areaWords(files: string[]): string {
+  const f = files.join(" ");
+  if (/payment|billing|invoice|checkout/i.test(f)) return "invoicing or payments";
+  if (/auth|login|logout|password|permission|session|token/i.test(f)) return "sign-in or permissions";
+  if (/grad|exam|proctor/i.test(f)) return "exams or grading";
+  if (/settings|config|secret|\.env/i.test(f)) return "settings";
+  return "a protected area";
+}
+
+/**
+ * Whether a fix may go into the visitor's copy, and the true reason when not. In the copy, a protected area
+ * (and the reviewer's matching "touches a sensitive area" concern) is a note, not a block; the risky-code
+ * rules (network, processes, files, dynamic code) and every other check stay hard.
+ */
+export function copyVerdict(level: string, reasons: string[], protectedFiles: string[], outside: string | null): { appliable: boolean; reason: string | null; protectedNote: string | null } {
+  const protectedNote = protectedFiles.length
+    ? `In a real app this fix waits for your tap, because it touches ${areaWords(protectedFiles)}. In your copy you can apply it.`
+    : null;
+  if (outside) return { appliable: false, reason: `Not applied: the fix ${outside}, which only a person may approve.`, protectedNote: null };
+  if (level === "recommended") return { appliable: true, reason: null, protectedNote };
+  const onlySensitive = level === "caution" && protectedFiles.length > 0 && reasons.length > 0 && reasons.every((r) => /sensitive area/.test(r));
+  if (onlySensitive) return { appliable: true, reason: null, protectedNote };
+  if (level === "caution") return { appliable: false, reason: `Not applied: the AI reviewer had concerns (${reasons.join("; ")}).`, protectedNote: null };
+  return { appliable: false, reason: `Not applied: the checks withheld this fix (${reasons[0] ?? "it did not pass every check"}).`, protectedNote: null };
+}
+
+/** Python modules a fix may import in the playground copy: the standard library's pure helpers. */
+const SAFE_IMPORTS = /^(decimal|datetime|math|fractions|re|json|collections|typing|dataclasses|enum|functools|itertools|statistics|string|zoneinfo|numbers)$/;
 
 export class Playground {
   readonly bench: Bench;
@@ -166,8 +202,8 @@ export class Playground {
     db.exec(PLAYGROUND_SCHEMA);
     // A crash mid-run leaves a 'running' row: it never finished, so it is not a result.
     db.prepare("UPDATE playground_runs SET status = 'failed' WHERE status = 'running'").run();
-    // Readable copies left by a crash mid-run.
-    try {
+    // Readable copies left by a crash mid-run (not by a side tool like the e2e script, which shares the temp folder).
+    if (opts.cleanTemp !== false) try {
       for (const name of readdirSync(tmpdir())) if (name.startsWith("jrplay-")) rmSync(join(tmpdir(), name), { recursive: true, force: true });
     } catch {
       // a temp folder we cannot list holds nothing of ours
@@ -461,8 +497,10 @@ export class Playground {
         let ownTest: Scorecard["own_test"] = "skipped";
         let hidden: Scorecard["hidden_test"] = "not_run";
         let tProved: number | null = null;
+        let protectedFiles: string[] = [];
+        let appliable = false;
         if ("error" in out) {
-          if (mine) emit("ready", { approvable: false, heal: mine.heal, reason: "The diagnosis could not finish, so there is no fix to apply." });
+          if (mine) emit("ready", { approvable: false, heal: mine.heal, reason: "The diagnosis could not finish this time, so there is no fix to apply. Plant it again to retry." });
           // The reason stays in our log; viewers get a plain sentence, never a raw SDK message.
           console.error(`playground ${app} diagnosis:`, out.error);
           emit("cause", { unavailable: "The diagnosis could not finish this time." });
@@ -481,7 +519,7 @@ export class Playground {
             seconds: Math.round((tCause - tCrash) / 100) / 10,
           });
           const shown = [...files, ...out.files_read];
-          const rules = codeChecks(d, shown);
+          const rules = codeChecks(d, shown, { allowProtected: true });
           const gate = await this.steps.gate(this.ai, d, shown);
           gateLevel = gate.level ?? (gate.passed ? "recommended" : "withheld");
           gateReasons = gate.reasons;
@@ -493,7 +531,10 @@ export class Playground {
             code_rules: rules.passed ? "passed" : "failed",
             code_rule_reasons: rules.reasons,
             reviewer: gate.review ? { fix_quality: gate.review.fix_quality, could_break: gate.review.could_break, touches_sensitive: gate.review.touches_sensitive } : null,
+            review_ran: !!gate.review,
+            protected_files: gate.protected_files ?? [],
           });
+          protectedFiles = gate.protected_files ?? [];
           if (Object.keys(gate.patched).length) {
             // The model's own test: fails on the broken code, passes on the fixed code (Python only).
             const proof = await proveFix(broken, gate.patched, d.regression_test, runFrom);
@@ -502,20 +543,16 @@ export class Playground {
             emit("own_test", { verdict: proof.verdict, before: proof.before ?? null, after: proof.after ?? null, note: proof.note });
             // Our hidden test (the model never saw it) on the patched copy, unless the fix reaches outside the program.
             const outside = this.reachesOutside(broken, gate.patched, d);
+            const verdict = copyVerdict(gateLevel, gate.reasons, protectedFiles, outside);
+            appliable = verdict.appliable;
             if (mine) {
               // The visitor decides: the hidden test runs when the fix is applied (approved or healed).
-              mine.patched = outside ? null : gate.patched;
-              mine.approvable = !outside && gateLevel === "recommended";
+              mine.patched = verdict.appliable ? gate.patched : null;
+              mine.approvable = verdict.appliable;
+              // A fix in a protected area never heals on its own, as in a real app; the visitor may still apply it.
+              mine.protectedArea = protectedFiles.length > 0;
               mine.proved = proof.verdict === "proved";
-              emit("ready", {
-                approvable: mine.approvable,
-                heal: mine.heal,
-                reason: outside
-                  ? "The fix reaches outside the program, so it is never applied."
-                  : gateLevel !== "recommended"
-                    ? `The gate did not recommend this fix (${gateLevel}${gate.reasons.length ? `: ${gate.reasons[0]}` : ""}), so it cannot be applied.`
-                    : null,
-              });
+              emit("ready", { approvable: verdict.appliable, heal: mine.heal, reason: verdict.reason, protected_note: verdict.protectedNote });
             } else if (outside) {
               emit("hidden_test", { result: "not_run", note: `Not run: the fix adds code that reaches outside the program (${outside.slice(0, 60)}).` });
             } else {
@@ -526,7 +563,7 @@ export class Playground {
             }
           } else {
             emit("own_test", { verdict: "skipped", note: "No edit to test." });
-            if (mine) emit("ready", { approvable: false, heal: mine.heal, reason: "There is no fix to apply." });
+            if (mine) emit("ready", { approvable: false, heal: mine.heal, reason: gate.reasons[0] ? `JaagteRaho found the cause but proposed no edit it could check (${gate.reasons[0]}).` : "JaagteRaho found the cause but proposed no edit." });
           }
         }
         const cost = Math.round(this.spentBy(projectId, startedAt) * 10000) / 10000;
@@ -535,6 +572,8 @@ export class Playground {
           app,
           case_id: c.id,
           case_source: c.source ?? "benchmark",
+          appliable_in_copy: appliable,
+          ...(protectedFiles.length ? { protected_files: protectedFiles } : {}),
           planted: { story: c.story, files: injected },
           error: `${parsed.exception_type}: ${parsed.message}`.slice(0, 160),
           where,
@@ -563,7 +602,8 @@ export class Playground {
           mine.state = "broken";
           // "Heal on its own": only a recommended fix that its own test proved, as with real heal rules.
           if (mine.heal === "auto") {
-            if (mine.approvable && mine.proved) await this.applyFix(mine, "healed");
+            if (mine.approvable && mine.protectedArea) emit("note", { text: "Not healed on its own: it touches a protected area, so it waits for your tap, as it would in a real app." });
+            else if (mine.approvable && mine.proved) await this.applyFix(mine, "healed");
             else if (mine.approvable) emit("note", { text: "Not healed on its own: its own test did not prove the fix. You can still approve it." });
           }
         }
@@ -608,7 +648,7 @@ export class Playground {
   startOwn(choice: OwnChoice, app: string, now = Date.now()): { run_id: number } | { error: "app" | "case" | "busy" | "full" | "cap" } {
     if (!this.hasApp(app)) return { error: "app" };
     const cases = this.casesFor(app);
-    const c = choice.caseId === "surprise" ? cases[randomInt(0, cases.length)] : cases.find((x) => x.id === choice.caseId);
+    const c = choice.caseId === "surprise" ? this.surprise(cases) : cases.find((x) => x.id === choice.caseId);
     if (!c) return { error: "case" };
     const previous = this.ownBySession.get(choice.session);
     if (previous !== undefined && this.own.get(previous)?.state === "running") return { error: "busy" };
@@ -646,6 +686,22 @@ export class Playground {
     const v = this.tickets.get(ticket);
     this.tickets.delete(ticket);
     return v && now <= v.until ? v.session : null;
+  }
+
+  /**
+   * "Surprise me" prefers bugs whose fixes normally go in: not in a protected area, and not a bug whose last
+   * real run ended with a fix that could not be applied. Falls back to any bug of the app.
+   */
+  surprise(cases: BenchCase[]): BenchCase {
+    const lastAppliable = (id: string) => {
+      const row = this.db.prepare("SELECT json_extract(scorecard, '$.appliable_in_copy') AS a FROM playground_runs WHERE case_id = ? AND status = 'done' AND scorecard IS NOT NULL ORDER BY id DESC LIMIT 1").get(id) as { a: number | null } | undefined;
+      return row?.a === undefined || row.a === null ? null : row.a === 1;
+    };
+    const touchesProtected = (c: BenchCase) => (c.inject ?? []).some((e) => SENSITIVE.test(e.file));
+    const good = cases.filter((c) => !touchesProtected(c) && lastAppliable(c.id) !== false);
+    const ok = good.length ? good : cases.filter((c) => lastAppliable(c.id) !== false);
+    const pool = ok.length ? ok : cases;
+    return pool[randomInt(0, pool.length)];
   }
 
   /** The visitor's run, only for that visitor. */
@@ -750,7 +806,17 @@ export class Playground {
         originals[p] = "";
       }
     }
-    const js = riskyAdditions(d.edits, originals);
+    // A plain import of a pure standard module (decimal, datetime...) or of the app itself is not "reaching
+    // outside"; every other risky addition still blocks. Imported names are checked by riskyFixLines below.
+    const appRoot = (p: string) => p.split("/")[0];
+    const safeImport = (line: string, file: string) => {
+      const m = line.trim().match(/^(?:from\s+(\.+[\w.]*|[\w.]+)\s+import\s+[\w ,()]+|import\s+([\w.]+)(?:\s+as\s+\w+)?)$/);
+      if (!m) return false;
+      const mod = m[1] ?? m[2];
+      return mod.startsWith(".") || SAFE_IMPORTS.test(mod.split(".")[0]) || mod.split(".")[0] === appRoot(file);
+    };
+    const edits = d.edits.map((e) => (e.file.endsWith(".py") ? { ...e, replace: e.replace.split("\n").filter((l) => !safeImport(l, e.file)).join("\n") } : e));
+    const js = riskyAdditions(edits, originals);
     if (js.length) return js[0];
     for (const [p, text] of Object.entries(patched)) {
       if (!p.endsWith(".py")) continue;

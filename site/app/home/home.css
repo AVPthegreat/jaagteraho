@@ -89,7 +89,6 @@
 }
 .rd-dot {
   fill: #7aa7ff;
-  filter: drop-shadow(0 0 6px rgba(122, 167, 255, 0.9));
   transition: fill 0.25s, r 0.25s;
 }
 .rd-ripple {
@@ -113,7 +112,6 @@
 .rd-blip[data-state="fail"] .rd-dot {
   fill: var(--wake);
   r: 6px;
-  filter: drop-shadow(0 0 8px rgba(255, 122, 107, 0.95));
 }
 .rd-blip[data-state="fail"] .rd-name {
   fill: #ffd0ca;
@@ -121,7 +119,6 @@
 .rd-blip[data-state="fixed"] .rd-dot {
   fill: var(--ok);
   r: 6.5px;
-  filter: drop-shadow(0 0 10px rgba(95, 214, 160, 1));
 }
 .rd-blip[data-state="fixed"] .rd-name {
   fill: #c9f3df;
@@ -337,16 +334,19 @@
   font-size: 1.25rem;
   margin: 2px 0 0;
 }
+/* The open moment's text always takes the same height (three lines), so the list, the scene centred on it
+   and the note under it hold still from step to step; one opens as the other closes. */
 .story-pin[data-pinned] .st-text p {
-  max-height: 0;
+  height: 0;
   overflow: hidden;
   opacity: 0;
   margin-top: 0;
-  transition: max-height 0.5s var(--ease), margin-top 0.5s var(--ease), opacity 0.4s var(--ease);
+  transition: height 0.5s var(--ease), margin-top 0.5s var(--ease), opacity 0.4s var(--ease);
   font-size: 0.95rem;
+  line-height: 1.6;
 }
 .story-pin[data-pinned] li.on .st-text p {
-  max-height: 5em;
+  height: 4.8em;
   opacity: 1;
   margin-top: 6px;
 }
@@ -712,13 +712,23 @@
   border-radius: var(--radius-lg);
   border: 1px solid var(--line-2);
   background: var(--surface);
-  animation: panel-in 0.25s var(--ease);
 }
-@keyframes panel-in {
-  from {
-    opacity: 0.5;
-    transform: translateY(4px);
-  }
+/* All four panels share one grid cell (the box keeps the tallest one's height); the chosen one fades in. */
+.watch-panels {
+  display: grid;
+  margin-top: 12px;
+}
+.watch-panels > .watch-panel {
+  grid-area: 1 / 1;
+  margin-top: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s var(--ease), visibility 0s linear 0.2s;
+}
+.watch-panels > .watch-panel.on {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.3s var(--ease);
 }
 @media (min-width: 900px) {
   .watch-panel {
@@ -764,252 +774,66 @@
   color: var(--ok);
 }
 
-/* ------- See it work: one playlist ------- */
-.pl {
+/* ------- See it work: one 30-second film ------- */
+.film {
   display: grid;
-  gap: 16px;
+  gap: 18px;
 }
 @media (min-width: 980px) {
-  .pl {
-    grid-template-columns: minmax(0, 0.62fr) minmax(0, 1.7fr);
-    gap: 24px;
+  .film {
+    grid-template-columns: minmax(0, 1.75fr) minmax(0, 0.85fr);
+    gap: 28px;
     align-items: start;
   }
-}
-.pl-steps {
-  display: grid;
-  gap: 6px;
-}
-.pl-steps button {
-  position: relative;
-  width: 100%;
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
-  align-items: center;
-  gap: 0 12px;
-  text-align: left;
-  padding: 11px 14px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: rgba(14, 19, 30, 0.5);
-  color: var(--soft);
-  cursor: pointer;
-  overflow: hidden;
-  transition: border-color 0.25s, background 0.25s, box-shadow 0.25s, color 0.25s, scale 0.16s var(--ease);
-}
-@media (hover: hover) and (pointer: fine) {
-  .pl-steps button:hover {
-    border-color: var(--line-2);
-    color: var(--text);
+  .film-main {
+    width: min(100%, calc((100svh - 300px) * 1.78));
   }
 }
-.ps-n {
-  grid-row: span 2;
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  border: 1px solid var(--line-2);
-  font-family: var(--font-m);
-  font-size: 0.78rem;
-  color: var(--lantern-2);
-  transition: background 0.25s, color 0.25s;
-}
-.ps-t {
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-.ps-c {
-  display: none;
-  font-size: 0.875rem;
-  color: var(--faint);
-  margin-top: 2px;
-}
-.ps-fill {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-}
-.ps-fill i {
-  display: block;
-  height: 100%;
-  background: var(--lantern);
-  transform-origin: left;
-  transform: scaleX(0);
-}
-.pl-steps button[aria-current="step"] {
-  color: var(--text);
-  border-color: rgba(122, 167, 255, 0.65);
-  background: linear-gradient(180deg, rgba(60, 100, 200, 0.24), rgba(14, 19, 30, 0.6));
-  box-shadow: 0 0 0 1px rgba(122, 167, 255, 0.25), 0 16px 40px -20px rgba(80, 130, 255, 0.7);
-}
-.pl-steps button[aria-current="step"] .ps-n {
-  background: var(--lantern);
-  color: var(--lantern-ink);
-  border-color: var(--lantern);
-}
-.pl-steps button[aria-current="step"] .ps-c {
-  display: block;
-}
-@media (max-width: 979px) {
-  /* Phones and tablets: a horizontal strip of steps above the player (it scrolls, the page does not). */
-  .pl-steps {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scroll-snap-type: x proximity;
-    scrollbar-width: none;
-    margin-inline: calc(-1 * var(--gutter));
-    padding-inline: var(--gutter);
-    padding-bottom: 2px;
-  }
-  .pl-steps::-webkit-scrollbar {
-    display: none;
-  }
-  .pl-steps li {
-    flex: 0 0 auto;
-    scroll-snap-align: start;
-  }
-  .pl-steps button {
-    width: auto;
-    grid-template-columns: 26px auto;
-    padding: 8px 12px;
-    white-space: nowrap;
-  }
-  .ps-n {
-    width: 24px;
-    height: 24px;
-    grid-row: auto;
-  }
-  .pl-steps button[aria-current="step"] .ps-c {
-    display: none;
-  }
-}
-.clip-frame {
-  position: relative;
-  border-radius: 18px;
-  border: 1px solid var(--line-2);
-  background: var(--surface);
-  padding: 34px 10px 10px;
-  box-shadow: 0 40px 120px -60px rgba(70, 120, 255, 0.6);
-}
-.clip-dots {
-  position: absolute;
-  top: 13px;
-  left: 16px;
-  display: flex;
-  gap: 6px;
-}
-.clip-dots i {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--surface-3);
-}
-.clip-tag {
-  position: absolute;
-  top: 8px;
-  right: 14px;
-  font-family: var(--font-m);
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--faint);
-}
-.clip-screen {
+.film-screen {
   position: relative;
   aspect-ratio: 16 / 9;
-  border-radius: 10px;
+  border-radius: 16px;
   overflow: hidden;
-  background: #080c16;
+  background: #05070d;
+  border: 1px solid var(--line-2);
 }
-.clip-screen.is-tall {
-  aspect-ratio: 9 / 16;
-  max-height: 70svh;
-  margin-inline: auto;
-}
-.clip-video {
+.film-video {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   display: block;
 }
-.pl-sound-cta {
+.film-sound {
   position: absolute;
-  right: 12px;
-  bottom: 12px;
+  right: 14px;
+  bottom: 14px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   min-height: 40px;
-  padding: 0 14px;
+  padding: 0 16px;
   border-radius: 999px;
   border: 1px solid rgba(179, 204, 255, 0.5);
-  background: rgba(6, 12, 30, 0.82);
+  background: rgba(6, 12, 30, 0.85);
   color: var(--text);
   font-weight: 600;
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   cursor: pointer;
-  /* no backdrop blur: it was recomputed on every video frame, and the 82% fill already separates it */
 }
 @media (hover: hover) and (pointer: fine) {
-  .pl-sound-cta:hover {
+  .film-sound:hover {
     border-color: var(--lantern-2);
   }
 }
-.pl-sound-cta .t-mouse {
-  display: none;
-}
-@media (pointer: fine) {
-  .pl-sound-cta .t-mouse {
-    display: inline;
-  }
-  .pl-sound-cta .t-touch {
-    display: none;
-  }
-}
-/* Phones: the label covered a third of the frame; the speaker alone says it, at a thumb's size. */
-@media (max-width: 640px) {
-  .pl-sound-cta {
-    width: 44px;
-    height: 44px;
-    min-height: 44px;
-    padding: 0;
-    justify-content: center;
-    right: 8px;
-    bottom: 8px;
-  }
-  .pl-sound-cta .pl-sound-label {
-    display: none;
-  }
-}
-/* Below 980px the step strip shows titles only, so the current step's caption sits under the player. */
-.pl-cap {
-  display: none;
-}
-@media (max-width: 979px) {
-  .pl-cap {
-    display: block;
-    margin-top: 6px;
-    font-size: 0.92rem;
-    color: var(--soft);
-    max-width: 60ch;
-  }
-}
-.pl-bar {
+.film-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 12px;
+  gap: 10px;
+  margin-top: 10px;
 }
-.pl-btn {
-  flex: none;
-  width: 40px;
-  height: 40px;
+.film-btn {
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -1018,78 +842,113 @@
   color: var(--text);
   cursor: pointer;
 }
-/* The player's round buttons reach 44px on touch screens. */
-@media (pointer: coarse) {
-  .pl-btn {
-    width: 44px;
-    height: 44px;
-  }
-}
 @media (hover: hover) and (pointer: fine) {
-  .pl-btn:hover {
+  .film-btn:hover {
     border-color: var(--lantern);
   }
 }
-.pl-btn[aria-pressed="true"] {
-  color: var(--lantern-2);
+.film-time {
+  margin-left: auto;
+  font-family: var(--font-m);
+  font-size: 0.8rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
 }
-.pl-seek {
-  flex: 1;
-  display: flex;
-  gap: 4px;
-  height: 28px;
+.film-steps {
+  display: grid;
+  gap: 6px;
+}
+.film-steps button {
+  position: relative;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 0 12px;
   align-items: center;
+  text-align: left;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(14, 19, 30, 0.45);
+  color: var(--soft);
   cursor: pointer;
-  /* The page can still scroll through the bar on phones; a tap (pointer up) seeks. */
-  touch-action: pan-y;
-  border-radius: 6px;
-}
-.pl-seg {
-  flex-basis: 0;
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(214, 224, 255, 0.12);
   overflow: hidden;
-  pointer-events: none;
-  transition: transform 0.15s var(--ease);
-}
-.pl-seg.on {
-  transform: scaleY(1.33);
+  transition: border-color 0.3s, background 0.3s, color 0.3s;
 }
 @media (hover: hover) and (pointer: fine) {
-  .pl-seek:hover .pl-seg {
-    transform: scaleY(1.33);
+  .film-steps button:hover {
+    color: var(--text);
+    border-color: var(--line-2);
   }
 }
-@media (pointer: coarse) {
-  .pl-seek {
-    height: 44px;
-  }
+.film-steps button[aria-current="step"] {
+  color: var(--text);
+  border-color: rgba(122, 167, 255, 0.6);
+  background: rgba(60, 100, 200, 0.16);
 }
-.pl-seg i {
+.fs-n {
+  grid-row: span 2;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  font-family: var(--font-m);
+  font-size: 0.76rem;
+  color: var(--lantern-2);
+  transition: background 0.3s, color 0.3s;
+}
+.film-steps button[aria-current="step"] .fs-n {
+  background: var(--lantern);
+  border-color: var(--lantern);
+  color: var(--lantern-ink);
+}
+.fs-t {
+  font-weight: 600;
+  font-size: 0.94rem;
+}
+.fs-c {
+  font-size: 0.84rem;
+  color: var(--faint);
+  display: none;
+}
+.film-steps button[aria-current="step"] .fs-c {
+  display: block;
+}
+.fs-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+}
+.fs-fill i {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, var(--lantern), var(--lantern-2));
+  background: var(--lantern);
   transform-origin: left;
   transform: scaleX(0);
 }
-.pl-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 6px;
-  font-size: 0.9rem;
-  color: var(--soft);
-}
-.pl-meta b {
-  color: var(--text);
-}
-.pl-time {
-  font-family: var(--font-m);
-  font-size: 0.82rem;
-  color: var(--faint);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+@media (max-width: 979px) {
+  .film-steps {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-inline: calc(-1 * var(--gutter));
+    padding-inline: var(--gutter);
+  }
+  .film-steps li {
+    flex: 0 0 auto;
+  }
+  .film-steps button {
+    width: auto;
+    white-space: nowrap;
+  }
+  .film-steps button[aria-current="step"] .fs-c {
+    display: none;
+  }
 }
 
 /* ------- The shield ------- */
@@ -1185,6 +1044,12 @@
   color: var(--faint);
   text-align: right;
 }
+@media (min-width: 960px) {
+  /* The open layer's text is 2 to 5 lines; reserve 5 so scrolling through the layers never moves the page. */
+  .shield-list > li > p {
+    min-height: calc(5 * 1.6em + 16px);
+  }
+}
 .shield-list > li > p {
   padding: 0 18px 16px 60px;
   color: var(--soft);
@@ -1208,6 +1073,9 @@
   animation: rise 0.35s var(--ease);
 }
 .shield-out[hidden] {
+  display: none;
+}
+.shield-outs {
   display: none;
 }
 .shield-out .tg {
@@ -1281,17 +1149,38 @@
   }
 }
 @media (min-width: 980px) {
-  .shield {
-    position: relative;
+  .shield-art,
+  .shield-outs {
+    grid-column: 1;
+    grid-row: 1;
   }
-  /* The left column is 0.9 / 2 of the row after the 64px gap. */
-  .shield-out {
-    position: absolute;
-    left: calc(((100% - 64px) * 0.45 - min(400px, (100% - 64px) * 0.45)) / 2);
-    width: min(400px, (100% - 64px) * 0.45);
-    bottom: 2.6rem;
-    margin: 0;
+  .shield-list {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .shield-out.in-list {
+    display: none;
+  }
+  .shield-outs {
+    display: grid;
+    align-self: end;
+    justify-self: center;
+    width: min(400px, 100%);
     z-index: 1;
+  }
+  .shield-outs > .shield-out {
+    grid-area: 1 / 1;
+    align-self: end;
+    margin: 0;
+    animation: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s var(--ease), visibility 0s linear 0.2s;
+  }
+  .shield-outs > .shield-out.on {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s var(--ease);
   }
 }
 @media (max-width: 560px) {
@@ -1468,24 +1357,12 @@
   margin-top: 18px;
 }
 
-@media (orientation: landscape) and (max-height: 500px) {
-  .pl-main {
-    width: min(100%, calc((100svh - 120px) * 1.78 + 20px));
-    margin-inline: auto;
-  }
-}
-@media (min-width: 980px) {
-  /* On short screens, keep the player and its bar inside one screen with the steps beside it. */
-  .pl-main {
-    width: min(100%, calc((100svh - 330px) * 1.78 + 20px));
-  }
-}
 
 /* ------- v5: one screen per section ------- */
 .hero4 {
   min-height: 100svh;
-  padding-top: calc(86px + clamp(8px, 2vh, 24px));
-  padding-bottom: clamp(24px, 4vh, 48px);
+  padding-top: calc(70px + clamp(4px, 1vh, 12px));
+  padding-bottom: clamp(48px, 9vh, 104px);
 }
 .section.screen {
   padding-block: clamp(48px, 7vh, 80px);
@@ -1513,8 +1390,12 @@
   font-size: var(--step-body);
 }
 .story-pin[data-pinned] {
+  /* As tall as its content, anchored from the top: a full-screen block left a blank band when the pin ended,
+     and centring moved the heading and the list a little at every step. */
   height: auto;
-  padding-block: 0;
+  justify-content: flex-start;
+  padding-top: max(84px, calc(50vh - 21rem));
+  padding-bottom: 24px;
 }
 .story-steps {
   gap: 12px;
@@ -1675,12 +1556,62 @@
   }
 }
 
-/* Pinned sections hold still: anchored from the top instead of re-centring every time the active text changes height. */
-@media (min-width: 960px) {
-  .screen[data-pinned] {
-    justify-content: flex-start;
-    padding-top: max(clamp(24px, 4vh, 72px), calc(50vh - 22rem));
+/* Press states: one shared rule in globals.css ("Press feedback"). */
+/* ------- Tested on real production code (Faurus) ------- */
+.real-code {
+  display: grid;
+  gap: 6px 24px;
+  margin-bottom: 14px;
+  padding: clamp(16px, 2.2vw, 22px) clamp(18px, 2.6vw, 28px);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(122, 167, 255, 0.35);
+  background: radial-gradient(600px 160px at 0% 0%, rgba(60, 100, 220, 0.2), transparent 70%), rgba(14, 19, 30, 0.6);
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 0.2s;
+}
+@media (hover: hover) and (pointer: fine) {
+  .real-code:hover {
+    border-color: var(--lantern);
+    color: var(--text);
   }
 }
-
-/* Press states: one shared rule in globals.css ("Press feedback"). */
+@media (min-width: 1000px) {
+  .real-code {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .real-code .rc-tag,
+  .real-code .rc-head {
+    grid-column: 1;
+  }
+  .real-code .rc-stats {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+.rc-tag {
+  font-family: var(--font-m);
+  font-size: var(--step-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--lantern);
+}
+.rc-head {
+  font-size: 1.02rem;
+  font-weight: 500;
+}
+.rc-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 22px;
+  font-size: 0.86rem;
+  color: var(--soft);
+}
+.rc-stats b {
+  font-family: var(--font-d);
+  font-size: 1.35rem;
+  font-weight: 500;
+  color: var(--text);
+  margin-right: 4px;
+}

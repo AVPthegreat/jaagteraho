@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Bars } from "../ui/bars";
-import { BENCH_ALL, benchInr, benchInrPerBug } from "../site";
+import { BENCH_ALL, benchInr, benchInrPerBug, FAURUS_BENCH as FB } from "../site";
 import { getEvidence } from "../watcher";
 import benchmarks from "./benchmarks.json";
 
@@ -104,6 +104,44 @@ function Benchmarks() {
           </div>
         </div>
       )}
+      <div className="doc">
+        <h2 id="faurus-h" data-rv>
+          On real production code: Faurus, {FB.bugs} planted bugs
+        </h2>
+        <div className="body">
+          <p className="soft" data-rv>
+            Faurus is a live coding and exam platform with {FB.accounts} accounts. We copied {FB.files} of its backend files ({FB.lines} lines) into a
+            private folder, planted {FB.bugs} bugs of the kind a real commit introduces, made each one crash for real, and let JaagteRaho handle it. A
+            hidden test it never saw judged every fix: the crash must be gone and every other call must return exactly what the clean code returns.
+          </p>
+          <Table
+            label="JaagteRaho on a private copy of the Faurus backend"
+            head={["Measure", `All ${FB.bugs} bugs`, `Critical paths (${FB.critical})`]}
+            rows={[
+              ["Reached the owner", frac(FB.reached, FB.bugs), frac(FB.critical, FB.critical)],
+              ["Woke the owner (exam window open)", String(FB.critical_woke), frac(FB.critical_woke, FB.critical)],
+              ["Right file named", frac(FB.right_file, FB.bugs), frac(181, FB.critical)],
+              ["Fix passed our hidden test", frac(FB.fix_works, FB.bugs), frac(FB.critical_fix_works, FB.critical)],
+              ["Fix restored the exact original behaviour", frac(FB.strict, FB.bugs), frac(162, FB.critical)],
+              ["Fixes shown to the owner that were wrong", `${FB.shown_wrong} of ${FB.shown} shown`, "–"],
+              ["Would heal on its own (default rules)", `${FB.auto_heal}, of which ${FB.auto_heal_wrong} wrong (Undo exists for this)`, "–"],
+              ["Working fixes held back by the safety rules", `${FB.held_back_working} (protected exam and judging code, or reviewers disagreed)`, "–"],
+              ["Median seconds: decision / fix ready", `${FB.median_decision_s} / ${FB.median_fix_s.toFixed(1)}`, "–"],
+              ["AI cost", `$${FB.cost_usd.toFixed(2)} in total, about $${FB.cost_per_bug_usd.toFixed(3)} a bug`, "–"],
+            ]}
+          />
+          <p className="small soft" data-rv>
+            Critical paths: submissions, exam attempts, contests, contest rating and sign-in. Caveats: a private copy of pure-logic modules, driven by
+            direct calls rather than live HTTP; views, the database and the judge were not part of the copy, and this is not production traffic.
+            Planted bugs are mechanical mutations with one changed spot each; real incidents can be messier. Faurus itself, its repository, database
+            and servers were never changed.{" "}
+            <a href={FB.csv} download>
+              Download every bug as CSV
+            </a>{" "}
+            (one row per bug: module, severity, decision, right file, hidden-test result, gate, cost).
+          </p>
+        </div>
+      </div>
       <div className="doc">
         <h2 id="extended-h" data-rv>
           Both sets together: {BENCH_ALL.bugs} planted bugs
