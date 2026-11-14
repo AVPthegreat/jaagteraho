@@ -5,7 +5,8 @@
 // folder: no playground_runs rows, spend rows or anything else of the live watcher is touched.
 //
 // Run inside the watcher container (where the runner socket and the model key are):
-//   node --import tsx scripts/playground-e2e.ts [--out /data/playground-e2e] [--only ledgerly] [--budget 1.5] [--concurrency 3]
+//   node --import tsx scripts/playground-e2e.ts [--out /data/playground-e2e] [--only <app or case id>] [--budget 1.5] [--concurrency 3]
+// Local check without a key or spend: JR_RUNNER=inprocess npx tsx scripts/playground-e2e.ts --stand-in --out /tmp/e2e --only messmenu-missing-plates
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -15,28 +16,40 @@ import type { PlaygroundEvent } from "../src/playground/events.js";
 import { playgroundBus } from "../src/playground/events.js";
 import { Playground } from "../src/playground/runner.js";
 import { runnerMode } from "../src/runner/client.js";
+import { standInAI } from "./standin.js";
 
 const args = process.argv.slice(2);
 const arg = (name: string, d: string) => (args.includes(name) ? args[args.indexOf(name) + 1] : d);
 const OUT = arg("--out", "/data/playground-e2e");
 const ONLY = args.includes("--only") ? arg("--only", "") : null;
 const BUDGET = Number(arg("--budget", "1.5"));
-const CONCURRENCY = Math.max(1, Math.min(3, Number(arg("--concurrency", "3"))));
+const CONCURRENCY = Math.max(1, Math.min(3, Number(arg("--concurrency", "3")) || 3));
+const STAND_IN = args.includes("--stand-in");
 
 if (!runnerMode()) throw new Error("No isolated runner: set JR_RUNNER_SOCKET (inside the watcher container it is set).");
 mkdirSync(OUT, { recursive: true });
 const db = openDb(join(OUT, "e2e.db")); // its own ledger: the live watcher's database is never opened
-const ai = makeAI(db);
+const ai = STAND_IN ? standInAI(db) : makeAI(db);
 if (!ai) throw new Error("JR_ANTHROPIC_API_KEY is not set");
 const spent = () => ai.guard.total();
-const pg = new Playground(db, ai, { canSpend: () => spent() < BUDGET, maxConcurrent: CONCURRENCY, runsPerHour: 600, cleanTemp: false });
-pg.stop(); // no ticker: only the runs started here
+// Never started, so no ticker plants bugs of its own: only the runs below. (stop() would refuse every run.)
+const pg = new Playground(db, ai, { canSpend: () => spent() < BUDGET, maxConcurrent: CONCURRENCY, runsPerHour: 10_000, cleanTemp: false });
 
 type Row = {
   case_id: string; app: string; title: string; source: string; decision: string | null; cause_file_right: boolean | null; gate: string | null; gate_reason: string | null;
   protected_files: string[]; appliable_in_copy: boolean | null; not_appliable_reason: string | null; use_before: string | null; hidden_test: string | null;
   use_after_fix: string | null; undo_restores_500: boolean | null; seconds: number; cost_usd: number; error: string | null;
 };
+
+/** "Use the app", retried while another Use holds the slot. */
+async function useApp(o: NonNullable<ReturnType<Playground["ownRun"]>>) {
+  let u = await pg.use(o);
+  for (let w = 0; u === "busy" && w < 120; w++) {
+    await new Promise((res) => setTimeout(res, 500));
+    u = await pg.use(o);
+  }
+  return u;
+}
 
 const describeUse = (u: Awaited<ReturnType<Playground["use"]>>) =>
   u === "busy" ? "busy" : u.answered ? `answered ${typeof u.response === "object" && u.response && "status" in u.response ? (u.response as { status: unknown }).status : "ok"}` : "500 crashed";
@@ -55,7 +68,12 @@ async function one(caseId: string, app: string, i: number): Promise<Row> {
   };
   try {
     if (spent() >= BUDGET) throw new Error("budget reached before this case");
-    const r = pg.startOwn({ session, caseId, exam: false, heal: "ask" }, app);
+    // "full" or "busy" only means a slot is taken for a moment: wait and try again (up to 5 minutes).
+    let r = pg.startOwn({ session, caseId, exam: false, heal: "ask" }, app);
+    for (let w = 0; "error" in r && (r.error === "full" || r.error === "busy") && w < 600; w++) {
+      await new Promise((res) => setTimeout(res, 500));
+      r = pg.startOwn({ session, caseId, exam: false, heal: "ask" }, app);
+    }
     if ("error" in r) throw new Error(`could not start: ${r.error}`);
     for (let w = 0; w < 600 && pg.ownRun(session, r.run_id)?.state === "running"; w++) await new Promise((res) => setTimeout(res, 500));
     const o = pg.ownRun(session, r.run_id);
@@ -68,13 +86,13 @@ async function one(caseId: string, app: string, i: number): Promise<Row> {
     row.appliable_in_copy = o.approvable;
     row.not_appliable_reason = o.approvable ? null : ((step("ready")?.reason as string) ?? (step("cause")?.unavailable as string) ?? null);
     row.cause_file_right = o.card?.right_file ?? null;
-    row.use_before = describeUse(await pg.use(o));
+    row.use_before = describeUse(await useApp(o));
     if (o.approvable) {
       await pg.applyFix(o, "approved");
       row.hidden_test = pg.ownRun(session, r.run_id)?.card?.hidden_test ?? null;
-      row.use_after_fix = describeUse(await pg.use(o));
+      row.use_after_fix = describeUse(await useApp(o));
       pg.undo(o);
-      row.undo_restores_500 = describeUse(await pg.use(o)) === "500 crashed";
+      row.undo_restores_500 = describeUse(await useApp(o)) === "500 crashed";
     }
   } catch (e) {
     row.error = String(e).slice(0, 200);
@@ -87,7 +105,9 @@ async function one(caseId: string, app: string, i: number): Promise<Row> {
   return row;
 }
 
-const todo = pg.apps.filter((a) => !ONLY || a.name === ONLY).flatMap((a) => pg.casesFor(a.name).map((c) => ({ id: c.id, app: a.name })));
+// --only takes an app name (all its bugs) or one case id (a smoke run of that bug).
+const todo = pg.apps.flatMap((a) => pg.casesFor(a.name).map((c) => ({ id: c.id, app: a.name }))).filter((t) => !ONLY || t.app === ONLY || t.id === ONLY);
+if (todo.length === 0) throw new Error(`--only ${ONLY}: no such app or case`);
 const rows: Row[] = [];
 let next = 0;
 await Promise.all(
