@@ -9,7 +9,7 @@
 // /run, /data and .env files, process starts, sockets and C libraries, and the clean child environment.
 // The complete fix is to run proofs in a separate container or as a separate user with no secrets.
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
@@ -139,16 +139,54 @@ for name, value in (("RLIMIT_NPROC", 0), ("RLIMIT_FSIZE", 1 << 20), ("RLIMIT_CPU
 unittest.main(module="jr_regression_test", argv=["jr"], exit=True)
 `;
 
-/** Problems that stop a test from being run; empty means it may run. */
-export function testProblems(code: string, packages: string[]): string[] {
-  const py = process.env.JR_TEST_PYTHON ?? "python3";
-  const r = spawnSync(py, ["-E", "-s", "-c", SAFETY, JSON.stringify(packages)], { input: code, encoding: "utf8", timeout: 10_000 });
+type Ran = { status: number | null; signal: string | null; stdout: string; stderr: string };
+
+/**
+ * Runs a process without blocking the event loop (a proof takes a second or more; with spawnSync the
+ * whole watcher, intake, live feeds and the bot included, froze for that long on every demo run).
+ * Killed with SIGKILL at the time limit; output kept to the first 1 MB of each stream.
+ */
+function run(cmd: string, args: string[], opts: { cwd?: string; env?: Record<string, string>; input?: string; timeout: number }): Promise<Ran> {
+  return new Promise((done) => {
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const finish = (r: Ran) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        done(r);
+      }
+    };
+    const child = spawn(cmd, args, { cwd: opts.cwd, env: opts.env, stdio: ["pipe", "pipe", "pipe"] });
+    const timer = setTimeout(() => child.kill("SIGKILL"), opts.timeout);
+    child.stdout.setEncoding("utf8").on("data", (d: string) => void (stdout.length < 1 << 20 && (stdout += d)));
+    child.stderr.setEncoding("utf8").on("data", (d: string) => void (stderr.length < 1 << 20 && (stderr += d)));
+    child.on("error", () => finish({ status: null, signal: "error", stdout, stderr }));
+    child.on("close", (status, signal) => finish({ status, signal, stdout, stderr }));
+    child.stdin.on("error", () => undefined);
+    child.stdin.end(opts.input ?? "");
+  });
+}
+
+const readProblems = (r: { status: number | null; stdout: string }): string[] => {
   if (r.status !== 0) return ["the safety check could not run"];
   try {
     return JSON.parse(r.stdout.trim()) as string[];
   } catch {
     return ["the safety check could not run"];
   }
+};
+
+/** Problems that stop a test from being run; empty means it may run. */
+export function testProblems(code: string, packages: string[]): string[] {
+  const py = process.env.JR_TEST_PYTHON ?? "python3";
+  return readProblems(spawnSync(py, ["-E", "-s", "-c", SAFETY, JSON.stringify(packages)], { input: code, encoding: "utf8", timeout: 10_000 }));
+}
+
+async function testProblemsAsync(code: string, packages: string[]): Promise<string[]> {
+  const py = process.env.JR_TEST_PYTHON ?? "python3";
+  return readProblems(await run(py, ["-E", "-s", "-c", SAFETY, JSON.stringify(packages)], { input: code, timeout: 10_000 }));
 }
 
 function djangoSettings(root: string): string | null {
@@ -168,12 +206,12 @@ export function readOutcome(status: number | null, signal: string | null, output
   return ran && /^FAILED \(/m.test(output) ? "failed" : "error";
 }
 
-function runIn(dir: string, settings: string | null): "passed" | "failed" | "error" {
+async function runIn(dir: string, settings: string | null): Promise<"passed" | "failed" | "error"> {
   const py = process.env.JR_TEST_PYTHON ?? "python3";
   const env: Record<string, string> = { PATH: process.env.PATH ?? "/usr/bin:/bin", PYTHONDONTWRITEBYTECODE: "1", LANG: "C.UTF-8" };
   if (settings) env.DJANGO_SETTINGS_MODULE = settings;
-  const r = spawnSync(py, ["-E", "-s", "-c", RUNNER], { cwd: dir, env, encoding: "utf8", timeout: 20_000, killSignal: "SIGKILL" });
-  return readOutcome(r.status, r.signal, `${r.stdout ?? ""}\n${r.stderr ?? ""}`);
+  const r = await run(py, ["-E", "-s", "-c", RUNNER], { cwd: dir, env, timeout: 20_000 });
+  return readOutcome(r.status, r.signal, `${r.stdout}\n${r.stderr}`);
 }
 
 // The fixed code runs too (the test imports it), so the lines the fix adds get a check of their own:
@@ -193,13 +231,13 @@ export function riskyFixLines(original: string, patched: string): string[] {
 const said = (o: "passed" | "failed" | "error") => (o === "error" ? "could not run" : o);
 
 /** root: the project's local folder. patched: repository path -> full fixed file text (from the gate). */
-export function proveFix(root: string, patched: Record<string, string>, test: { file: string; code: string } | undefined): TestRun {
+export async function proveFix(root: string, patched: Record<string, string>, test: { file: string; code: string } | undefined): Promise<TestRun> {
   if (!test?.code?.trim()) return { verdict: "skipped", note: "No regression test was written." };
   if (Object.keys(patched).some((p) => !p.endsWith(".py"))) return { verdict: "skipped", note: "Tests are run only for Python fixes." };
   const packages = [...new Set(Object.keys(patched).map((p) => p.split("/")[0].replace(/\.py$/, "")))];
   const settings = djangoSettings(root);
   if (settings) packages.push("django");
-  const problems = testProblems(test.code, packages);
+  const problems = await testProblemsAsync(test.code, packages);
   if (problems.length) return { verdict: "skipped", note: `Test not run: ${problems.slice(0, 3).join(", ")}.` };
 
   const base = resolve(root);
@@ -225,8 +263,8 @@ export function proveFix(root: string, patched: Record<string, string>, test: { 
       if (!target.startsWith(resolve(fixed) + sep)) return { verdict: "skipped", note: "Test not run: a fixed file is outside the project." };
       writeFileSync(target, text);
     }
-    const before = runIn(broken, settings);
-    const after = runIn(fixed, settings);
+    const before = await runIn(broken, settings);
+    const after = await runIn(fixed, settings);
     const proved = before === "failed" && after === "passed";
     return {
       verdict: proved ? "proved" : "not_proved",

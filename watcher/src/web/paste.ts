@@ -12,6 +12,7 @@ import { runDiagnosis, traceFiles } from "../pipeline/diagnose.js";
 import { runGate } from "../pipeline/gate.js";
 import { relatedFiles } from "../source/related.js";
 import { GitHubSource } from "../source/source.js";
+import { isPublicRepo } from "../projects.js";
 import { clientIp, Window } from "./public.js";
 import { parseV8Stack } from "../selfwatch.js";
 
@@ -97,7 +98,10 @@ export const parseTraceback = (text: string) => parsePythonTraceback(text) ?? pa
 
 export function parseRepo(url: string): string | null {
   const m = url.trim().match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/([A-Za-z0-9_.-]{1,100})\/([A-Za-z0-9_.-]{1,100}?)(?:\.git)?\/?(?:[#?].*)?$/);
-  return m ? `${m[1]}/${m[2]}` : null;
+  // "." and ".." are not names: in https://api.github.com/repos/<owner>/<name>/... they would climb out
+  // of /repos to other API paths, with our read token attached. (Owners never start with a dot; ".github" is a real repo name.)
+  if (!m || m[1].startsWith(".") || m[2] === "." || m[2] === "..") return null;
+  return `${m[1]}/${m[2]}`;
 }
 
 /**
@@ -145,6 +149,12 @@ export function pasteRoutes(db: DB, ai: AI | null) {
     const failed = (reason: string) => db.prepare("UPDATE pastes SET id = ?, result = ? WHERE id = ?").run(`failed-${randomBytes(6).toString("hex")}`, JSON.stringify({ failed: reason }), slot.id);
 
     const run = async () => {
+      // The page is for public code only. The read token is meant to have no repository access, but if it
+      // ever had some, a visitor naming a private repository would get its code back in the diagnosis.
+      if (!(await isPublicRepo(repo))) {
+        failed("not public");
+        return c.json({ error: `We could not read ${repo}. Is it public? This page works only with public repositories.` }, 404);
+      }
       const src = new GitHubSource(repo, process.env.JR_GITHUB_PUBLIC_READ_TOKEN || undefined, "paste");
       const { files } = await traceFiles(src, parsed.frames);
       if (files.length === 0) {
