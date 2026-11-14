@@ -39,7 +39,7 @@ const LAYERS: Array<{ name: string; short: string; text: React.ReactNode }> = [
     short: "You decide how far it goes",
     text: (
       <>
-        <code>/heal ask</code> waits for your Approve (the default). <code>/heal auto 10m</code> heals if you sleep through a wake-up. At most 2 heals per
+        <code>/heal auto 3m</code> (the default) heals if you sleep through a wake-up for 3 minutes. <code>/heal ask</code> waits for your Approve. At most 2 heals per
         app a night, never in login, payments, exams or settings, and only behind your branch&apos;s own required checks.
       </>
     ),
