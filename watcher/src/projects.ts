@@ -60,7 +60,7 @@ export function createOutsideApp(db: DB, name: string, repo: string | null, heal
   const uniqueName = `${name}-${randomBytes(2).toString("hex")}`;
   db.prepare(
     "INSERT INTO projects (id, name, public_key, kind, repo, repo_access, settings, created_at) VALUES (?, ?, ?, 'faurus', ?, 'read', ?, ?)",
-  ).run(id, uniqueName, key, repo, JSON.stringify({ outside: true, critical: [], heal: { mode: heal, after_min: 3, max_per_night: 2, flows: [] } }), now);
+  ).run(id, uniqueName, key, repo, JSON.stringify({ outside: true, critical: [], heal: { mode: heal, after_min: 3, max_per_night: 2, flows: [], minor: "auto" } }), now);
   const code = randomBytes(6).toString("hex");
   db.prepare("INSERT INTO link_codes (code, project_id, expires_at) VALUES (?, ?, ?)").run(code, id, new Date(Date.now() + 7 * 86_400_000).toISOString());
   return { id, name: uniqueName, dsn: dsnFor(key, id), logs_url: logsUrlFor(key, id), link_code: code };

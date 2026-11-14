@@ -71,8 +71,8 @@ const NIGHT = [
     meta: "a few seconds",
   },
   {
-    t: "You approve it, or it heals under your rule",
-    d: "Tap \"Show fix\" to see the exact change. By default you decide: apply it yourself, or tap Approve where you gave write access. If your rule allows it and nobody acknowledges the wake-up in time, a recommended fix goes in on its own as a pull request that merges only after your required checks pass, and you get \"Healed while you were away\" with the proof and one-tap Undo. Tap \"Diagnosis right\" or \"wrong\" so we learn how often it is right.",
+    t: "Small bugs fix themselves; big ones wait 3 minutes for you",
+    d: "Tap \"Show fix\" to see the exact change. A small bug (a message, not a call) whose fix passes every rule goes in on its own and you get a quiet note. For a big one you decide: apply it yourself, or tap Approve where you gave write access. If nobody acknowledges the wake-up in time, a recommended fix goes in on its own as a pull request that merges only after your required checks pass, and you get \"Healed while you were away\" with the proof and one-tap Undo. Tap \"Diagnosis right\" or \"wrong\" so we learn how often it is right.",
     meta: "your rule decides",
   },
   {
@@ -90,7 +90,7 @@ const COMMANDS: Array<[string, string]> = [
   ["/critical /api/checkout checkout", "Mark a page as critical, so failures there always reach you"],
   ["/github and /repo", "Give read access to your code, or change which repository"],
   ["/credits", "How much of your $5 is left"],
-  ["/heal", "Your heal rule: /heal ask (approve every fix), /heal auto 3m (the default: heal if a wake-up goes unanswered for 3 min), /heal now, /heal off, /heal max 2"],
+  ["/heal", "Your heal rule. Small bugs: fixed on their own, you get a note in the morning (/heal minor off to approve them yourself). Big ones: it calls you; no answer in 3 minutes, it heals (/heal auto 3m). Also /heal ask, /heal now, /heal off, /heal max 2"],
   ["/pause and /resume", "Stop or restart all AI calls, fixes, heals and wake-ups"],
 ];
 
@@ -347,11 +347,16 @@ export default function How() {
             </h2>
             <div className="body prose">
               <p className="lead" data-rv>
-                You approve every fix, or let it heal on its own under rules you set. Pick one with <code>/heal</code> on Telegram or when you connect:
+                By default: <b>small bugs are fixed on their own, and you get a note in the morning. Big ones call you; no answer in 3 minutes, it
+                heals.</b> A small bug is one the decision sends you a message for, not a call. Change it with <code>/heal</code> on Telegram:
               </p>
               <ul data-rv>
                 <li>
-                  <b>Ask</b>: nothing goes in until you approve it.
+                  <b>Small bugs</b> (on by default): a fix that passes every rule below goes in at once, at most 5 a night (apart from the big ones), with
+                  a quiet note and one-tap Undo. <code>/heal minor off</code> makes you approve them too.
+                </li>
+                <li>
+                  <b>Ask</b>: no big fix goes in until you approve it.
                 </li>
                 <li>
                   <b>Heal after 3 minutes</b> (the default): if a wake-up is not acknowledged in time, a fix that passed every check goes in on its own. Never in
@@ -361,7 +366,7 @@ export default function How() {
                   <b>Heal right away</b>: for the routes you name, or all of them.
                 </li>
                 <li>
-                  <b>Off</b>: fixes arrive as diffs only.
+                  <b>Off</b>: fixes arrive as diffs only, small ones too.
                 </li>
               </ul>
               <p data-rv>Rules that hold whatever you pick:</p>
@@ -375,7 +380,7 @@ export default function How() {
                   Only for errors your server sends with its secret (the bot gives you a server-only address). Errors that come with only the public key,
                   which web pages can see, are still alerted and explained, but never heal on their own.
                 </li>
-                <li>At most 2 heals per app a night, unless you change it (up to 5).</li>
+                <li>At most 2 big heals per app a night, unless you change it (up to 5), and at most 5 small fixes.</li>
                 <li>
                   On your app a heal is a pull request. It merges by itself only if your branch requires status checks, and only once they pass; otherwise it
                   waits for you to merge and the wake-up calls go on. It needs write access you give for that one repository; that is set up with us by hand
@@ -386,7 +391,10 @@ export default function How() {
                   minutes. If it comes back at least 3 times and is not down by half, the fix is rolled back, you are woken again and self-healing stops for 12
                   hours.
                 </li>
-                <li>You get &ldquo;Healed while you were away&rdquo;: what broke, what changed, the proof, and one-tap Undo. Every step is in the logbook.</li>
+                <li>
+                  You get &ldquo;Healed while you were away&rdquo; (or, for a small bug, a quiet &ldquo;Fixed a small bug on its own&rdquo;): what broke, what
+                  changed, and one-tap Undo. A small fix that does not help is undone with a message, never a call. Every step is in the logbook.
+                </li>
               </ul>
               <p className="soft" data-rv>
                 On our exam portal, healing switches your session to the portal&apos;s fixed build and sends the failing request again to prove it works.

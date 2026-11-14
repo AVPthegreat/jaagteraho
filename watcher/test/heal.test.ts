@@ -4,10 +4,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { openDb, type DB } from "../src/db/db.js";
 import {
-  DEFAULT_POLICY, GRACE_MS, WATCH_MS, Healer, healBlocker, normalisePolicy, notImproved, parseHealArgs, policyOf, reverseEdits, savePolicy,
+  DEFAULT_POLICY, GRACE_MS, WATCH_MS, Healer, editShape, healBlocker, normalisePolicy, notImproved, parseHealArgs, policyOf, reverseEdits, savePolicy,
   type GitHubOps, type HealFacts,
 } from "../src/pipeline/heal.js";
 import type { Telegram } from "../src/telegram/api.js";
+import { createOutsideApp } from "../src/projects.js";
 
 const iso = (ms: number) => new Date(ms).toISOString();
 
@@ -312,8 +313,12 @@ describe("healer: real apps", () => {
       return inc;
     };
     assert.equal((await h.onFix(a.inc, { session: null, action: "wake" }))?.status, "merging");
-    assert.equal((await h.onFix(mk(), { session: null, action: "notify" }))?.status, "merging");
+    assert.equal((await h.onFix(mk(), { session: null, action: "wake" }))?.status, "merging");
     assert.equal(await h.onFix(mk(), { session: null, action: "wake" }), null, "third heal in 12 hours is held");
+    // Small bugs have their own cap, so the big ones keep their 2.
+    const small = await h.onFix(mk(), { session: null, action: "notify" });
+    assert.equal(small?.trigger, "auto-minor");
+    assert.equal(small?.status, "merging");
   });
 
   it("without write access sends the diff and keeps paging", async () => {
@@ -708,5 +713,147 @@ describe("re-review fixes", () => {
     assert.equal(await h.onFix(s.inc, { session: null, action: "wake" }), null);
     assert.match(h.check(s.fix, "owner", null).blocker ?? "", /already imports/);
     assert.equal(calls.length, 0);
+  });
+});
+
+describe("small bugs fix themselves (founder's rule, 14 Nov)", () => {
+  const setup = (o: Parameters<typeof seed>[1] = {}) => {
+    const db = openDb(":memory:");
+    const t = fakeTg();
+    const g = fakeGitHub();
+    const h = new Healer(db, t.tg, { twinFixed: "http://x", github: g.github });
+    const s = seed(db, { action: "notify", ...o });
+    return { db, h, s, ...t, ...g };
+  };
+  const quietTg = () => {
+    const sent: Array<{ text: string; quiet: boolean }> = [];
+    const tg = { send: async (_c: number, text: string, _m?: unknown, opts?: { quiet?: boolean }) => (sent.push({ text, quiet: opts?.quiet === true }), { message_id: 1, chat: { id: 1, type: "private" } }) } as unknown as Telegram;
+    return { tg, sent };
+  };
+
+  it("is on by default, separate from the nightly cap for big ones", () => {
+    assert.equal(DEFAULT_POLICY.minor, "auto");
+    assert.equal(DEFAULT_POLICY.max_minor_per_night, 5);
+    assert.equal(normalisePolicy({}).minor, "auto");
+    assert.deepEqual(parseHealArgs(["minor", "off"]), { patch: { minor: "off" } });
+    assert.equal((parseHealArgs(["minor", "on"]) as { patch: { minor: string } }).patch.minor, "auto");
+    assert.ok("error" in (parseHealArgs(["minor", "maybe"]) as object));
+  });
+
+  it("a NOTIFY whose fix passes every guard heals at once, even under 'ask', with a quiet note and Undo", async () => {
+    const db = openDb(":memory:");
+    const { tg, sent } = quietTg();
+    const { github, calls, prs } = fakeGitHub();
+    const h = new Healer(db, tg, { twinFixed: "http://x", github });
+    const s = seed(db, { action: "notify" });
+    savePolicy(db, s.pid, { mode: "ask" });
+    const row = await h.onFix(s.inc, { session: null, action: "notify" });
+    assert.equal(row?.trigger, "auto-minor");
+    assert.equal(row?.status, "merging");
+    assert.ok(calls.includes(`automerge:${row!.pr_number}:checks`), "merges only behind the repository's required checks");
+    prs.get(row!.pr_number!)!.merged_at = iso(Date.now());
+    await h.tick(Date.now() + 1000);
+    const note = sent.find((m) => m.text.includes("Fixed a small bug on its own"));
+    assert.ok(note, "the owner gets the after-the-fact note");
+    assert.equal(note!.quiet, true, "without a sound");
+    assert.ok(sent.every((m) => m.quiet), "nothing about a small bug makes a sound");
+    assert.equal((db.prepare("SELECT action FROM alerts WHERE incident_id = ?").get(s.inc) as { action: string }).action, "notify", "never turned into a wake-up");
+  });
+
+  it("does not heal on its own when a guard fails: caution, unproved, protected, risky, unsigned, off", async () => {
+    const cases: Array<[string, Parameters<typeof seed>[1], ((db: DB, pid: number) => void)?]> = [
+      ["caution", { level: "caution" }],
+      ["protected file", { file: "app/payments/views.py" }],
+      ["risky addition", { replace: '    import subprocess; subprocess.run("x")' }],
+      ["not signed with the server secret", { authed: false }],
+      ["reviewers not unanimous", { unanimous: false }],
+      ["/heal minor off", {}, (db, pid) => savePolicy(db, pid, { minor: "off" })],
+      ["/heal off", {}, (db, pid) => savePolicy(db, pid, { mode: "off" })],
+    ];
+    for (const [why, o, prep] of cases) {
+      const { db, h, s, calls } = setup(o);
+      prep?.(db, s.pid);
+      assert.equal(await h.onFix(s.inc, { session: null, action: "notify" }), null, why);
+      assert.equal(calls.length, 0, why);
+    }
+    // A regression test that ran but did not prove the fix also stops it.
+    assert.equal(healBlocker(facts({ trigger: "auto-minor", policy: normalisePolicy({}), gate: { passed: true, level: "recommended", test_run: { verdict: "not_proved" }, review: { unanimous: true } } })), "its regression test did not prove it");
+    assert.equal(healBlocker(facts({ trigger: "auto-minor", policy: normalisePolicy({}) })), null);
+  });
+
+  it("caps small fixes per night (5 by default)", () => {
+    assert.match(healBlocker(facts({ trigger: "auto-minor", policy: normalisePolicy({}), minor_heals_last_night: 5 })) ?? "", /5 small fixes/);
+    assert.equal(healBlocker(facts({ trigger: "auto-minor", policy: normalisePolicy({}), minor_heals_last_night: 4, heals_last_night: 9 })), null, "big heals do not use up the small ones");
+  });
+
+  it("a WAKE is unchanged: it still waits for the call and the 3 minutes", async () => {
+    const { h, s, calls } = setup({ action: "wake" });
+    assert.equal(await h.onFix(s.inc, { session: null, action: "wake" }), null);
+    assert.equal(calls.length, 0);
+  });
+
+  it("a small fix that does not help is undone without waking anyone", async () => {
+    const db = openDb(":memory:");
+    const { tg, sent } = quietTg();
+    const { github } = fakeGitHub({ autoMerge: "clean" });
+    const h = new Healer(db, tg, { twinFixed: "http://x", github });
+    const s = seed(db, { action: "notify" });
+    const row = await h.onFix(s.inc, { session: null, action: "notify" });
+    assert.equal(row?.status, "applied");
+    const merged = Date.parse(h.get(row!.id)!.applied_at!);
+    for (let i = 0; i < 6; i++) addEvent(db, s.pid, s.inc, merged + GRACE_MS + 60_000 + i * 1000);
+    await h.tick(merged + GRACE_MS + 11 * 60_000);
+    assert.equal(h.get(row!.id)!.status, "rolled_back");
+    assert.ok(sent.some((m) => m.text.includes("Undid a small fix")));
+    assert.ok(!sent.some((m) => m.text.includes("WAKE")));
+    assert.equal((db.prepare("SELECT action FROM alerts WHERE incident_id = ?").get(s.inc) as { action: string }).action, "notify");
+  });
+
+  it("the demo portal is unchanged: a visitor's session follows only the visitor's own heal rule", async () => {
+    const { h, s } = setup({ kind: "sandbox", proved: true });
+    assert.equal(await h.onFix(s.inc, { session: null, action: "notify" }), null, "the owner's own demo card keeps its Approve button");
+  });
+});
+
+describe("review fixes for small-bug healing", () => {
+  it("a policy saved before small-bug healing keeps the owner's caution", () => {
+    assert.equal(normalisePolicy({ mode: "ask" }).minor, "off");
+    assert.equal(normalisePolicy({ mode: "off" }).minor, "off");
+    assert.equal(normalisePolicy({ mode: "auto-after" }).minor, "auto");
+    assert.equal(normalisePolicy({ mode: "ask", minor: "auto" }).minor, "auto", "an explicit choice wins");
+    const db = openDb(":memory:");
+    db.prepare("INSERT INTO projects (id, name, public_key, kind, settings, created_at) VALUES (7, 'old', 'k7', 'faurus', ?, ?)").run(JSON.stringify({ heal: { mode: "ask", after_min: 3, max_per_night: 2, flows: [] } }), iso(Date.now()));
+    assert.equal(policyOf(db, 7).minor, "off");
+  });
+
+  it("a legacy 'ask' app gets no unattended merge", async () => {
+    const db = openDb(":memory:");
+    const { tg } = fakeTg();
+    const { github, calls } = fakeGitHub();
+    const h = new Healer(db, tg, { twinFixed: "http://x", github });
+    const s = seed(db, { action: "notify" });
+    db.prepare("UPDATE projects SET settings = ? WHERE id = ?").run(JSON.stringify({ heal: { mode: "ask", after_min: 3, max_per_night: 2, flows: [] } }), s.pid);
+    assert.equal(await h.onFix(s.inc, { session: null, action: "notify" }), null);
+    assert.equal(calls.length, 0);
+  });
+
+  it("unattended fixes never remove a check and stay small; the owner can still approve them", () => {
+    const removesIf = editShape([{ find: "    if not user.is_admin:\n        raise Forbidden()\n    do()", replace: "    do()" }]);
+    assert.match(removesIf.removes_guard ?? "", /if not user.is_admin/);
+    const addsGuard = editShape([{ find: '    language = data["language"]', replace: '    if "language" not in data:\n        return bad("pick a language")\n    language = data["language"]' }]);
+    assert.equal(addsGuard.removes_guard, null, "adding a check is fine");
+    assert.equal(addsGuard.changed, 2);
+    for (const trigger of ["auto-minor", "auto-after", "auto-now"] as const) {
+      assert.match(healBlocker(facts({ trigger, policy: normalisePolicy({ mode: trigger === "auto-minor" ? "auto-after" : trigger }), ...removesIf })) ?? "", /removes a check/, trigger);
+      assert.match(healBlocker(facts({ trigger, policy: normalisePolicy({ mode: trigger === "auto-minor" ? "auto-after" : trigger }), changed: 7 })) ?? "", /changes 7 lines/, trigger);
+    }
+    assert.equal(healBlocker(facts({ trigger: "owner", ...removesIf, changed: 12 })), null, "a person may approve it");
+  });
+
+  it("new apps from Connect get small-bug healing even when they chose 'ask'", () => {
+    const db = openDb(":memory:");
+    const app = createOutsideApp(db, "shop", null, "ask");
+    assert.equal(policyOf(db, app.id).minor, "auto");
+    assert.equal(policyOf(db, app.id).mode, "ask");
   });
 });
