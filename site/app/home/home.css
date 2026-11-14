@@ -1350,3 +1350,60 @@
     grid-column: 1 / -1;
   }
 }
+
+/* ------- Tested on real production code (Faurus) ------- */
+.real-code {
+  display: grid;
+  gap: 6px 24px;
+  margin-bottom: 14px;
+  padding: clamp(16px, 2.2vw, 22px) clamp(18px, 2.6vw, 28px);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(122, 167, 255, 0.35);
+  background: radial-gradient(600px 160px at 0% 0%, rgba(60, 100, 220, 0.2), transparent 70%), rgba(14, 19, 30, 0.6);
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 0.2s;
+}
+.real-code:hover {
+  border-color: var(--lantern);
+  color: var(--text);
+}
+@media (min-width: 1000px) {
+  .real-code {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .real-code .rc-tag,
+  .real-code .rc-head {
+    grid-column: 1;
+  }
+  .real-code .rc-stats {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+.rc-tag {
+  font-family: var(--font-m);
+  font-size: var(--step-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--lantern);
+}
+.rc-head {
+  font-size: 1.02rem;
+  font-weight: 500;
+}
+.rc-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 22px;
+  font-size: 0.86rem;
+  color: var(--soft);
+}
+.rc-stats b {
+  font-family: var(--font-d);
+  font-size: 1.35rem;
+  font-weight: 500;
+  color: var(--text);
+  margin-right: 4px;
+}
