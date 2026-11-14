@@ -8,10 +8,10 @@ import type { AI } from "../ai/claude.js";
 import type { DB } from "../db/db.js";
 import type { CleanFrame } from "../intake/allowlist.js";
 import { clip, mask } from "../intake/mask.js";
-import { runDiagnosis, type SourceFile } from "../pipeline/diagnose.js";
+import { runDiagnosis, traceFiles } from "../pipeline/diagnose.js";
 import { runGate } from "../pipeline/gate.js";
 import { relatedFiles } from "../source/related.js";
-import { GitHubSource, locate } from "../source/source.js";
+import { GitHubSource } from "../source/source.js";
 import { clientIp, Window } from "./public.js";
 import { parseV8Stack } from "../selfwatch.js";
 
@@ -123,22 +123,18 @@ export function pasteRoutes(db: DB, ai: AI | null) {
     if (all >= PER_DAY) return c.json({ error: "Today's free diagnoses are used up. Try again tomorrow." }, 429);
 
     const src = new GitHubSource(repo, process.env.JR_GITHUB_PUBLIC_READ_TOKEN || undefined);
-    const files: SourceFile[] = [];
-    for (const f of [...parsed.frames].reverse()) {
-      if (!f.in_app || files.length >= 3) continue;
-      const found = await locate(src, f.abs_path ?? "");
-      if (!found) continue;
-      const known = files.find((x) => x.path === found.path);
-      if (known) known.focus = [...(known.focus ?? []), ...(f.lineno ? [f.lineno] : [])];
-      else files.push({ ...found, focus: f.lineno ? [f.lineno] : [] });
-    }
+    const [{ files }, index] = await Promise.all([
+      traceFiles(src, parsed.frames),
+      process.env.JR_DIAGNOSIS_LOOKUPS !== "0" ? src.index().catch(() => null) : Promise.resolve(null),
+    ]);
     if (files.length === 0) {
       return c.json({ error: `None of the files in the traceback were found in ${repo}. Is the repository public, and is this its code?` }, 404);
     }
     for (const r of await relatedFiles(src, files)) files.push({ ...r, related: true });
 
-    const out = await runDiagnosis(ai, { exception_type: parsed.exception_type, message: parsed.message, transaction: null, frames: parsed.frames }, files, false);
+    const out = await runDiagnosis(ai, { exception_type: parsed.exception_type, message: parsed.message, transaction: null, frames: parsed.frames }, files, false, null, index);
     if ("error" in out) return c.json({ error: "The diagnosis did not finish. Try again in a minute." }, 502);
+    files.push(...out.files_read);
 
     // The same three-level gate as live incidents: recommended, use with care, or withheld.
     const gate = await runGate(ai, out.result, files);

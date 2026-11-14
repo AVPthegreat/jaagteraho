@@ -13,7 +13,10 @@ const PRICES: Record<string, [number, number]> = {
 /** The app a model call is made for, so spend can be charged to its owner's free credit. */
 export const spendContext = new AsyncLocalStorage<{ projectId: number }>();
 
-export type Usage = { input_tokens: number; output_tokens: number };
+export type Usage = { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number | null; cache_read_input_tokens?: number | null };
+
+/** Price of a cached read per million tokens; writes cost 1.25 times the input price. */
+const CACHE_READ: Record<string, number> = { "claude-haiku-5-5": 0.01, "claude-sonnet-5-5": 0.1, "claude-opus-5-5": 0.2 };
 
 export class SpendGuard {
   constructor(
@@ -41,10 +44,12 @@ export class SpendGuard {
 
   record(model: string, purpose: string, usage: Usage): number {
     const [inp, out] = PRICES[model] ?? [0, 0];
-    const cost = (usage.input_tokens * inp + usage.output_tokens * out) / 1_000_000;
+    const write = usage.cache_creation_input_tokens ?? 0;
+    const read = usage.cache_read_input_tokens ?? 0;
+    const cost = (usage.input_tokens * inp + write * inp * 1.25 + read * (CACHE_READ[model] ?? inp * 0.1) + usage.output_tokens * out) / 1_000_000;
     this.db
       .prepare("INSERT INTO spend (at, model, purpose, input_tokens, output_tokens, cost_usd, project_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .run(new Date().toISOString(), model, purpose, usage.input_tokens, usage.output_tokens, cost, spendContext.getStore()?.projectId ?? null);
+      .run(new Date().toISOString(), model, purpose, usage.input_tokens + write + read, usage.output_tokens, cost, spendContext.getStore()?.projectId ?? null);
     return cost;
   }
 }

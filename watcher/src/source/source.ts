@@ -2,10 +2,13 @@
 
 import { readFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
+import { cachedIndex, indexFromFolder, indexFromTarball, type RepoIndex } from "./repo.js";
 
 export interface SourceProvider {
   name: string;
   getFile(path: string, ref?: string | null): Promise<string | null>;
+  /** The whole repository's code at `ref`, for lookups beyond the stack trace. Null if unavailable. */
+  index?(ref?: string | null): Promise<RepoIndex | null>;
 }
 
 const cleanPath = (p: string) => {
@@ -17,6 +20,9 @@ const cleanPath = (p: string) => {
 export class LocalSource implements SourceProvider {
   name = "local";
   constructor(private root: string) {}
+  index(): Promise<RepoIndex | null> {
+    return cachedIndex(`local:${resolve(this.root)}`, () => indexFromFolder(this.root));
+  }
   async getFile(path: string): Promise<string | null> {
     const rel = cleanPath(path);
     if (!rel) return null;
@@ -36,6 +42,16 @@ export type GitHubToken = string | undefined | (() => Promise<string | undefined
 export class GitHubSource implements SourceProvider {
   name = "github";
   constructor(private repo: string, private tokenSource?: GitHubToken) {}
+  index(ref?: string | null): Promise<RepoIndex | null> {
+    const at = ref && /^[\w./-]{1,100}$/.test(ref) ? ref : "";
+    return cachedIndex(`github:${this.repo}@${at}`, async () => {
+      const token = typeof this.tokenSource === "function" ? await this.tokenSource() : this.tokenSource;
+      const headers: Record<string, string> = { accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28", ...(token ? { authorization: `Bearer ${token}` } : {}) };
+      const url = (r: string) => `https://api.github.com/repos/${this.repo}/tarball${r ? `/${encodeURIComponent(r)}` : ""}`;
+      // A release name that is not a ref falls back to the default branch, as getFile does.
+      return (await indexFromTarball(url(at), headers)) ?? (at ? indexFromTarball(url(""), headers) : null);
+    });
+  }
   async getFile(path: string, ref?: string | null): Promise<string | null> {
     const rel = cleanPath(path);
     if (!rel) return null;

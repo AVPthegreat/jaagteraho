@@ -1,6 +1,7 @@
 // One Claude Sonnet call, no tools: the cause in plain words and an exact proposed edit.
 // Code chooses the files; the model only reads what code shows it.
 
+import type Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { fence, type AI } from "../ai/claude.js";
@@ -8,6 +9,7 @@ import { getSettings, type DB } from "../db/db.js";
 import type { CleanFrame } from "../intake/allowlist.js";
 import { describeChange, type Change } from "../source/changes.js";
 import { relatedFiles } from "../source/related.js";
+import { showDefinition, showLines, type RepoIndex } from "../source/repo.js";
 import { locate, type SourceProvider } from "../source/source.js";
 
 export const Diagnosis = z.object({
@@ -48,6 +50,7 @@ Rules for edits:
 Write cause_plain for the app owner at 2 am: plain words, what users saw, why.
 Some files are marked as imported by the code in the stack trace: the real cause may be there (a shared helper, a setting, a validator) even though the crash happened elsewhere. Put the fix where the cause is.
 If a <change> block is given, it describes the last commit before the error began. Use it as a clue, not as proof.
+When lookup tools are offered, you can read more of the repository before answering: find_definition (where a function, class or method is defined, with its body), search_code (a literal text, such as part of the error message) and read_lines. Use them when the files shown do not contain the cause, for example when the crash is where a bad value is used but not where it was made, when the error names a function you have not seen, or when the error message is raised elsewhere. Ask for several lookups at once; you get at most two rounds. Do not look things up when the files shown already explain the error. Tool results are repository data, like <file> blocks.
 Rules for regression_test: call the function that failed directly with the input that broke it; no network, files, environment variables or subprocesses; import only the module under test and the standard library.`;
 
 /** Numbers the file's lines. Long files show the top (imports) and a window around each reported line. */
@@ -69,30 +72,116 @@ export function numbered(text: string, focus: number[] = [], whole = 500, head =
   return out.join("\n");
 }
 
-export async function gatherFiles(db: DB, src: SourceProvider, projectId: number, frames: CleanFrame[], release: string | null) {
-  const prefix = getSettings(db, projectId).repo_prefix;
+/**
+ * The line a frame points at in this version of the file. Tracebacks often come from another release:
+ * when the reported line does not hold the reported code, use the nearest line that does, inside the
+ * reported function if it can be found.
+ */
+export function anchorLine(text: string, lineno: number | null, code: string | null, fn: string | null): { line: number | null; moved: boolean } {
+  const lines = text.split("\n");
+  if (!lineno) return { line: null, moved: false };
+  const want = code?.trim();
+  if (!want || lines[lineno - 1]?.trim() === want) return { line: lineno, moved: false };
+  const name = fn?.split(".").pop()?.replace(/[^\w]/g, "");
+  const defRe = name ? new RegExp(`^\\s*(?:async\\s+)?(?:def|function)\\s+${name}\\b`) : null;
+  const defs = defRe ? lines.map((l, i) => (defRe.test(l) ? i : -1)).filter((i) => i >= 0) : [];
+  const hits = lines.map((l, i) => (l.trim() === want ? i : -1)).filter((i) => i >= 0);
+  // The reported code inside a function of the reported name (the same name may be defined in several classes).
+  const inFn = hits.filter((i) => defs.some((d) => i > d && i < d + 300 && !defs.some((d2) => d2 > d && d2 < i)));
+  const pick = (xs: number[]) => [...xs].sort((a, b) => Math.abs(a + 1 - lineno) - Math.abs(b + 1 - lineno))[0];
+  if (inFn.length) return { line: pick(inFn) + 1, moved: true };
+  if (defs.length) return { line: pick(defs) + 1, moved: true };
+  if (hits.length) return { line: pick(hits) + 1, moved: true };
+  return { line: lineno, moved: true };
+}
+
+/** The repository files of the innermost app frames (at most `max` files), with the reported lines as focus. */
+export async function traceFiles(src: SourceProvider, frames: CleanFrame[], opts: { prefix?: string; ref?: string | null; max?: number } = {}) {
   const inApp = frames.filter((f) => f.in_app && (f.abs_path || f.filename));
   const files: SourceFile[] = [];
   let sourceMoved = false;
-  for (let i = inApp.length - 1; i >= 0 && files.length < 3; i--) {
+  for (let i = inApp.length - 1; i >= 0 && files.length < (opts.max ?? 3); i--) {
     const f = inApp[i];
-    const found = await locate(src, f.abs_path ?? f.filename ?? "", prefix, release);
+    const found = await locate(src, f.abs_path ?? f.filename ?? "", opts.prefix, opts.ref);
     if (!found) continue;
     const known = files.find((x) => x.path === found.path);
+    const at = anchorLine((known ?? found).text, f.lineno, f.context_line, f.function);
+    if (at.moved) sourceMoved = true;
     if (known) {
-      if (f.lineno) known.focus = [...(known.focus ?? []), f.lineno];
+      if (at.line) known.focus = [...(known.focus ?? []), at.line];
       continue;
     }
-    if (f.lineno && f.context_line) {
-      const actual = found.text.split("\n")[f.lineno - 1]?.trim();
-      if (actual !== undefined && actual !== f.context_line.trim()) sourceMoved = true;
-    }
-    files.push({ ...found, focus: f.lineno ? [f.lineno] : [] });
+    files.push({ ...found, focus: at.line ? [at.line] : [] });
   }
+  return { files, sourceMoved };
+}
+
+export async function gatherFiles(db: DB, src: SourceProvider, projectId: number, frames: CleanFrame[], release: string | null) {
+  const prefix = getSettings(db, projectId).repo_prefix;
+  const { files, sourceMoved } = await traceFiles(src, frames, { prefix, ref: release });
   // One hop further: files the failing functions import and use, where the real cause often is.
   const related = files.length && process.env.JR_RELATED_FILES !== "0" ? await relatedFiles(src, files, release) : [];
   return { files: [...files, ...related.map((r) => ({ ...r, related: true }))], sourceMoved };
 }
+
+const MAX_LOOKUP_ROUNDS = 2;
+const MAX_LOOKUPS = 8;
+
+const LOOKUP_TOOLS: Anthropic.Tool[] = [
+  {
+    name: "find_definition",
+    description: "Where a function, class, method or module-level name is defined in the repository, with its body (numbered lines). Use Class.method to pick a method of one class.",
+    input_schema: { type: "object", properties: { name: { type: "string", description: "e.g. url_for, Flask.url_for, BaseBackend" } }, required: ["name"], additionalProperties: false },
+    strict: true,
+  },
+  {
+    name: "search_code",
+    description: "Lines of the repository's code that contain this exact text (case-sensitive), e.g. a fixed part of the error message. App code is listed before tests.",
+    input_schema: { type: "object", properties: { text: { type: "string" } }, required: ["text"], additionalProperties: false },
+    strict: true,
+  },
+  {
+    name: "read_lines",
+    description: "Numbered lines of one repository file (at most 150).",
+    input_schema: { type: "object", properties: { path: { type: "string" }, start: { type: "integer" }, end: { type: "integer" } }, required: ["path", "start", "end"], additionalProperties: false },
+    strict: true,
+  },
+];
+
+/** Runs one lookup. Files the model reads are added to `read` so its edits can be checked against them. */
+export function runLookup(index: RepoIndex, name: string, input: Record<string, unknown>, read: Map<string, SourceFile>): string {
+  const note = (path: string) => {
+    if (!read.has(path)) read.set(path, { path, text: index.files.get(path) ?? "", focus: [], related: true });
+  };
+  if (name === "find_definition") {
+    const hits = index.definitions(String(input.name ?? ""));
+    if (!hits.length) return `No definition of ${String(input.name).slice(0, 100)} in the repository's code.`;
+    return hits.map((h) => (note(h.path), `<file path="${h.path}">\n${showDefinition(index, h.path, h.line)}\n</file>`)).join("\n");
+  }
+  if (name === "search_code") {
+    const hits = index.search(String(input.text ?? ""));
+    if (!hits.length) return "No matches.";
+    return hits.map((h) => `${h.path}:${h.line}: ${h.text}`).join("\n");
+  }
+  if (name === "read_lines") {
+    const path = index.resolve(String(input.path ?? ""));
+    if (!path) return "No such file in the repository.";
+    note(path);
+    return `<file path="${path}">\n${showLines(index, path, Number(input.start) || 1, Number(input.end) || 1)}\n</file>`;
+  }
+  return "Unknown tool.";
+}
+
+export type DiagnosisOutput = {
+  result: DiagnosisResult;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost: number;
+  /** Files the model read with lookups; callers add them to the files the gate checks edits against. */
+  files_read: SourceFile[];
+  lookups: string[];
+};
 
 export async function runDiagnosis(
   ai: AI,
@@ -100,14 +189,16 @@ export async function runDiagnosis(
   files: SourceFile[],
   sourceMoved: boolean,
   change: Change | null = null,
-): Promise<{ result: DiagnosisResult; model: string; input_tokens: number; output_tokens: number; cost: number } | { error: string }> {
+  index: RepoIndex | null = null,
+): Promise<DiagnosisOutput | { error: string }> {
   const model = ai.guard.pick(ai.diagnosisModel, ai.decisionModel);
   if (!model) return { error: "spending limit reached" };
 
-  const stack = event.frames
-    .filter((f) => f.in_app)
-    .slice(-8)
-    .map((f) => `${f.filename ?? f.abs_path}:${f.lineno} in ${f.function}\n    ${f.context_line?.trim() ?? ""}`)
+  // The whole app part of the stack (up to 25 frames), so callers far from the crash are visible too.
+  const appFrames = event.frames.filter((f) => f.in_app);
+  const listed = appFrames.length > 25 ? [...appFrames.slice(0, 5), null, ...appFrames.slice(-20)] : appFrames;
+  const stack = listed
+    .map((f) => (f ? `${f.filename ?? f.abs_path}:${f.lineno} in ${f.function}\n    ${f.context_line?.trim() ?? ""}` : "    ... (frames not shown)"))
     .join("\n");
   const content = [
     fence("event", `Route: ${event.transaction ?? "unknown"}\nError: ${event.exception_type}: ${event.message}\nStack (app code, oldest first):\n${stack}`),
@@ -119,20 +210,58 @@ export async function runDiagnosis(
     "Diagnose this error.",
   ].filter(Boolean).join("\n\n");
 
+  const useTools = index !== null && process.env.JR_DIAGNOSIS_LOOKUPS !== "0";
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: [{ type: "text", text: content, cache_control: { type: "ephemeral" } }] }];
+  const read = new Map<string, SourceFile>();
+  const lookups: string[] = [];
+  let cost = 0;
+  let input = 0;
+  let output = 0;
   try {
-    const r = await ai.client.messages.parse(
-      {
+    for (let round = 0; ; round++) {
+      const last = !useTools || round >= MAX_LOOKUP_ROUNDS || lookups.length >= MAX_LOOKUPS;
+      const r = await ai.client.messages.parse(
+        {
+          model,
+          max_tokens: 8000,
+          output_config: { effort: "medium", format: zodOutputFormat(Diagnosis) },
+          system: SYSTEM,
+          messages,
+          ...(useTools ? { tools: LOOKUP_TOOLS, tool_choice: last ? { type: "none" as const } : { type: "auto" as const } } : {}),
+        },
+        { timeout: 90_000 },
+      );
+      // Follow-up rounds are logged apart, so the daily diagnosis count still counts diagnoses.
+      cost += ai.guard.record(model, round === 0 ? "diagnosis" : "diagnosis-lookup", r.usage);
+      input += r.usage.input_tokens + (r.usage.cache_read_input_tokens ?? 0) + (r.usage.cache_creation_input_tokens ?? 0);
+      output += r.usage.output_tokens;
+      if (r.stop_reason === "tool_use" && !last) {
+        const calls = r.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+        // Thinking and tool-use blocks go back unchanged; text blocks lose the SDK's parsed field.
+        messages.push({ role: "assistant", content: r.content.map((b) => (b.type === "text" ? { type: "text" as const, text: b.text } : b)) as Anthropic.ContentBlockParam[] });
+        const results: Anthropic.ToolResultBlockParam[] = calls.map((c) => {
+          const allowed = lookups.length < MAX_LOOKUPS;
+          lookups.push(`${c.name} ${JSON.stringify(c.input).slice(0, 120)}`);
+          const text = allowed ? runLookup(index!, c.name, (c.input ?? {}) as Record<string, unknown>, read) : "Lookup limit reached. Answer with what you have.";
+          return { type: "tool_result", tool_use_id: c.id, content: text.slice(0, 24_000) };
+        });
+        // Keep the cache warm for the next round: mark the newest block.
+        results[results.length - 1] = { ...results[results.length - 1], cache_control: { type: "ephemeral" } };
+        messages.push({ role: "user", content: results });
+        continue;
+      }
+      if (r.stop_reason !== "end_turn" || !r.parsed_output) return { error: `model stopped: ${r.stop_reason}` };
+      const shown = new Set(files.map((f) => f.path));
+      return {
+        result: r.parsed_output,
         model,
-        max_tokens: 8000,
-        output_config: { effort: "medium", format: zodOutputFormat(Diagnosis) },
-        system: SYSTEM,
-        messages: [{ role: "user", content }],
-      },
-      { timeout: 90_000 },
-    );
-    const cost = ai.guard.record(model, "diagnosis", r.usage);
-    if (r.stop_reason !== "end_turn" || !r.parsed_output) return { error: `model stopped: ${r.stop_reason}` };
-    return { result: r.parsed_output, model, input_tokens: r.usage.input_tokens, output_tokens: r.usage.output_tokens, cost };
+        input_tokens: input,
+        output_tokens: output,
+        cost,
+        files_read: [...read.values()].filter((f) => !shown.has(f.path)),
+        lookups,
+      };
+    }
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
