@@ -755,6 +755,268 @@
   font-size: 0.82rem;
   line-height: 1.45;
 }
+
+/* ------- Mini app screens (sample UI around the one real action) ------- */
+.as {
+  display: grid;
+  gap: 14px;
+}
+.as-name {
+  font-family: var(--font-d);
+  font-size: 1.45rem;
+  font-variation-settings: "opsz" 72;
+}
+.as-screen {
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(214, 224, 255, 0.04);
+  border: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+.as-muted {
+  color: var(--faint);
+  font-size: 0.84rem;
+}
+.as-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+.as-listing {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+.as-listing > div {
+  display: grid;
+  gap: 2px;
+}
+.as-img {
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2b3c66, #172238);
+}
+.as-price {
+  font-weight: 700;
+  color: var(--lantern-2);
+}
+.as-queue {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+}
+.as-now {
+  display: grid;
+  justify-items: center;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(122, 167, 255, 0.12);
+}
+.as-now b {
+  font-family: var(--font-d);
+  font-size: 1.8rem;
+  line-height: 1.1;
+}
+.as-queue ul,
+.as-routes,
+.as-meals {
+  display: grid;
+  gap: 6px;
+}
+.as-exam {
+  display: grid;
+  gap: 8px;
+}
+.as-timer {
+  font-family: var(--font-m);
+  color: var(--amber, #f5b544);
+}
+.as-options {
+  display: grid;
+  gap: 6px;
+}
+.as-options li,
+.as-meals li,
+.as-routes li {
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: rgba(214, 224, 255, 0.04);
+}
+.as-options li.on,
+.as-meals li.on {
+  background: rgba(122, 167, 255, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(122, 167, 255, 0.4);
+}
+.as-routes li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.as-chip {
+  margin-left: auto;
+  font-family: var(--font-m);
+  font-size: 0.76rem;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(95, 214, 160, 0.12);
+  color: var(--ok);
+}
+.as-chip.late {
+  background: rgba(245, 181, 68, 0.12);
+  color: var(--amber, #f5b544);
+}
+.as-invoice {
+  display: grid;
+  gap: 6px;
+}
+.as-invoice .total {
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+.as-order {
+  display: grid;
+  gap: 6px;
+}
+.as-track {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(214, 224, 255, 0.08);
+  overflow: hidden;
+}
+.as-track i {
+  display: block;
+  width: 62%;
+  height: 100%;
+  background: var(--lantern);
+}
+.as-generic {
+  display: grid;
+  gap: 8px;
+}
+.as-generic span {
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(214, 224, 255, 0.07);
+}
+.as-generic .short {
+  width: 60%;
+}
+.as-act {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  transition: background 0.3s, border-color 0.3s;
+}
+.as-btn {
+  justify-self: start;
+}
+.as-act.bad {
+  background: rgba(255, 122, 107, 0.08);
+  border-color: rgba(255, 122, 107, 0.35);
+  animation: as-shake 0.42s ease-in-out;
+}
+.as-act.good,
+.as-act.ready {
+  background: rgba(95, 214, 160, 0.08);
+  border-color: rgba(95, 214, 160, 0.35);
+}
+.as-status {
+  display: grid;
+  gap: 2px;
+  min-height: 2.6em;
+}
+.as-status.bad {
+  color: #ffc4bc;
+}
+.as-status.bad .mono {
+  font-family: var(--font-m);
+  font-size: 0.8rem;
+  word-break: break-word;
+}
+.as-status.good {
+  color: #c9f3df;
+}
+.as-status b {
+  color: var(--text);
+}
+.as-note {
+  font-size: 0.74rem;
+  color: var(--faint);
+}
+@keyframes as-shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  20% {
+    transform: translateX(-4px);
+  }
+  40% {
+    transform: translateX(4px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .as-act.bad {
+    animation: none;
+  }
+}
+
+/* ------- Share card ------- */
+.share {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.share-card {
+  flex: 1 1 360px;
+  padding: 20px 24px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(60, 100, 220, 0.28), rgba(14, 19, 30, 0.8) 60%);
+  border: 1px solid rgba(122, 167, 255, 0.35);
+}
+.share-tag {
+  font-family: var(--font-m);
+  font-size: var(--step-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--lantern);
+}
+.share-line {
+  margin-top: 6px;
+  font-family: var(--font-d);
+  font-size: clamp(1.3rem, 1rem + 1.2vw, 1.8rem);
+  line-height: 1.2;
+}
+.share-sub {
+  margin-top: 6px;
+  color: var(--soft);
+  font-size: 0.92rem;
+}
+.share-pass {
+  color: var(--ok);
+  margin-left: 6px;
+}
+.share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .pg2-care {
   display: block;
   margin-bottom: 6px;

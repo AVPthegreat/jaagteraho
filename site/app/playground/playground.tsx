@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Diff } from "../ui/alert-card";
 import { WATCHER } from "../watcher";
+import { AppScreen } from "./app-screen";
+import { ShareCard } from "./share-card";
 import { appTitle, loadPlaySession, type AppInfo, type BugCase, type PlayEvent, type Scorecard } from "./play";
 
 /*
@@ -189,6 +191,9 @@ export function Playground() {
     if (fromUrl && /^[a-z]{2,20}$/.test(fromUrl)) {
       setApp(fromUrl);
       setStage(2);
+      // A shared link (?app=…&case=…) opens with that bug picked; the server checks it when planted.
+      const fromCase = new URLSearchParams(window.location.search).get("case");
+      if (fromCase && /^[A-Za-z0-9_.-]{2,80}$/.test(fromCase)) setBug(fromCase);
     }
     let alive = true;
     let wait = 1000;
@@ -321,8 +326,13 @@ export function Playground() {
     setStage(2);
     const url = new URL(window.location.href);
     url.searchParams.set("app", name);
+    url.searchParams.delete("case");
     window.history.replaceState(null, "", url);
   };
+  // A shared link's bug that this app no longer has falls back to "Surprise me".
+  useEffect(() => {
+    if (info && bug !== "surprise" && !info.cases.some((c) => c.id === bug)) setBug("surprise");
+  }, [info, bug]);
 
   const plant = useCallback(async () => {
     if (!session || !app) return;
@@ -622,39 +632,27 @@ export function Playground() {
                     </span>
                   </div>
                   <div className="pg2-frame-body">
-                    <p className="pg2-frame-name">{appTitle(run.app)}</p>
-                    <p className="pg2-frame-tag">{runApp?.tagline ?? ""}</p>
-                    <span className="pg2-sk" aria-hidden="true" />
-                    <span className="pg2-sk short" aria-hidden="true" />
-                    <button type="button" className="btn pg2-action" onClick={() => act("use")} disabled={busy !== null || working}>
-                      {busy === "use" ? "Sending…" : (bugInfo?.action ?? "Use the app")}
-                    </button>
-                    <div className="pg2-out" aria-live="off">
-                      {look === "bad" ? (
-                        <div className="pg2-err">
-                          <b>500 · Something went wrong</b>
-                          <span className="mono">{fresh?.error ?? `${String(crash?.exception_type ?? "Error")}: ${String(crash?.message ?? "")}`}</span>
-                        </div>
-                      ) : look === "good" && fresh ? (
-                        <div className="pg2-ok">
-                          <b>It works</b>
-                          <span>{friendly(fresh.response)}</span>
-                        </div>
-                      ) : look === "ready" ? (
-                        <div className="pg2-ok soft-ok">
-                          <b>The fix is in</b>
-                          <span>Press the button to try it.</span>
-                        </div>
-                      ) : (
-                        <span className="soft small">{working ? "Starting your copy…" : "Press the button to use it."}</span>
-                      )}
-                      {fresh && (fresh.traceback || fresh.response) ? (
-                        <details className="pg2-mini">
-                          <summary>Details</summary>
-                          <pre>{fresh.traceback ?? JSON.stringify(fresh.response, null, 2)}</pre>
-                        </details>
-                      ) : null}
-                    </div>
+                    <AppScreen
+                      app={run.app}
+                      title={appTitle(run.app)}
+                      action={bugInfo?.action ?? "Use the app"}
+                      busy={busy === "use"}
+                      disabled={busy !== null || working}
+                      onUse={() => act("use")}
+                      look={look}
+                      errorLine={fresh?.error ?? `${String(crash?.exception_type ?? "Error")}: ${String(crash?.message ?? "")}`}
+                      okLine={fresh ? friendly(fresh.response) : ""}
+                      response={fresh?.response}
+                      hint={working ? "Starting your copy…" : "Press the button to use it."}
+                      details={
+                        fresh && (fresh.traceback || fresh.response) ? (
+                          <details className="pg2-mini">
+                            <summary>Details</summary>
+                            <pre>{fresh.traceback ?? JSON.stringify(fresh.response, null, 2)}</pre>
+                          </details>
+                        ) : null
+                      }
+                    />
                   </div>
                 </div>
                 <p className={`pg2-conn ${conn === "live" ? "on" : ""}`}>
@@ -733,6 +731,17 @@ export function Playground() {
                   </button>
                 </div>
               </div>
+            ) : null}
+
+            {fixed && hiddenResult === "passed" ? (
+              <ShareCard
+                app={run.app}
+                appName={appTitle(run.app)}
+                caseId={typeof runCaseId === "string" ? runCaseId : ""}
+                bugTitle={bugInfo?.title ?? "a planted bug"}
+                seconds={fixSecs}
+                rupees={card ? rupees(card.cost_usd) : ""}
+              />
             ) : null}
 
             <details className="pg2-drawer">

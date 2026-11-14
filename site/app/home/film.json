@@ -1,0 +1,18 @@
+{
+  "_note": "The home 'See it work' film. To swap the film, copy its .mp4/.webm/.jpg into site/public/clips/ and edit this file (src without extension, poster, steps with start seconds). Timings: jr-video/final/jaagteraho_45s_site.steps.json.",
+  "src": "/clips/jaagteraho-45s",
+  "poster": "/clips/jaagteraho-45s.jpg",
+  "label": "JaagteRaho in 45 seconds",
+  "steps": [
+    { "at": 0, "title": "2 a.m.: the app crashes", "line": "Hundreds of students can't submit. You're asleep." },
+    { "at": 6.88, "title": "Small bug fixed", "line": "A small bug: it fixes it and leaves you a note." },
+    { "at": 10.38, "title": "It calls you", "line": "Login or an exam? Your phone rings." },
+    { "at": 14.04, "title": "Press 1", "line": "One key to say you're on it." },
+    { "at": 16.04, "title": "Cause and fix on Telegram", "line": "The cause is waiting, with a fix ready for one tap." },
+    { "at": 20.23, "title": "Asleep: no answer", "line": "Three minutes and no answer?" },
+    { "at": 26.36, "title": "Healed while you slept", "line": "A fix checked three ways goes in." },
+    { "at": 31.5, "title": "Undo", "line": "One tap to undo it." },
+    { "at": 33.9, "title": "Tested on real code", "line": "294 bugs in a real codebase; 96% of fixes passed a hidden test." },
+    { "at": 42.73, "title": "Try the playground", "line": "Build it. Ship it. Sleep." }
+  ]
+}
