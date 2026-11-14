@@ -25,7 +25,7 @@ JaagteRaho is a watchman for a live app. The app's existing Sentry SDK sends its
 
 **Hard rules from the parliament (non-negotiable):**
 
-1. The watchman never merges, deploys, restarts or rolls back anything. On our own sandbox repository, the owner's Approve tap opens a pull request on a new branch; a person merges it on GitHub. (Changed on 13 Nov from "Approve merges": merging into the sandbox's main branch would remove the planted faults and break the demo for the next visitor.)
+1. The watchman never merges, deploys, restarts or rolls back anything. On our own sandbox repository, the owner's Approve tap opens a pull request on a new branch; a person merges it on GitHub. (Changed on 13 Nov from "Approve merges": merging into the sandbox's main branch would remove the planted faults and break the demo for the next visitor.) **Changed on 14 Nov (the founder): self-healing.** The owner may set a heal rule (`/heal`). Under it, a recommended fix outside protected areas goes in without a tap: on the demo portal by switching the visitor's session to the fixed build; on a real app only through a pull request that merges by itself only behind the branch's required status checks, using a write token bound to that one repository, and only for incidents whose every error carried the app's server-only ingest secret (the DSN public key ships in browsers and proves nothing). Fixes that add imports, network, process, file-write, dynamic or decoding code, or touch the wider HEAL_PROTECTED list, never apply themselves. A heal that does not bring the signed errors down after the deploy (at least 3 repeats, not down by half) is reverted automatically, once. See `watcher/src/pipeline/heal.ts`.
 2. No write credential for any Faurus repository or server exists anywhere in this system.
 3. Models give signals; code decides. No model answer can lower an alert.
 4. Text that users can influence is data, never instructions. The model has no tools.
@@ -378,6 +378,7 @@ For private repositories. Permissions: Contents read and Metadata read, nothing 
 ### 4.18 Better diagnosis input
 
 - **Imported files:** besides up to 3 files from the stack trace, code adds up to 2 files that the failing functions import and actually use (Python `from … import`, `import …`; JavaScript `import … from` and `require`), skipping installed packages and files over 600 lines. They are marked as not in the stack trace. Measured on/off with `JR_RELATED_FILES=0`.
+- **Lookups beyond the stack trace:** when the repository's code can be read (the GitHub tarball at the release, or the local folder), the diagnosis gets a code-picked map (where the failing code's callees are defined, where the error's text appears) and three read-only tools: `find_definition`, `search_code`, `read_lines`. At most 3 rounds and 8 lookups; prompt caching keeps a round near $0.005. Files it reads join the files the fix gate checks edits against. Off with `JR_DIAGNOSIS_LOOKUPS=0`. Measured in `watcher/eval/NOTES-lookups.md`.
 - **Last change:** for GitHub repositories, the commit that went live just before the incident began (the release, if it is a commit hash; otherwise the newest commit on the default branch before the first error, within 3 days), its author, message and files, and which of them are in the stack trace. Shown on the alert ("Began 20 min after commit abc1234 … which changed quiz/views.py") and given to the diagnosis as a clue, fenced as data.
 - **Tracebacks:** the paste parser also reads IPython/Jupyter tracebacks and pytest `INTERNALERROR>` output.
 
@@ -398,7 +399,7 @@ At 08:00 India time (sent between 08:00 and 12:00 so a restart in the evening se
 
 ### 4.21 Measurement
 
-- `npm run eval:real`: 30 real bugs from 17 public Python projects (traceback as posted on GitHub, scored against the lines the merged fix changed), run exactly as the paste page runs.
+- `npm run eval:real`: 30 real bugs from 17 public Python projects, plus 12 more with the cause outside the traceback (`-- --cases real-bugs-new.json`) (traceback as posted on GitHub, scored against the lines the merged fix changed), run exactly as the paste page runs.
 - `npm run bench`: JR-Bench, 7 generated sample apps (six Python apps of 21 to 101 files, one Node.js app of 30) with 20 planted bugs and 4 noise errors. Each bug is planted into clean code and triggered for real; JaagteRaho decides, diagnoses, gates and proves; a hidden test it never sees judges the fix. `--validate` checks every case for free first.
 
 ## 5. Connecting Faurus safely

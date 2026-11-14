@@ -17,6 +17,7 @@ import { decide, saveDecision, severityWord, type Decision } from "./decide.js";
 import { gatherFiles, runDiagnosis, type DiagnosisResult } from "./diagnose.js";
 import { runGate } from "./gate.js";
 import { proveFix } from "./verify.js";
+import type { Healer } from "./heal.js";
 import { lastChange, loadChange, saveChange, type Change } from "../source/changes.js";
 
 type Job = { id: number; kind: string; incident_id: number; payload: string; attempts: number };
@@ -56,12 +57,14 @@ export function tokenFor(project: ProjectRow): GitHubToken {
 export function sourceFor(project: ProjectRow): SourceProvider | null {
   if (!project.repo) return null;
   if (project.repo.startsWith("local:")) return new LocalSource(project.repo.slice(6));
-  return new GitHubSource(project.repo, tokenFor(project));
+  return new GitHubSource(project.repo, tokenFor(project), `project:${project.id}`);
 }
 
 export class Worker {
   private running = 0;
   private timers: NodeJS.Timeout[] = [];
+  /** Self-healing under the owner's rules (heal.ts); set by the server. */
+  healer: Healer | null = null;
 
   constructor(
     private db: DB,
@@ -259,6 +262,7 @@ export class Worker {
 
     if (owner?.paused !== 1) {
       await this.diagnoseAndGate(project, inc.id, event, ev.release, feed);
+      await this.healer?.onFix(inc.id, { session, action: decision.action }).catch((e) => console.error("heal:", e));
       await this.refreshCard(inc.id, false);
     }
     await voiceDone;
@@ -348,13 +352,18 @@ export class Worker {
     }
 
     const src = sourceFor(project);
-    const [{ files, sourceMoved }, change] = await Promise.all([
+    const [{ files, sourceMoved }, change, index] = await Promise.all([
       src ? gatherFiles(this.db, src, project.id, event.frames, release) : Promise.resolve({ files: [], sourceMoved: false }),
       this.changeFor(project, incidentId, event.frames, release),
+      // The repository's code, so the diagnosis can look up what the stack trace does not show.
+      src?.index && process.env.JR_DIAGNOSIS_LOOKUPS !== "0" ? src.index(release).catch(() => null) : Promise.resolve(null),
     ]);
     if (change) feed("change", { ...change });
     const started = Date.now();
-    const out = await runDiagnosis(this.ai!, event, files, sourceMoved, change);
+    // Lookup rounds stop as soon as the owner's credit falls under the floor checked above.
+    const out = await runDiagnosis(this.ai!, event, files, sourceMoved, change, files.length ? index : null, {
+      budgetOk: () => creditLeftForProject(this.db, project.id) >= 0.02,
+    });
     if ("error" in out) {
       feed("cause", { unavailable: `Diagnosis failed: ${out.error}` });
       return;
@@ -370,6 +379,7 @@ export class Worker {
     feed("cause", { ...out.result, diagnosis_id: diagnosisId, seconds: Math.round((Date.now() - started) / 1000), model: out.model });
     await this.refreshCard(incidentId, false);
 
+    files.push(...out.files_read);
     const gate = await runGate(this.ai, out.result, files);
     // At most 3 fix proposals per real app per day, so a bad night cannot flood the owner with diffs.
     if (gate.passed && project.kind !== "sandbox" && this.fixesShownToday(project.id) >= MAX_FIXES_PER_DAY) {
@@ -389,7 +399,7 @@ export class Worker {
     const fixId = Number(
       this.db
         .prepare("INSERT INTO fixes (diagnosis_id, diff, gate_result, status, created_at) VALUES (?, ?, ?, ?, ?)")
-        .run(diagnosisId, gate.diff, JSON.stringify({ passed: gate.passed, level: gate.level, reasons: gate.reasons, changed_lines: gate.changed_lines, review: gate.review, test_run: testRun }), status, new Date().toISOString())
+        .run(diagnosisId, gate.diff, JSON.stringify({ passed: gate.passed, level: gate.level, reasons: gate.reasons, changed_lines: gate.changed_lines, review: gate.review, test_run: testRun, risky: gate.risky }), status, new Date().toISOString())
         .lastInsertRowid,
     );
     feed("fix", { fix_id: fixId, status, level: gate.level, diff: gate.passed ? gate.diff : null, reasons: gate.reasons, changed_lines: gate.changed_lines, test_run: testRun, test_code: gate.passed ? out.result.regression_test?.code || null : null });

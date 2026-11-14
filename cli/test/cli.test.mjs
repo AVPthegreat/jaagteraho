@@ -138,3 +138,16 @@ describe("setup command", () => {
     assert.equal(JSON.parse(payload).tags.jr_test, "1");
   });
 });
+
+describe("DSN check before anything is written", () => {
+  it("accepts real DSN shapes, with a port or a path prefix", async () => {
+    const { validDsn } = await import("../lib/plan.mjs");
+    for (const ok of [DSN, "http://abc123@127.0.0.1:8787/42", "https://k@host.example/sentry/7", "https://k@o1.ingest.sentry.io/4506/"]) assert.ok(validDsn(ok), ok);
+  });
+
+  it("refuses a DSN that would break out of the string written into the app", () => {
+    for (const bad of ['https://k@h/1", __import__("os").system("x"), "', "https://k@h/1`;process.exit()//", "https://k@h/$(id)/1", "https://k@h/1\\", "not a dsn", ""]) {
+      assert.throws(() => makePlan(app({ "manage.py": "", "web/settings.py": "INSTALLED_APPS = []\n" }), { language: "python", framework: "django" }, bad), /does not look like a DSN/, bad);
+    }
+  });
+});

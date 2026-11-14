@@ -9,11 +9,13 @@ const PRICES: Record<string, [number, number]> = {
   "claude-sonnet-5-5": [2, 10],
   "claude-opus-5-5": [4, 20],
 };
+const HIGHEST_PRICE: [number, number] = [Math.max(...Object.values(PRICES).map((p) => p[0])), Math.max(...Object.values(PRICES).map((p) => p[1]))];
 
 /** The app a model call is made for, so spend can be charged to its owner's free credit. */
 export const spendContext = new AsyncLocalStorage<{ projectId: number }>();
 
-export type Usage = { input_tokens: number; output_tokens: number };
+export type Usage = { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number | null; cache_read_input_tokens?: number | null };
+
 
 export class SpendGuard {
   constructor(
@@ -40,11 +42,16 @@ export class SpendGuard {
   }
 
   record(model: string, purpose: string, usage: Usage): number {
-    const [inp, out] = PRICES[model] ?? [0, 0];
-    const cost = (usage.input_tokens * inp + usage.output_tokens * out) / 1_000_000;
+    // A model missing from the table (a new or misspelled id) is charged at the highest known price,
+    // never as free, so the spend cap keeps working.
+    const [inp, out] = PRICES[model] ?? HIGHEST_PRICE;
+    // Cached input: writes are charged at 1.25 times the input price, reads at 0.1 times (never below the real price).
+    const write = usage.cache_creation_input_tokens ?? 0;
+    const read = usage.cache_read_input_tokens ?? 0;
+    const cost = (usage.input_tokens * inp + write * inp * 1.25 + read * inp * 0.1 + usage.output_tokens * out) / 1_000_000;
     this.db
       .prepare("INSERT INTO spend (at, model, purpose, input_tokens, output_tokens, cost_usd, project_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .run(new Date().toISOString(), model, purpose, usage.input_tokens, usage.output_tokens, cost, spendContext.getStore()?.projectId ?? null);
+      .run(new Date().toISOString(), model, purpose, usage.input_tokens + write + read, usage.output_tokens, cost, spendContext.getStore()?.projectId ?? null);
     return cost;
   }
 }

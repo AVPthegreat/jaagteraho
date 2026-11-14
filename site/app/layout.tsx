@@ -9,9 +9,9 @@ const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "600"], variab
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")),
-  title: "JaagteRaho: an AI night watchman for your live app",
+  title: "JaagteRaho: an AI on-call agent that stays awake for your live app",
   description:
-    "Your app breaks at 2 am and your users find out before you do. JaagteRaho watches your live app's errors, wakes you only when it matters, explains the cause in plain words and has a checked fix waiting for your approval.",
+    "Your app breaks at 2 am. If you don't wake up, JaagteRaho heals it: an AI agent that reads every error, wakes you only when real users are hurt, explains the cause with file and line, and writes a checked fix. You approve every fix, or let it heal on its own under rules you set. 20 of 20 planted bugs caught, 0 wrong fixes shown.",
 };
 
 export const viewport: Viewport = { themeColor: "#0e1626", viewportFit: "cover" };

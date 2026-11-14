@@ -23,6 +23,12 @@ export function definitionLines(text: string, names: Set<string>): number[] {
 
 /** The lines of the function that contains `line` (1-based), for Python and JavaScript. */
 export function enclosingFunction(text: string, line: number): string[] {
+  const [start, end] = enclosingRange(text, line);
+  return text.split("\n").slice(start, end);
+}
+
+/** 0-based [start, end) of the function that contains `line` (1-based), at most 200 lines. */
+export function enclosingRange(text: string, line: number): [number, number] {
   const lines = text.split("\n");
   const i = Math.min(Math.max(0, line - 1), lines.length - 1);
   const indent = (s: string) => s.match(/^\s*/)![0].length;
@@ -32,7 +38,7 @@ export function enclosingFunction(text: string, line: number): string[] {
   const base = indent(lines[start] ?? "");
   let end = i + 1;
   while (end < lines.length && (lines[end].trim() === "" || indent(lines[end]) > base || /^\s*[)}\]]/.test(lines[end]))) end++;
-  return lines.slice(start, Math.min(end, start + 200));
+  return [start, Math.min(end, start + 200)];
 }
 
 type Import = { names: string[]; module: string; level: number; js: boolean };

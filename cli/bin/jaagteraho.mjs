@@ -104,7 +104,13 @@ async function init() {
     }
   }
 
-  const plan = makePlan(root, app, dsn);
+  let plan;
+  try {
+    plan = makePlan(root, app, dsn);
+  } catch (e) {
+    console.log(`\n${e.message}\nNothing was changed.`);
+    process.exit(1);
+  }
   if (plan.changes.length) {
     console.log(`\nChanges:\n${preview(root, plan)}\n`);
     const go = (await ask("Apply these changes? (Y/n) ", "y")).toLowerCase();

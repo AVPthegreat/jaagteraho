@@ -8,6 +8,7 @@ import { streamSSE } from "hono/streaming";
 import { bus, type FeedEvent } from "../bus.js";
 import type { DB } from "../db/db.js";
 import type { Voice } from "../voice/voice.js";
+import { Healer } from "../pipeline/heal.js";
 
 const FLOWS = { submit: "/api/submit", exam: "/api/exam/start", pay: "/api/pay" } as const;
 type Flow = keyof typeof FLOWS;
@@ -20,6 +21,7 @@ export type PublicOptions = {
   twinBroken: string; // e.g. http://127.0.0.1:8001
   twinFixed: string; // e.g. http://127.0.0.1:8002
   allowedOrigins: string[];
+  healer?: Healer | null;
 };
 
 /** The caller's address as Caddy reports it (first X-Forwarded-For entry). Used only for limits, never stored. */
@@ -43,7 +45,7 @@ export class Window {
   }
 }
 
-export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins }: PublicOptions) {
+export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins, healer }: PublicOptions) {
   const app = new Hono();
   const limits = new Window();
   app.use("/public/*", cors({ origin: allowedOrigins, allowMethods: ["GET", "POST"], allowHeaders: ["Content-Type"], maxAge: 600 }));
@@ -75,7 +77,7 @@ export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins 
   }
 
   app.post("/public/break", async (c) => {
-    const body = ((await c.req.json().catch(() => ({}))) ?? {}) as { session?: string; flow?: string; exam?: boolean; country?: string };
+    const body = ((await c.req.json().catch(() => ({}))) ?? {}) as { session?: string; flow?: string; exam?: boolean; country?: string; heal?: boolean };
     const session = typeof body.session === "string" ? body.session : "";
     const flow = body.flow as Flow;
     if (!SESSION.test(session) || !(typeof flow === "string" && Object.hasOwn(FLOWS, flow))) return c.json({ error: "Choose a flow to break." }, 400);
@@ -85,6 +87,8 @@ export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins 
     if (!limits.allow("global", 240, 3_600_000)) return c.json({ error: "The demo is busy. Try again in a few minutes." }, 429);
     const country = typeof body.country === "string" && COUNTRY.test(body.country) ? body.country : null;
     touchVisitor(session, country);
+    // The visitor's own heal rule for this session: approve each fix, or let a proved fix heal on its own.
+    Healer.setSessionMode(db, session, body.heal === true);
 
     const fixed = db.prepare("SELECT fix_id FROM session_fixes WHERE session_id = ? AND flow = ?").get(session, flow) as { fix_id: number } | undefined;
     const build = fixed ? "fixed" : "broken";
@@ -163,6 +167,15 @@ export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins 
     const caution = fix ? (JSON.parse(fix.gate_result) as { level?: string }).level === "caution" : false;
     if (!fix || fix.status === "rejected" || caution || fix.transaction_name !== FLOWS[flow]) return c.json({ error: "This fix cannot be approved." }, 409);
     db.prepare("INSERT OR REPLACE INTO session_fixes (session_id, flow, fix_id, at) VALUES (?, ?, ?, ?)").run(body.session, flow, body.fix_id, new Date().toISOString());
+    return c.json({ ok: true });
+  });
+
+  // A visitor's Undo of a heal in their own session: back to the broken build.
+  app.post("/public/undo", async (c) => {
+    const body = ((await c.req.json().catch(() => ({}))) ?? {}) as { session?: string; heal_id?: number };
+    if (!SESSION.test(body.session ?? "") || !Number.isInteger(body.heal_id)) return c.json({ error: "bad request" }, 400);
+    if (!limits.allow(`u:${body.session}`, 10, 60_000) || !limits.allow(`uip:${clientIp(c)}`, 60, 3_600_000)) return c.json({ error: "Easy there. Try again in a minute." }, 429);
+    if (!healer?.undoSession(body.heal_id!, body.session!)) return c.json({ error: "Nothing to undo." }, 409);
     return c.json({ ok: true });
   });
 

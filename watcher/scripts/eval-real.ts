@@ -14,9 +14,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { makeAI } from "../src/ai/claude.js";
 import { openDb } from "../src/db/db.js";
 import { codeChecks } from "../src/pipeline/gate.js";
-import { runDiagnosis, type SourceFile } from "../src/pipeline/diagnose.js";
+import { runDiagnosis, traceFiles, type SourceFile } from "../src/pipeline/diagnose.js";
 import { relatedFiles } from "../src/source/related.js";
-import { locate, type SourceProvider } from "../src/source/source.js";
+import { cachedIndex, indexFromTarball, type RepoIndex } from "../src/source/repo.js";
+import type { SourceProvider } from "../src/source/source.js";
 import { parseTraceback } from "../src/web/paste.js";
 
 const envFile = new URL("../.env", import.meta.url);
@@ -36,7 +37,7 @@ type Case = {
 
 const args = process.argv.slice(2);
 const opt = (n: string) => (args.includes(`--${n}`) ? args[args.indexOf(`--${n}`) + 1] : undefined);
-const STOP_AT_USD = 2;
+const STOP_AT_USD = Number(opt("stop") ?? 2);
 const TOLERANCE = 3;
 
 /** Raw file reads (no API rate limit), trying a src/ layout as well. */
@@ -49,6 +50,9 @@ class RawSource implements SourceProvider {
       if (res?.ok) return res.text();
     }
     return null;
+  }
+  index(): Promise<RepoIndex | null> {
+    return cachedIndex(`${this.repo}@${this.sha}`, () => indexFromTarball(`https://codeload.github.com/${this.repo}/tar.gz/${this.sha}`));
   }
 }
 
@@ -71,12 +75,16 @@ function score(c: Case, files: SourceFile[], r: { file: string; line: number; ed
 }
 
 async function main() {
-  const cases = (JSON.parse(readFileSync(new URL("../eval/real-bugs.json", import.meta.url), "utf8")) as Case[])
+  const casesFile = opt("cases") ? new URL(`../eval/${opt("cases")}`, import.meta.url) : new URL("../eval/real-bugs.json", import.meta.url);
+  // --split design|heldout|new picks a fixed half of the outside-traceback cases (eval/split.json).
+  const split = opt("split") ? (JSON.parse(readFileSync(new URL("../eval/split.json", import.meta.url), "utf8")) as Record<string, string[]>)[opt("split")!] : null;
+  const cases = (JSON.parse(readFileSync(casesFile, "utf8")) as Case[])
+    .filter((c) => !split || split.includes(c.issue_url))
     .filter((c) => !opt("only") || c.repo.includes(opt("only")!))
     .filter((c) => !opt("difficulty") || c.difficulty === opt("difficulty"))
     .slice(0, Number(opt("limit") ?? 1000));
   mkdirSync(new URL("../eval/", import.meta.url), { recursive: true });
-  const db = openDb(new URL("../eval/eval.db", import.meta.url).pathname);
+  const db = openDb(new URL(`../eval/${opt("db") ?? "eval.db"}`, import.meta.url).pathname);
   const ai = makeAI(db);
   if (!ai) throw new Error("JR_ANTHROPIC_API_KEY is not set");
   const startSpend = ai.guard.total();
@@ -95,30 +103,29 @@ async function main() {
         results.push({ repo: c.repo, issue: c.issue_url, difficulty: c.difficulty, error: "traceback not parsed" });
         continue;
       }
-      // Tracebacks come from installed packages; frames inside the repository's package count as its code.
-      const pkgs = new Set(c.fixed_files.map((f) => f.replace(/^src\//, "").split("/")[0].replace(/\.py$/, "")));
-      const frames = parsed.frames.map((f) => ({ ...f, in_app: [...pkgs].some((p) => (f.abs_path ?? "").replace(/\\/g, "/").includes(`/${p}/`) || (f.abs_path ?? "").startsWith(`${p}/`)) }));
+      // Tracebacks come from installed packages; frames inside one of the repository's own packages count
+      // as its code (what an error tracker's in-app flag says). Without the repository's file list, fall
+      // back to the packages the real fix touched.
       const src = new RawSource(c.repo, c.buggy_commit);
-      const files: SourceFile[] = [];
-      for (const f of [...frames].reverse()) {
-        if (!f.in_app || files.length >= 3) continue;
-        const found = await locate(src, f.abs_path ?? "");
-        if (!found) continue;
-        const known = files.find((x) => x.path === found.path);
-        if (known) known.focus = [...(known.focus ?? []), ...(f.lineno ? [f.lineno] : [])];
-        else files.push({ path: found.path.replace(/^(?!src\/)/, ""), text: found.text, focus: f.lineno ? [f.lineno] : [] });
-      }
+      const index = await src.index();
+      const pkgs = index?.packages() ?? new Set(c.fixed_files.map((f) => f.replace(/^src\//, "").split("/")[0].replace(/\.py$/, "")));
+      const frames = parsed.frames.map((f) => ({ ...f, in_app: [...pkgs].some((p) => (f.abs_path ?? "").replace(/\\/g, "/").includes(`/${p}/`) || (f.abs_path ?? "").startsWith(`${p}/`)) }));
+      const { files } = await traceFiles(src, frames);
       if (files.length === 0) {
         results.push({ repo: c.repo, issue: c.issue_url, difficulty: c.difficulty, error: "no repository files found from the traceback" });
         continue;
       }
       if (process.env.JR_RELATED_FILES !== "0") for (const r of await relatedFiles(src, files)) files.push({ ...r, related: true });
+      // RawSource also finds "x.py" at "src/x.py"; name every file by its real repository path, once.
+      for (const f of files) f.path = index?.resolve(f.path) ?? f.path;
+      for (let i = files.length - 1; i > 0; i--) if (files.findIndex((g) => g.path === files[i].path) < i) files.splice(i, 1);
       const t0 = Date.now();
-      const out = await runDiagnosis(ai, { exception_type: parsed.exception_type, message: parsed.message, transaction: null, frames }, files, false);
+      const out = await runDiagnosis(ai, { exception_type: parsed.exception_type, message: parsed.message, transaction: null, frames }, files, false, null, index);
       if ("error" in out) {
         results.push({ repo: c.repo, issue: c.issue_url, difficulty: c.difficulty, error: out.error });
         continue;
       }
+      files.push(...out.files_read);
       const s = score(c, files, out.result);
       const gate = codeChecks(out.result, files);
       results.push({
@@ -126,7 +133,9 @@ async function main() {
         issue: c.issue_url,
         fix: c.fix_url,
         difficulty: c.difficulty,
-        files_shown: files.map((f) => f.path),
+        files_shown: files.filter((f) => !out.files_read.includes(f)).map((f) => f.path),
+        lookups: out.lookups,
+        files_read: out.files_read.map((f) => f.path),
         fixed_files: c.fixed_files,
         named: `${out.result.file}:${out.result.line}`,
         file_hit: s.fileHit,
@@ -135,6 +144,7 @@ async function main() {
         gate_reasons: gate.reasons,
         confidence: out.result.confidence_words,
         cause_plain: out.result.cause_plain,
+        cause_technical: out.result.cause_technical,
         real_cause: c.cause_summary,
         seconds: Math.round((Date.now() - t0) / 1000),
         cost_usd: Number(out.cost.toFixed(4)),
@@ -165,13 +175,13 @@ async function main() {
     `Total cost $${cost.toFixed(2)} (about $${(cost / Math.max(1, done.length)).toFixed(3)} per diagnosis); median ${median(done.map((r) => r.seconds as number))} s per diagnosis.`,
     `Not diagnosed: ${results.length - done.length} (${results.filter((r) => !("file_hit" in r)).map((r) => `${r.repo}: ${r.error ?? r.skipped}`).join("; ") || "none"}).`,
     "",
-    "How it works: the traceback is parsed as the paste page parses it; up to 3 repository files from the traceback are read at the commit before the fix; one Claude call proposes the cause and an edit. The model never sees the real fix. 'Right lines' means the named line, or the text the edit replaces, is within 3 lines of a line the real fix changed. The fix-review step is skipped here to save cost.",
+    `How it works: the traceback is parsed as the paste page parses it; frames inside the repository's own packages count as app code; up to 3 repository files from the traceback (plus up to 2 files they import and use) are read at the commit before the fix; Claude proposes the cause and an edit${process.env.JR_DIAGNOSIS_LOOKUPS === "0" ? " in one call" : ", and may first look up definitions, assignments, search the code or read lines of the repository at that commit (at most 5 rounds)"}.`+"  The model never sees the real fix. 'Right lines' means the named line, or the text the edit replaces, is within 3 lines of a line the real fix changed. The fix-review step is skipped here to save cost.",
     "",
     "| Repository | Kind | Named | Right file | Right lines | Issue | Real fix |",
     "|---|---|---|---|---|---|---|",
     ...done.map((r) => `| ${r.repo} | ${r.difficulty === "in_trace" ? "in trace" : "elsewhere"} | \`${r.named}\` | ${r.file_hit ? "yes" : "no"} | ${r.line_hit ? "yes" : "no"} | [issue](${r.issue}) | [fix](${r.fix}) |`),
   ].join("\n");
-  const tag = (process.env.JR_RELATED_FILES === "0" ? "-no-related" : "") + (opt("difficulty") ? `-${opt("difficulty")}` : "");
+  const tag = (opt("tag") ? `-${opt("tag")}` : "") + (process.env.JR_RELATED_FILES === "0" ? "-no-related" : "") + (process.env.JR_DIAGNOSIS_LOOKUPS === "0" ? "-no-lookups" : "") + (opt("difficulty") ? `-${opt("difficulty")}` : "");
   writeFileSync(new URL(`../eval/results-real${tag}.json`, import.meta.url), JSON.stringify(results, null, 2));
   writeFileSync(new URL(`../eval/REAL-BUGS${tag}.md`, import.meta.url), `${summary}\n`);
   console.log(`\n${summary.split("\n").slice(4, 11).join("\n")}`);

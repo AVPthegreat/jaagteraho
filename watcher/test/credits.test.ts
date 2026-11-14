@@ -93,3 +93,12 @@ describe("decision budget for outside apps", () => {
     assert.ok(calls >= 5, "owner linked: Claude votes");
   });
 });
+
+describe("spend cap", () => {
+  it("charges a model missing from the price table at the highest price, never as free", () => {
+    const db = openDb(":memory:");
+    const guard = new SpendGuard(db, 40, 45);
+    const cost = guard.record("claude-sonnet-9-typo", "diagnosis", { input_tokens: 1_000_000, output_tokens: 0 });
+    assert.ok(cost >= 4, `charged ${cost}`);
+  });
+});

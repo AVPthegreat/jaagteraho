@@ -1,0 +1,236 @@
+[
+  {
+    "repo": "pallets/flask",
+    "issue": "https://github.com/pallets/flask/issues/5258",
+    "fix": "https://github.com/pallets/flask/pull/5264",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "flask/helpers.py",
+      "flask/globals.py"
+    ],
+    "fixed_files": [
+      "src/flask/app.py"
+    ],
+    "named": "flask/helpers.py:222",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Pages that build a link with a URL value named 'self' crashed. Flask passes that value on in a way that clashes with its own internal 'self', so the link could not be built.",
+    "real_cause": "Flask.url_for() declared self as an ordinary parameter, so a URL value named 'self' passed via **values collided with it; the fix makes self positional-only.",
+    "seconds": 10,
+    "cost_usd": 0.0225
+  },
+  {
+    "repo": "pallets/jinja",
+    "issue": "https://github.com/pallets/jinja/issues/1701",
+    "fix": "https://github.com/pallets/jinja/pull/1702",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "jinja2/nativetypes.py",
+      "jinja2/environment.py",
+      "jinja2/debug.py"
+    ],
+    "fixed_files": [
+      "src/jinja2/runtime.py"
+    ],
+    "named": "jinja2/nativetypes.py:35",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "guess",
+    "cause_plain": "Rendering a native-type template failed with a TypeError when the template produced several pieces and one was a number. The code tried to join the pieces as text without converting them first.",
+    "real_cause": "BlockReference.__call__/_async_call joined block output with the module-level str concat instead of environment.concat, so NativeEnvironment blocks returning non-strings failed.",
+    "seconds": 8,
+    "cost_usd": 0.028
+  },
+  {
+    "repo": "psf/requests",
+    "issue": "https://github.com/psf/requests/issues/6643",
+    "fix": "https://github.com/psf/requests/pull/6644",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "requests/adapters.py",
+      "requests/sessions.py",
+      "requests/api.py",
+      "requests/models.py",
+      "requests/cookies.py"
+    ],
+    "fixed_files": [
+      "src/requests/adapters.py"
+    ],
+    "named": "requests/adapters.py:534",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "When a request was made to a malformed web address (like one with a bad host or port), the app crashed with a raw low-level parsing error instead of a clear 'invalid URL' error. The bad address got through the earlier checks and only failed when the connection was opened.",
+    "real_cause": "HTTPAdapter.request_url() passed a path starting with '//' through unchanged, and urllib3 then parsed '//v:h' as a network location and failed; the fix collapses the leading slashes.",
+    "seconds": 11,
+    "cost_usd": 0.0682
+  },
+  {
+    "repo": "psf/black",
+    "issue": "https://github.com/psf/black/issues/5214",
+    "difficulty": "root_elsewhere",
+    "error": "no repository files found from the traceback"
+  },
+  {
+    "repo": "encode/httpx",
+    "issue": "https://github.com/encode/httpx/issues/309",
+    "fix": "https://github.com/encode/httpx/pull/310",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "httpx/dispatch/http11.py",
+      "httpx/concurrency/asyncio.py",
+      "httpx/dispatch/connection.py",
+      "httpx/config.py",
+      "httpx/models.py"
+    ],
+    "fixed_files": [
+      "httpx/middleware.py"
+    ],
+    "named": "httpx/client.py:202",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "A request went out whose declared body size (Content-Length header) was larger than the body actually sent, so the HTTP library refused to finish sending it. Users saw the request fail with a protocol error.",
+    "real_cause": "RedirectMiddleware.redirect_headers() kept Content-Length/Transfer-Encoding when a redirect switched the method to GET and dropped the body, so h11 saw too little data for the declared length.",
+    "seconds": 11,
+    "cost_usd": 0.0591
+  },
+  {
+    "repo": "psf/black",
+    "issue": "https://github.com/psf/black/issues/4062",
+    "fix": "https://github.com/psf/black/pull/4086",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/black/__init__.py",
+      "src/black/parsing.py",
+      "black/output.py",
+      "src/black/output.py"
+    ],
+    "fixed_files": [
+      "src/black/linegen.py"
+    ],
+    "named": "src/black/__init__.py:1447",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "Black reformatted a user's code into something Python can't read, so its own safety check refused to output it. The user got an internal error instead of formatted code.",
+    "real_cause": "left_hand_split() only checked for a missing opening bracket, not for empty tail leaves, so at line length 1 it produced a split that broke the code and failed the equivalence check.",
+    "seconds": 5,
+    "cost_usd": 0.0413
+  },
+  {
+    "repo": "fastapi/fastapi",
+    "issue": "https://github.com/fastapi/fastapi/issues/9424",
+    "fix": "https://github.com/fastapi/fastapi/pull/9425",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "fastapi/routing.py",
+      "fastapi/dependencies/utils.py",
+      "fastapi/datastructures.py"
+    ],
+    "fixed_files": [
+      "fastapi/dependencies/utils.py"
+    ],
+    "named": "fastapi/routing.py:477",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "The app fails to start (or load a route file) because an endpoint is declared with HTTP status 204 (No Content) but also appears to return data. 204 responses cannot carry a body, so the framework refuses to register the route.",
+    "real_cause": "get_typed_annotation() turned the string annotation 'None' (from postponed annotations) into NoneType rather than None, so the route was treated as having a response body and the 204 assertion failed.",
+    "seconds": 11,
+    "cost_usd": 0.0505
+  },
+  {
+    "repo": "marshmallow-code/marshmallow",
+    "issue": "https://github.com/marshmallow-code/marshmallow/issues/2868",
+    "fix": "https://github.com/marshmallow-code/marshmallow/pull/2894",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "marshmallow/schema.py",
+      "marshmallow/error_store.py"
+    ],
+    "fixed_files": [
+      "src/marshmallow/fields.py"
+    ],
+    "named": "marshmallow/schema.py:938",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "likely",
+    "cause_plain": "A request was rejected because a field named 'sentinel' was sent as null, and the schema does not allow null for that field. The code shown is working correctly; the sender or the field definition is the issue.",
+    "real_cause": "fields.Constant set load_default/dump_default after Field.__init__ had already computed allow_none from a missing default, so a None constant was rejected as null on load.",
+    "seconds": 4,
+    "cost_usd": 0.0209
+  },
+  {
+    "repo": "celery/celery",
+    "issue": "https://github.com/celery/celery/issues/6164",
+    "fix": "https://github.com/celery/celery/pull/10406",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "celery/backends/base.py",
+      "celery/backends/redis.py",
+      "celery/backends/asynchronous.py"
+    ],
+    "fixed_files": [
+      "celery/backends/base.py"
+    ],
+    "named": "celery/backends/base.py:753",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "A background cleanup step crashed while an old task-result object was being thrown away. It tried to build a Redis key for the task and hit a TypeError. This most likely happens while the app is shutting down. Nothing is shown about a user-facing failure.",
+    "real_cause": "BaseKeyValueStoreBackend._get_key_for() passed the task id straight to key_t(), so a uuid.UUID task id made the bytes join raise TypeError.",
+    "seconds": 9,
+    "cost_usd": 0.0395
+  },
+  {
+    "repo": "python-attrs/attrs",
+    "issue": "https://github.com/python-attrs/attrs/issues/1284",
+    "fix": "https://github.com/python-attrs/attrs/pull/1319",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "attr/_make.py",
+      "attr/_next_gen.py"
+    ],
+    "fixed_files": [
+      "src/attr/_make.py"
+    ],
+    "named": "attr/_make.py:317",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "Creating a class with the attrs `@define` decorator failed at startup. attrs generates Python source for the class's `__init__` and the generated text was not valid Python. The visible code does not show why.",
+    "real_cause": "_attrs_to_init_script() built the __attrs_pre_init__ call from kw_only argument strings that still included '=default', generating invalid code like a=attr_dict['a'].default=a=....",
+    "seconds": 11,
+    "cost_usd": 0.0457
+  }
+]

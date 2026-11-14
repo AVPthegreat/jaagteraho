@@ -153,3 +153,30 @@ describe("intake: performance traces", () => {
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM events").get() as { n: number }).n, 1);
   });
 });
+
+describe("masking stays fast on hostile input", () => {
+  it("masks a 1 MB message in milliseconds, not minutes", () => {
+    for (const s of ["a".repeat(1_000_000), "a-".repeat(500_000), `x@${"a".repeat(1_000_000)}`]) {
+      const t = performance.now();
+      mask(s);
+      assert.ok(performance.now() - t < 500, "masking took too long");
+    }
+    assert.equal(mask("write to riya.k@quizkart.in"), "write to [email]");
+  });
+});
+
+describe("ingest secret", () => {
+  it("stores an event as authenticated only when it carries the app's server secret", async () => {
+    const { db } = setup();
+    db.prepare("UPDATE projects SET ingest_secret = 'srv-secret-1' WHERE id = 42").run();
+    const app = intakeRoutes({ db });
+    const post = (id: string, headers: Record<string, string>) =>
+      app.request("/api/42/envelope/", { method: "POST", headers: { "content-type": "application/x-sentry-envelope", ...headers }, body: new Uint8Array(envelopeBytes(withId(id))) });
+    await post("a".repeat(32), { "x-sentry-auth": "Sentry sentry_key=abc123key, sentry_version=7" });
+    await post("b".repeat(32), { "x-sentry-auth": "Sentry sentry_key=abc123key, sentry_version=7, sentry_secret=srv-secret-1" });
+    await post("c".repeat(32), { "x-sentry-auth": "Sentry sentry_key=abc123key, sentry_version=7", "x-jr-ingest-secret": "srv-secret-1" });
+    await post("d".repeat(32), { "x-sentry-auth": "Sentry sentry_key=abc123key, sentry_version=7, sentry_secret=guess" });
+    const rows = db.prepare("SELECT event_id, authenticated FROM events ORDER BY event_id").all() as Array<{ event_id: string; authenticated: number }>;
+    assert.deepEqual(rows.map((r) => r.authenticated), [0, 1, 1, 0]);
+  });
+});

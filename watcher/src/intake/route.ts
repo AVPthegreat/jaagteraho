@@ -2,6 +2,7 @@
 // SENTRY_DSN points at JaagteRaho. Answers fast so the app never waits on us.
 
 import { Hono } from "hono";
+import { timingSafeEqual } from "node:crypto";
 import { brotliDecompressSync, gunzipSync, inflateSync } from "node:zlib";
 import type { DB, Project } from "../db/db.js";
 import { allowlistEvent } from "./allowlist.js";
@@ -30,6 +31,21 @@ function unpack(body: Buffer, encoding: string | undefined): Buffer {
   }
 }
 
+/**
+ * True only when the request carries the app's server-only ingest secret: the X-JR-Ingest-Secret
+ * header (Node: transportOptions.headers), or sentry_secret in X-Sentry-Auth (Python sends it when the
+ * DSN is written https://KEY:SECRET@host/ID). The public key alone proves nothing: it ships in browsers.
+ * Unauthenticated events still alert and get diagnosed; they can never make a fix apply itself.
+ */
+export function carriesSecret(secret: string | null | undefined, header: string | undefined, authHeader: string | undefined): boolean {
+  if (!secret) return false;
+  const given = header ?? authHeader?.match(/sentry_secret=([^,\s]+)/)?.[1];
+  if (!given) return false;
+  const a = Buffer.from(given);
+  const b = Buffer.from(secret);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 class RateLimiter {
   private windows = new Map<number, { start: number; count: number }>();
   allow(projectId: number, perMinute: number, nowMs: number): boolean {
@@ -46,13 +62,14 @@ class RateLimiter {
 export function intakeRoutes({ db, now = () => new Date(), onStored }: IntakeOptions) {
   const app = new Hono();
   const limiter = new RateLimiter();
-  const findProject = db.prepare("SELECT id, name, public_key, kind, rate_per_min FROM projects WHERE id = ?");
+  const findProject = db.prepare("SELECT id, name, public_key, kind, rate_per_min, ingest_secret FROM projects WHERE id = ?");
 
   const handler = async (c: import("hono").Context) => {
     const projectId = Number(c.req.param("projectId"));
     const key = sentryKey(c.req.header("x-sentry-auth"), c.req.query("sentry_key"));
     const project = Number.isInteger(projectId) ? (findProject.get(projectId) as Project | undefined) : undefined;
     if (!project || !key || key !== project.public_key) return c.json({ detail: "unknown project or key" }, 403);
+    const authenticated = carriesSecret((project as Project & { ingest_secret?: string | null }).ingest_secret, c.req.header("x-jr-ingest-secret"), c.req.header("x-sentry-auth"));
 
     const declared = Number(c.req.header("content-length") ?? 0);
     if (declared > MAX_BODY_BYTES) return c.json({ detail: "envelope too large" }, 413);
@@ -93,7 +110,7 @@ export function intakeRoutes({ db, now = () => new Date(), onStored }: IntakeOpt
       }
       const clean = allowlistEvent(raw, at);
       if (!clean) continue;
-      const result = storeEvent(db, project.id, clean, at);
+      const result = storeEvent(db, project.id, clean, at, authenticated);
       eventId = clean.event_id;
       if (result.stored) onStored?.(result.incidentId);
     }

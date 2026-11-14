@@ -1,18 +1,31 @@
 # JaagteRaho
 
-**An AI night watchman for a live app.** When your app breaks at 2 am, JaagteRaho decides whether it is worth waking you, tells you in plain words why it broke, and has a checked fix waiting for your approval.
+**Your app breaks at 2 am. If you don't wake up, JaagteRaho heals it.**
 
-Built for HackGlobal 2026 (Track 01, Agentic and GenAI apps) by Anant Vardhan Pandey, who runs [Faurus](https://faurus.app), a coding and exam platform used by colleges, alone.
+**You approve every fix, or let it heal on its own under rules you set.**
 
-- **Live demo:** _link added at deployment_ — break a demo exam portal and watch the whole loop
-- **Paste your error:** _link added at deployment_ — diagnose a Python or JavaScript error from your own public repository
-- **Connect your app:** _link added at deployment_ — one command, or `/new` in Telegram
-- **Evidence:** _link added at deployment_ — every number below, measured
+An AI on-call agent for people who run a live app alone. It reads every error from your app, wakes you only when real users are hurt, tells you the cause in plain words with the file and line, and writes a fix that must pass six code checks and a review. If you sleep through the wake-up and your rule allows it, the fix goes in on its own as a pull request that merges only behind your required checks; if the errors don't drop after your deploy, it is rolled back and you are woken again.
+
+**Measured on 13 Nov 2026, by scripts in this repository, mistakes included:** 20 of 20 planted bugs reached the owner · 0 wrong fixes among the 19 shown · 4 of 4 harmless errors kept quiet · 1.6 s median to a decision, 11.7 s to a checked fix · about $0.013 per error. [How each number was measured](#measured).
+
+- **Live demo:** _link added at deployment_. Break a demo exam portal (no sign-up) and watch the whole loop with a timer.
+- **Demo video (2:45):** _link added at submission_
+- **Paste your error:** _link added at deployment_. Diagnose a Python or JavaScript error from your own public repository.
+- **Connect your app:** _link added at deployment_. Run one command, or send `/new` in Telegram.
+- **Evidence:** _link added at deployment_. Every number below, with how it was measured.
 - **System design:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
-## The problem
+Built for HackGlobal 2026 (Track 01, Agentic and GenAI apps) by Anant Vardhan Pandey.
 
-Students and solo founders now run live products, but nobody watches them after launch. Faurus's server errors went to a log nobody read; if it failed during a live exam, I heard about it from a student. Error trackers collect errors, but one person still has to decide which ones matter, find the cause and fix it, usually at night.
+## Why: I am the person it wakes
+
+I run [Faurus](https://faurus.app), a coding and exam platform that colleges use. It has about 11,000 accounts and one engineer: me.
+
+Its server errors went to a log file nobody read. If something broke during a live exam at 2 am, I heard about it the next morning, from a student. By then the exam was over.
+
+Error trackers collect errors. They do not decide which one is worth waking a tired person for, find the cause or write the fix. For one person running a live product, that is the whole job, and it happens at night.
+
+Students, freelancers and solo founders now ship real products, often written with AI help, and nobody is on call for them after launch. JaagteRaho (Hindi for "stay awake", the night watchman's call) is the one who stays up.
 
 ## How a founder uses it
 
@@ -25,8 +38,20 @@ Students and solo founders now run live products, but nobody watches them after 
 2. **Sleep.** JaagteRaho wakes you (Telegram message plus a voice note in Hindi or English, repeated until you tap Acknowledge) only for what matters: a critical route failing during an exam, an outage, an error hitting many people. Everything else waits for the 08:00 summary.
    Where the owner has turned on phone calls (a Twilio account and their number in the settings), a wake also rings their phone: the call says which app and flow are failing, and pressing 1 acknowledges it like the Telegram button. It repeats with the Telegram pings, at most 3 call wakes a night per app.
 3. **Fix.** The alert says what broke for users, why, which file and line, which recent commit probably caused it, and shows a small fix that passed six code checks and a review. On the demo portal the fix is also proved by a test that fails before and passes after.
+4. **Or let it heal.** `/heal` sets your rule (also offered on the Connect page): `ask` (default: you approve every fix), `auto 10m` (heal if a wake-up is not acknowledged in 10 minutes), `now` (heal right away, optionally only on routes you name) or `off`. See [Self-healing](#self-healing).
 
-Every Telegram account gets $5 of free AI credit (about 500 diagnoses); deciding and alerting are always free. `/github` gives read-only access to a private repository. JaagteRaho never writes to your code: fixes arrive as diffs, and on the demo portal Approve opens a pull request that a person merges.
+Every Telegram account gets $5 of free AI credit (about 500 diagnoses); deciding and alerting are always free. `/github` gives read-only access to a private repository; self-healing needs write access you give separately (below).
+
+## Self-healing
+
+You approve every fix, or let it heal on its own under rules you set ([`heal.ts`](watcher/src/pipeline/heal.ts), tests in [`heal.test.ts`](watcher/test/heal.test.ts)).
+
+- **Only recommended fixes** heal on their own: all six code checks passed and, on a real app, every review vote agreed. A fix that adds an import, a network call, a process, a file write, dynamic code, decoding or a built-up URL never does. Never in login, sessions, tokens, admin and roles, payments, exams, grading, migrations, settings and config, CI or infrastructure (`HEAL_PROTECTED` and `riskyAdditions` in [`gate.ts`](watcher/src/pipeline/gate.ts)). On the demo portal the fix must also be proved by its own regression test.
+- **Only errors your server signs.** The DSN's public key ships in browsers, so it proves nothing. Self-healing acts only on incidents whose every error carried the app's server-only secret (`/heal` gives a `https://KEY:SECRET@…` DSN for Python, or an `x-jr-ingest-secret` header for Node). Other errors are still alerted and diagnosed.
+- **Caps:** at most 2 heals per app in 12 hours by default (`/heal max`, up to 5).
+- **How it goes in.** Demo portal: no code is written; the visitor's session switches to the portal's prebuilt fixed build and the failing request is sent again as proof. Your app: a pull request with GitHub auto-merge, turned on only when the branch requires status checks; otherwise the PR waits for you and the wake-up calls go on. This needs a write token set on the server by hand for now, bound to one repository (`JR_GITHUB_HEAL_TOKEN_<app id>` and `JR_GITHUB_HEAL_REPO_<app id>`); without it, a heal arrives as the ready-to-apply diff.
+- **Proved or undone.** It waits for the deploy (a newer release reporting in, or 10 minutes after the merge without release tags), then watches the error for 30 minutes, counting only signed errors from the new release. If at least 3 come back after 10 minutes or more and they are not down by half, a revert pull request goes in, you are woken again (once) and self-healing pauses for 12 hours.
+- **Told plainly.** "Healed while you were away": what broke, the cause, what changed, how it is being proved, and a one-tap Undo. Every step is in the incident's logbook.
 
 ## What happens to each error
 
@@ -49,24 +74,13 @@ flowchart LR
 
 ## Measured
 
-Every number is produced by a script in this repository. Measured 13 Nov 2026.
-
-**30 real bugs from 17 open-source Python projects** ([`watcher/eval`](watcher/eval)): tracebacks people posted on GitHub (requests, Flask, pip, pytest, Celery, black and others), scored against the lines the real, merged fix changed. JaagteRaho reads the code as it was before the fix and never sees the real fix.
-
-| | Result |
-|---|---|
-| Bug in a file from the traceback: right file | 20 of 20 (100%) |
-| Bug in a file from the traceback: right lines (±3) | 16 of 20 (80%) |
-| Cause outside the traceback: right file | 2 of 9 (22%); 3 of 9 when also shown the files the failing code imports and calls |
-| Cost per diagnosis | about $0.03 (these are large library files) |
-
-Our weak spot is a cause in a file the traceback never mentions, deep inside a large library.
+Every number is produced by a script in this repository. Measured 13 and 14 Nov 2026.
 
 **JR-Bench: 20 planted bugs and 4 noise errors in 7 sample apps** ([`bench`](bench)): six Python apps of 21 to 101 files and one Node.js app. Each bug is planted as if a commit introduced it and triggered for real; a hidden test JaagteRaho never sees judges the fix.
 
 | | Result |
 |---|---|
-| Real bugs that reached the owner | 20 of 20 |
+| Planted bugs that reached the owner | 20 of 20 |
 | Noise (dropped connection, favicon, bot scanner, planned restart) kept quiet | 4 of 4, at about $0.0005 each |
 | Exam-time bugs on a critical route that woke the owner | 3 of 3 |
 | Proposed fix works (hidden test passes) | 20 of 20 |
@@ -77,6 +91,15 @@ Our weak spot is a cause in a file the traceback never mentions, deep inside a l
 | Cost per error (decision + diagnosis + fix review) | about $0.013 |
 
 What the benchmark changed: the first fix gate showed a fix only when every review answer was clean, and held back 10 of 16 fixes that were in fact correct. The three-level gate shows 15 of the same 16, still with none wrong.
+
+**42 real bugs from 18 open-source Python projects** ([`watcher/eval`](watcher/eval)): tracebacks people posted on GitHub (requests, Flask, pip, pytest, Celery, black and others), scored against the lines the real, merged fix changed. JaagteRaho reads the code as it was before the fix and never sees the real fix. For 22 of them the fix is in code the traceback never shows; JaagteRaho then searches the repository itself (definitions, where a value is set, the error's text).
+
+| | Result |
+|---|---|
+| Bug in a file from the traceback: right file | 20 of 20 (100%) |
+| Bug in a file from the traceback: right lines (±3) | 17 of 20 (85%) |
+| Bug in code the traceback never shows: right file | 25 of 44 diagnoses (22 bugs, two runs each) |
+| Cost per diagnosis | about $0.045 (these are large library files) |
 
 **A real Node.js app:** an Express app connected with `npx jaagteraho init` (real `@sentry/node`); its `TypeError` was decided ("notify: blocks users"), diagnosed at `server.js:10` in plain words for $0.011, and a correct fix reached the gate.
 
@@ -102,7 +125,7 @@ What the benchmark changed: the first fix gate showed a fix only when every revi
 |---|---|
 | Secrets and personal data in errors | Only an allowlist of fields is kept: no request bodies, query strings, headers, cookies, user details, IP addresses or local variables. Emails, phone numbers, tokens and keys in what remains are masked. People are counted only through a one-way hash. Log drains: every line that is not part of a stack trace is dropped unread. |
 | Hidden instructions inside error text | The model has no tools; error text and commit messages are fenced as data; code picks the files and checks every edit; visitors can only press buttons. |
-| Write access to your code | None for real apps: fixes arrive as diffs, and the GitHub app is read-only. On the demo portal, the owner's Approve opens a pull request; merging is always done by a person. |
+| Write access to your code | Off unless you give it. The GitHub app is read-only. Self-healing a real app needs a write token bound to that one repository and errors signed with the app's server-only secret; a heal is then a pull request that merges by itself only behind the branch's required checks, and only recommended fixes outside protected areas with no risky code qualify, at most 2 a night, rolled back if the errors don't drop. On the demo portal, the owner's Approve opens a pull request a person merges. |
 | Running code | Outside apps' code is never run. On the demo portal only, the model's regression test runs in a throwaway copy after a strict check (no files, network, processes or environment). |
 | Runaway cost | Identical errors are grouped before any model call; per-app and daily caps; $5 free credit per account; Haiku-only after $40 and no model calls after $45. |
 
@@ -172,7 +195,7 @@ Send `/start <link code>` to your Telegram bot to receive alerts. Deployment: [d
 
 ## What we do not claim
 
-JaagteRaho is not the first tool to diagnose errors or propose fixes. It is tested end to end on Django and Flask with sentry-sdk 2.71.0 and on Express with @sentry/node 11.12, and its setup command on sample Django, Flask, FastAPI, Express and Next.js apps; Next.js and FastAPI have not been run end to end with a live error yet. Model vote shares are not calibrated probabilities. The benchmark apps are generated and small; the real-bug set is 30 cases. The accuracy figures above are what these runs measured, nothing more.
+JaagteRaho is not the first tool to diagnose errors or propose fixes. It is tested end to end on Django and Flask with sentry-sdk 2.71.0 and on Express with @sentry/node 11.12, and its setup command on sample Django, Flask, FastAPI, Express and Next.js apps; Next.js and FastAPI have not been run end to end with a live error yet. Model vote shares are not calibrated probabilities. The benchmark apps are generated and small; the real-bug set is 30 cases. The accuracy figures above are what these runs measured, nothing more. Self-healing runs for real on the demo portal; on a connected app it has been tested against a stand-in GitHub in the unit tests, not yet on a live repository.
 
 ## How this was built
 

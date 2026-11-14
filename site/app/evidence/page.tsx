@@ -61,12 +61,41 @@ function Table({ head, rows }: { head: string[]; rows: string[][] }) {
 
 function Benchmarks() {
   const real = benchmarks.real_bugs.before as Real;
-  const withImports = (benchmarks.real_bugs as { elsewhere_with_imports?: Part | null }).elsewhere_with_imports ?? null;
   const b = benchmarks.jr_bench.after as Bench;
   const history = (benchmarks as { gate_history?: { one_level: Bench; three_level: Bench } }).gate_history;
   if (!real && !b) return null;
   return (
     <>
+      {b && (
+        <>
+          <h3 style={{ marginTop: 40 }}>JR-Bench: planted bugs in 7 sample apps</h3>
+          <div className="prose muted">
+            <p>
+              Seven generated apps of different sizes (21 to 101 files; six in Python, one in Node.js). Each bug is planted as if a commit
+              introduced it and triggered for real. JaagteRaho decides, explains and proposes a fix; a hidden test it never sees judges whether the
+              fix works. Four noise errors (a dropped connection, a missing favicon, a bot scanner, a planned restart) check that it stays quiet.
+            </p>
+          </div>
+          <Table
+            head={["Measure", "Result"]}
+            rows={[
+              ["Planted bugs that reached the owner", frac(b.alerted, b.bugs)],
+              ["Noise kept quiet", frac(b.noise_quiet, b.noise)],
+              ["Bugs on a critical route during an exam that woke the owner", frac(b.exam_woke, b.exam_cases)],
+              ["Right file", frac(b.right_file, b.bugs)],
+              ["Proposed fix works (hidden test passes)", frac(b.fix_works, b.bugs)],
+              ["Fixes shown to the owner", b.caution !== undefined ? `${b.shown} of ${b.bugs}: ${b.recommended} recommended, ${b.caution} "use with care"` : `${b.shown} of ${b.bugs}`],
+              ["Fixes shown to the owner that were wrong", `${b.shown_wrong} of ${b.shown} shown`],
+              ["Working fixes the safety gate held back", String(b.withheld_working)],
+              ...(history?.one_level && history?.three_level
+                ? [["Working fixes shown, same 16 Python bugs: first gate → three-level gate", `${history.one_level.shown} → ${history.three_level.shown} of 16`]]
+                : []),
+              ["Median seconds: decision / fix ready", `${b.median_decision_seconds ?? "-"} / ${b.median_fix_seconds ?? "-"}`],
+              ["Cost per error (decision, diagnosis, fix review)", `$${b.cost_per_error_usd.toFixed(4)}`],
+            ]}
+          />
+        </>
+      )}
       {real && (
         <>
           <h3 style={{ marginTop: 40 }}>On 30 real bugs from open-source projects</h3>
@@ -82,44 +111,8 @@ function Benchmarks() {
             rows={[
               ["Bug in a file from the traceback: right file", frac(real.in_trace.right_file, real.in_trace.cases)],
               ["Bug in a file from the traceback: right lines (±3)", frac(real.in_trace.right_lines, real.in_trace.cases)],
-              ["Cause outside the traceback: right file", frac(real.elsewhere.right_file, real.elsewhere.cases)],
-              ...(withImports ? [["Same, also showing the files the failing code imports and calls", frac(withImports.right_file, withImports.cases)]] : []),
               ["All cases: right file", frac(real.all.right_file, real.all.cases)],
               ["Cost of the whole run", `$${real.cost_usd.toFixed(2)}`],
-            ]}
-          />
-          <p className="muted" style={{ fontSize: 14 }}>
-            Our weak spot: a cause in a file the traceback never mentions, deep inside a large library. Small apps, which is what JaagteRaho is
-            for, do better (below).
-          </p>
-        </>
-      )}
-      {b && (
-        <>
-          <h3 style={{ marginTop: 40 }}>JR-Bench: planted bugs in 7 sample apps</h3>
-          <div className="prose muted">
-            <p>
-              Seven generated apps of different sizes (21 to 101 files; six in Python, one in Node.js). Each bug is planted as if a commit
-              introduced it and triggered for real. JaagteRaho decides, explains and proposes a fix; a hidden test it never sees judges whether the
-              fix works. Four noise errors (a dropped connection, a missing favicon, a bot scanner, a planned restart) check that it stays quiet.
-            </p>
-          </div>
-          <Table
-            head={["Measure", "Result"]}
-            rows={[
-              ["Real bugs that reached the owner", frac(b.alerted, b.bugs)],
-              ["Noise kept quiet", frac(b.noise_quiet, b.noise)],
-              ["Bugs on a critical route during an exam that woke the owner", frac(b.exam_woke, b.exam_cases)],
-              ["Right file", frac(b.right_file, b.bugs)],
-              ["Proposed fix works (hidden test passes)", frac(b.fix_works, b.bugs)],
-              ["Fixes shown to the owner", b.caution !== undefined ? `${b.shown} of ${b.bugs}: ${b.recommended} recommended, ${b.caution} "use with care"` : `${b.shown} of ${b.bugs}`],
-              ["Fixes shown to the owner that were wrong", `${b.shown_wrong} of ${b.shown} shown`],
-              ["Working fixes the safety gate held back", String(b.withheld_working)],
-              ...(history?.one_level && history?.three_level
-                ? [["Working fixes shown, same 16 Python bugs: first gate → three-level gate", `${history.one_level.shown} → ${history.three_level.shown} of 16`]]
-                : []),
-              ["Median seconds: decision / fix ready", `${b.median_decision_seconds ?? "-"} / ${b.median_fix_seconds ?? "-"}`],
-              ["Cost per error (decision, diagnosis, fix review)", `$${b.cost_per_error_usd.toFixed(4)}`],
             ]}
           />
         </>
