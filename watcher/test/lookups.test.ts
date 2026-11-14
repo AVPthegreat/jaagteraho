@@ -98,6 +98,18 @@ describe("lookups", () => {
   });
 });
 
+describe("compact file view", () => {
+  it("shows the whole reported function in a long file, not 80 lines either side", async () => {
+    const { numbered } = await import("../src/pipeline/diagnose.js");
+    const body = Array.from({ length: 60 }, (_, i) => `    x${i} = ${i}`).join("\n");
+    const text = `${"# pad\n".repeat(300)}def f():\n${body}\n${"# tail\n".repeat(300)}`;
+    const out = numbered(text, [340], undefined, undefined, undefined, true);
+    assert.match(out, /301\| def f\(\):/);
+    assert.match(out, /361\| {5}x59 = 59/);
+    assert.doesNotMatch(out, /\b420\|/);
+  });
+});
+
 describe("repository map", () => {
   it("points at called functions defined elsewhere and at the error's text, not at tests", () => {
     const ix = new RepoIndex(
@@ -178,12 +190,14 @@ describe("diagnosis with lookups", () => {
     db.close();
   });
 
-  it("stops after two rounds of lookups", async () => {
-    const { ai, reqs } = fake(["tool", "tool", "tool", "tool"]);
+  it("stops after three rounds of lookups and asks for the answer", async () => {
+    const { ai, reqs } = fake(["tool", "tool", "tool", "tool", "tool"]);
     const out = await runDiagnosis(ai, event, shown, false, null, repo());
     assert.ok(!("error" in out), JSON.stringify(out));
-    assert.equal(reqs.length, 3);
-    assert.equal(reqs[2].tool_choice?.type, "none");
+    assert.equal(reqs.length, 4);
+    assert.equal(reqs[3].tool_choice?.type, "none");
+    assert.match(JSON.stringify(reqs[3].messages.at(-1)), /No more lookups/);
+    assert.doesNotMatch(JSON.stringify(reqs[2].messages.at(-1)), /No more lookups/);
   });
 
   it("offers no tools without a repository index", async () => {

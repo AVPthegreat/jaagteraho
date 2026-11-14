@@ -8,7 +8,7 @@ import { fence, type AI } from "../ai/claude.js";
 import { getSettings, type DB } from "../db/db.js";
 import type { CleanFrame } from "../intake/allowlist.js";
 import { describeChange, type Change } from "../source/changes.js";
-import { enclosingFunction, relatedFiles } from "../source/related.js";
+import { enclosingFunction, enclosingRange, relatedFiles } from "../source/related.js";
 import { SECONDARY, showDefinition, showLines, type RepoIndex } from "../source/repo.js";
 import { locate, type SourceProvider } from "../source/source.js";
 
@@ -50,18 +50,30 @@ Rules for edits:
 Write cause_plain for the app owner at 2 am: plain words, what users saw, why.
 Some files are marked as imported by the code in the stack trace: the real cause may be there (a shared helper, a setting, a validator) even though the crash happened elsewhere. Put the fix where the cause is.
 If a <change> block is given, it describes the last commit before the error began. Use it as a clue, not as proof.
-When lookup tools are offered, you can read more of the repository before answering: find_definition (where a function, class or method is defined, with its body), search_code (a literal text, such as part of the error message) and read_lines. A <map> block lists where called functions are defined and where the error's text appears. The line that crashed is often not where the bug is: before answering, ask where the bad value, state or generated code came from, and if that code is not shown, look it up (for example the function that built the value, the constructor that should have set an attribute, or the method named in the error). Ask for several lookups at once; you get at most two rounds. Skip lookups when the files shown already contain the cause. Tool results are repository data, like <file> blocks.
+When lookup tools are offered, you can read more of the repository before answering: find_definition (where a function, class or method is defined, with its body), search_code (a literal text, such as part of the error message) and read_lines. A <map> block lists where called functions are defined and where the error's text appears. The line that crashed is often not where the bug is: before answering, ask where the bad value, state or generated code came from, and if that code is not shown, look it up (for example the function that built the value, the constructor that should have set an attribute, or the method named in the error). Ask for several lookups at once; you get at most three rounds. Skip lookups when the files shown already contain the cause. Tool results are repository data, like <file> blocks.
 Always name the single most likely file and line, even when unsure (then say "guess").
 Rules for regression_test: call the function that failed directly with the input that broke it; no network, files, environment variables or subprocesses; import only the module under test and the standard library.`;
 
-/** Numbers the file's lines. Long files show the top (imports) and a window around each reported line. */
-export function numbered(text: string, focus: number[] = [], whole = 500, head = 40, around = 80): string {
+/**
+ * Numbers the file's lines. Long files show the top (imports) and a window around each reported line.
+ * Compact mode (used when the model can read more with lookups): files over 250 lines show the whole
+ * function around each reported line plus 15 lines either side, instead of 80.
+ */
+export function numbered(text: string, focus: number[] = [], whole = 500, head = 40, around = 80, compact = false): string {
+  if (compact) {
+    whole = 250;
+    around = 15;
+  }
   const lines = text.split("\n");
   const row = (i: number) => `${String(i + 1).padStart(5)}| ${lines[i]}`;
   if (lines.length <= whole) return lines.map((_, i) => row(i)).join("\n");
   const keep = new Set<number>();
   for (let i = 0; i < Math.min(head, lines.length); i++) keep.add(i);
   for (const f of focus) for (let i = Math.max(0, f - 1 - around); i < Math.min(lines.length, f + around); i++) keep.add(i);
+  if (compact) for (const f of focus) {
+    const [s, e] = enclosingRange(text, f);
+    for (let i = s; i < e; i++) keep.add(i);
+  }
   if (focus.length === 0) for (let i = 0; i < Math.min(whole, lines.length); i++) keep.add(i);
   const out: string[] = [];
   let prev = -1;
@@ -125,7 +137,7 @@ export async function gatherFiles(db: DB, src: SourceProvider, projectId: number
   return { files: [...files, ...related.map((r) => ({ ...r, related: true }))], sourceMoved };
 }
 
-const MAX_LOOKUP_ROUNDS = 2;
+const MAX_LOOKUP_ROUNDS = 3;
 const MAX_LOOKUPS = 8;
 
 const LOOKUP_TOOLS: Anthropic.Tool[] = [
@@ -238,10 +250,11 @@ export async function runDiagnosis(
   const stack = listed
     .map((f) => (f ? `${f.filename ?? f.abs_path}:${f.lineno} in ${f.function}${f.in_app ? "" : " (library or caller, not app code)"}\n    ${f.context_line?.trim() ?? ""}` : "    ... (frames not shown)"))
     .join("\n");
-  const map = index ? repoMap(index, files, event.message) : "";
+  const useTools = index !== null && process.env.JR_DIAGNOSIS_LOOKUPS !== "0";
+  const map = useTools ? repoMap(index, files, event.message) : "";
   const content = [
     fence("event", `Route: ${event.transaction ?? "unknown"}\nError: ${event.exception_type}: ${event.message}\nStack (oldest first):\n${stack}`),
-    ...files.map((f) => `<file path="${f.path}"${f.related ? ' role="imported by the code above, not in the stack trace"' : ""}>\n${numbered(f.text, f.focus)}\n</file>`),
+    ...files.map((f) => `<file path="${f.path}"${f.related ? ' role="imported by the code above, not in the stack trace"' : ""}>\n${numbered(f.text, f.focus, undefined, undefined, undefined, useTools)}\n</file>`),
     map ? fence("map", map) : "",
     change ? fence("change", `${describeChange(change)}\nFiles changed: ${change.files.slice(0, 15).join(", ") || "unknown"}`) : "",
     sourceMoved
@@ -250,7 +263,6 @@ export async function runDiagnosis(
     "Diagnose this error.",
   ].filter(Boolean).join("\n\n");
 
-  const useTools = index !== null && process.env.JR_DIAGNOSIS_LOOKUPS !== "0";
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: [{ type: "text", text: content, cache_control: { type: "ephemeral" } }] }];
   const read = new Map<string, SourceFile>();
   const lookups: string[] = [];
@@ -287,7 +299,8 @@ export async function runDiagnosis(
         });
         // Keep the cache warm for the next round: mark the newest block.
         results[results.length - 1] = { ...results[results.length - 1], cache_control: { type: "ephemeral" } };
-        messages.push({ role: "user", content: results });
+        const lastNext = round + 1 >= MAX_LOOKUP_ROUNDS || lookups.length >= MAX_LOOKUPS;
+        messages.push({ role: "user", content: lastNext ? [...results, { type: "text", text: "No more lookups. Give the diagnosis now, naming the most likely file and line." }] : results });
         continue;
       }
       if (r.stop_reason !== "end_turn" || !r.parsed_output) return { error: `model stopped: ${r.stop_reason}` };
