@@ -25,7 +25,7 @@ JaagteRaho is a watchman for a live app. The app's existing Sentry SDK sends its
 
 **Hard rules from the parliament (non-negotiable):**
 
-1. The watchman never merges, deploys, restarts or rolls back anything. On our own sandbox repository, the owner's Approve tap opens a pull request on a new branch; a person merges it on GitHub. (Changed on 13 Nov from "Approve merges": merging into the sandbox's main branch would remove the planted faults and break the demo for the next visitor.)
+1. The watchman never merges, deploys, restarts or rolls back anything. On our own sandbox repository, the owner's Approve tap opens a pull request on a new branch; a person merges it on GitHub. (Changed on 13 Nov from "Approve merges": merging into the sandbox's main branch would remove the planted faults and break the demo for the next visitor.) **Changed on 14 Nov (the founder): self-healing.** The owner may set a heal rule (`/heal`). Under it, a recommended fix outside protected areas goes in without a tap: on the demo portal by switching the visitor's session to the fixed build; on a real app only through a pull request with GitHub auto-merge, using a write token the owner gave for that one repository. A heal that does not bring the errors down is reverted automatically. See `watcher/src/pipeline/heal.ts`.
 2. No write credential for any Faurus repository or server exists anywhere in this system.
 3. Models give signals; code decides. No model answer can lower an alert.
 4. Text that users can influence is data, never instructions. The model has no tools.

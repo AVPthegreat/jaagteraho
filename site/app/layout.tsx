@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")),
   title: "JaagteRaho: an AI on-call agent that stays awake for your live app",
   description:
-    "Your app breaks at 2 am. JaagteRaho stays awake for you: an AI agent that reads every error, wakes you only when real users are hurt, explains the cause with file and line, and has a checked fix waiting for your approval. 20 of 20 planted bugs caught, 0 wrong fixes shown.",
+    "Your app breaks at 2 am. If you don't wake up, JaagteRaho heals it: an AI agent that reads every error, wakes you only when real users are hurt, explains the cause with file and line, and writes a checked fix. You approve every fix, or let it heal on its own under rules you set. 20 of 20 planted bugs caught, 0 wrong fixes shown.",
 };
 
 export const viewport: Viewport = { themeColor: "#0e1626", viewportFit: "cover" };

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { WATCHER } from "../watcher";
 
-type Result = { project: string; dsn: string; logs_url?: string; telegram: string | null; link_code: string };
+type Result = { project: string; dsn: string; logs_url?: string; telegram: string | null; link_code: string; heal?: "ask" | "auto-after" };
 
 function session(): string {
   try {
@@ -54,7 +54,7 @@ export function ConnectForm() {
       const res = await fetch(`${WATCHER}/public/connect`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ session: session(), name: form.get("name"), repo: form.get("repo"), consent: form.get("consent") === "on" }),
+        body: JSON.stringify({ session: session(), name: form.get("name"), repo: form.get("repo"), consent: form.get("consent") === "on", heal: form.get("heal") }),
       });
       const body = await res.json();
       if (!res.ok) setError(body.error ?? "Something went wrong.");
@@ -123,7 +123,14 @@ export function ConnectForm() {
           <p className="muted" style={{ margin: 0, fontSize: 14 }}>
             On Telegram: <code className="mono">/critical /api/checkout checkout</code> marks a route that must always reach you,{" "}
             <code className="mono">/learn 2h</code> logs old errors quietly while you settle in, and <code className="mono">/github</code> gives
-            read-only access to a private repository. Fixes arrive as diffs: JaagteRaho never writes to your code.
+            read-only access to a private repository.
+          </p>
+          <p className="muted" style={{ margin: 0, fontSize: 14 }}>
+            <b>Your heal rule:</b>{" "}
+            {result.heal === "auto-after"
+              ? "heal on its own if a wake-up is not acknowledged in 10 minutes. Until write access to your repository is set up, a heal arrives as a ready-to-apply diff and the calls go on."
+              : "you approve every fix."}{" "}
+            Change it any time with <code className="mono">/heal</code>.
           </p>
         </div>
       </div>
@@ -140,6 +147,22 @@ export function ConnectForm() {
         Its public GitHub repository <span className="muted" style={{ fontWeight: 400 }}>(optional: lets it read the code to explain causes)</span>
       </label>
       <input id="repo" name="repo" type="url" placeholder="https://github.com/you/your-app" style={input} />
+      <fieldset style={{ border: 0, padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+        <legend style={{ fontWeight: 700, marginBottom: 8 }}>If a wake-up goes unanswered</legend>
+        <label htmlFor="heal-ask" style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
+          <input id="heal-ask" name="heal" type="radio" value="ask" defaultChecked style={{ width: 20, height: 20, marginTop: 2, accentColor: "var(--lantern)" }} />
+          <span style={{ fontSize: 14 }}>
+            <b>Wait for me.</b> I approve every fix.
+          </span>
+        </label>
+        <label htmlFor="heal-auto" style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
+          <input id="heal-auto" name="heal" type="radio" value="auto-after" style={{ width: 20, height: 20, marginTop: 2, accentColor: "var(--lantern)" }} />
+          <span style={{ fontSize: 14 }}>
+            <b>Heal on its own after 10 minutes.</b> Only fully checked fixes, never in login, payments or settings, at most 2 a night, rolled
+            back and you are woken again if the errors don&apos;t drop. Needs write access to your repository; without it you get the diff.
+          </span>
+        </label>
+      </fieldset>
       <label htmlFor="consent" style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
         <input id="consent" name="consent" type="checkbox" required style={{ width: 20, height: 20, marginTop: 2, accentColor: "var(--lantern)" }} />
         <span style={{ fontSize: 14 }}>

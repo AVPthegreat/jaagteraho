@@ -72,10 +72,10 @@ export default async function Home() {
       <section className="hero" aria-labelledby="hero-h">
         <div className="hero-text">
           <p className="eyebrow">An AI on-call agent for apps with nobody on call</p>
-          <h1 id="hero-h">Your app breaks at 2 am. JaagteRaho stays awake for you.</h1>
+          <h1 id="hero-h">Your app breaks at 2 am. If you don&apos;t wake up, JaagteRaho heals it.</h1>
           <p className="lede">
             An AI agent that reads every error from your live app, wakes you only when real users are hurt, tells you the cause with the file and
-            line, and has a checked fix waiting for your approval. It never changes your code on its own.
+            line, and writes a fix that must pass six code checks and a review. <b>You approve every fix, or let it heal on its own under rules you set.</b>
           </p>
           <div className="actions">
             <a className="btn" href="#demo">
@@ -107,12 +107,16 @@ export default async function Home() {
               <code className="mono">portal/submissions.py:14</code> · likely
             </p>
             <p className="gap">
-              <b>Fix:</b> ready · all checks passed · AI-written · waiting for you
+              <b>Fix:</b> ready · all checks passed · proved by a test · AI-written
+            </p>
+            <p>
+              <b>Your rule:</b> heal on its own if nobody acknowledges in 10 min
             </p>
           </div>
           <div className="tg-btns" aria-hidden="true">
             <span>Why?</span>
             <span>Show fix</span>
+            <span>Approve fix</span>
             <span>Acknowledge</span>
           </div>
           <p className="muted small">
@@ -185,7 +189,7 @@ export default async function Home() {
           </li>
           <li>
             <b>Fix</b>
-            <span>the change and its checks{at(ev?.median_seconds.fix)}. If every check passed, Approve makes the same button work again</span>
+            <span>the change and its checks{at(ev?.median_seconds.fix)}. If every check passed and its test proved it, it heals on its own (or waits for your Approve, if you turn that off) and the same button works again</span>
           </li>
         </ol>
         <BreakIt country={country && /^[A-Z]{2}$/.test(country) ? country : null} />
@@ -225,8 +229,8 @@ export default async function Home() {
               <span>the cause in plain words, with the file and line</span>
             </li>
             <li>
-              <b>Waits</b>
-              <span>with a checked fix that only you can approve</span>
+              <b>Heals</b>
+              <span>with a checked fix you approve, or on its own under rules you set</span>
             </li>
           </ul>
         </div>
@@ -262,10 +266,11 @@ export default async function Home() {
           </li>
           <li>
             <Icon name="check" />
-            <b>4 · A checked fix waits for you</b>
+            <b>4 · A checked fix: you approve it, or it heals</b>
             <span>
               A small fix must pass 6 code checks (it applies cleanly, stays small, avoids login, payment and grading code, adds no packages or
-              links, is still valid code) and a second Claude review. You approve it and apply it yourself.
+              links, is still valid code) and a second Claude review. Then your rule decides: you approve it, or, if you sleep through the wake-up,
+              it goes in on its own as a pull request your own checks must pass. If the errors don&apos;t drop, it is undone and you are woken again.
             </span>
           </li>
         </ol>
@@ -399,23 +404,33 @@ export default async function Home() {
         </div>
 
         <h3 id="safety-h" style={{ marginTop: 16 }}>
-          Safety: what it will never do
+          Safety: you approve every fix, or it heals under rules you set
         </h3>
         <ul className="safety" aria-labelledby="safety-h">
           <li>
-            <b>Never writes your code.</b> Fixes arrive as a diff. You apply and deploy them yourself.
+            <b>Your rule.</b> Approve every fix yourself (the default), let it heal if a wake-up goes unanswered for 10 minutes, or heal right away.
+            Set it with <code className="mono">/heal</code> on Telegram or when you connect.
           </li>
           <li>
-            <b>Read-only access.</b> It reads only the files an error points to. Its GitHub app cannot write.
+            <b>Only fully checked fixes heal on their own.</b> All six code checks and the review must pass. Login, payments, grading, migrations,
+            settings and CI are never touched. At most 2 heals a night unless you change it.
+          </li>
+          <li>
+            <b>Through your own checks, with write access you choose to give.</b> On your app a heal is a pull request with GitHub auto-merge, so
+            your tests still decide. Without write access you get the ready-to-apply diff and it keeps calling you.
+          </li>
+          <li>
+            <b>Proved, or undone.</b> If the error does not drop after a heal, it rolls the fix back, wakes you again and stops healing for 12
+            hours. Every heal comes with one-tap Undo.
+          </li>
+          <li>
+            <b>Reads only what it needs.</b> Just the files an error points to. Its GitHub app is read-only.
           </li>
           <li>
             <b>Personal data masked.</b> No request bodies, cookies, headers or IP addresses are kept. Emails, phone numbers and keys are masked.
           </li>
           <li>
             <b>Spend caps.</b> Repeats are grouped before any AI call, each app has daily limits, and total spend has a hard cap.
-          </li>
-          <li>
-            <b>A person approves every fix.</b> A fix that touches login, payments or grading is never offered at all.
           </li>
         </ul>
         <p className="muted small">
