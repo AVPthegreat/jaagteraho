@@ -1,0 +1,43 @@
+--- a/portal/submissions.py
++++ b/portal/submissions.py
+@@ -11,6 +11,8 @@
+     code = data.get("code", "")
+     if not code.strip():
+         return {"ok": False, "error": "Write some code before submitting"}
+-    language = data["language"]
+-    runner = RUNNERS[language]
++    language = data.get("language")
++    runner = RUNNERS.get(language)
++    if runner is None:
++        return {"ok": False, "error": "Choose a supported language (python, cpp or java) before submitting"}
+     return {"ok": True, "runner": runner, "queued": True, "bytes": len(code)}
+--- a/portal/exams.py
++++ b/portal/exams.py
+@@ -1,6 +1,6 @@
+ """Opens an exam for a student when its start time has passed."""
+ 
+-from datetime import datetime, timedelta
++from datetime import timedelta
+ 
+ from django.utils import timezone
+ 
+@@ -12,7 +12,7 @@
+ 
+ def exam_start_time():
+     # The exam opens at the top of the current hour, India time.
+-    now = datetime.now()
++    now = timezone.localtime()
+     return now.replace(minute=0, second=0, microsecond=0)
+ 
+ 
+--- a/portal/payments.py
++++ b/portal/payments.py
+@@ -4,6 +4,8 @@
+ 
+ 
+ def fee_after_coupons(coupons):
++    if not coupons:
++        return {"ok": True, "fee": BASE_FEE, "currency": "INR"}
+     total_discount = sum(c["amount"] for c in coupons)
+     average_discount = total_discount / len(coupons)
+     discount = min(total_discount, average_discount * 2)
