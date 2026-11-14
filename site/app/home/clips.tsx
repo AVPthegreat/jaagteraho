@@ -32,7 +32,7 @@ export function Clips() {
   const box = useRef<HTMLDivElement | null>(null);
   const video = useRef<HTMLVideoElement | null>(null);
   const [t, setT] = useState(0);
-  const [dur, setDur] = useState(31);
+  const [dur, setDur] = useState(46);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
   const [still, setStill] = useState(false);

@@ -1305,3 +1305,15 @@
   color: var(--text);
   margin-right: 4px;
 }
+
+@media (min-width: 980px) {
+  .film-steps {
+    gap: 4px;
+  }
+  .film-steps button {
+    padding: 8px 12px;
+  }
+  .fs-t {
+    font-size: 0.9rem;
+  }
+}
