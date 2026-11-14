@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Diff } from "./ui/alert-card";
+import { isObj, liveFeed } from "./live";
 import { WATCHER } from "./watcher";
 
 type Flow = "submit" | "exam" | "pay";
@@ -71,12 +72,10 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
   // Live feed for this visitor's session.
   useEffect(() => {
     if (!session) return;
-    const es = new EventSource(`${WATCHER}/public/feed/${session}`);
-    const push = (msg: MessageEvent) => {
-      // The browser fires its own "error" event (no data) when the connection drops or the watcher is down;
-      // it shares a name with our "error" feed event, so skip anything that carries no data.
-      if (typeof msg.data !== "string" || msg.data === "") return;
-      const ev = JSON.parse(msg.data) as FeedEvent;
+    // liveFeed reconnects by itself (with backoff) if the watcher restarts, and drops bad JSON.
+    const push = (raw: unknown) => {
+      if (!isObj(raw) || typeof raw.type !== "string" || !isObj(raw.data)) return;
+      const ev = raw as unknown as FeedEvent;
       const t = startedRef.current ? (Date.now() - startedRef.current) / 1000 : 0;
       if (ev.type === "fixed" || ev.type === "heal") setStopped(Date.now());
       if (ev.type === "fix" && !(ev.data.status !== "rejected" && ev.data.level === "recommended" && healRef.current)) setStopped(Date.now());
@@ -85,8 +84,9 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
       if (ev.type === "fixed") return;
       setEntries((list) => [...list, { key: `${ev.type}-${ev.at}-${list.length}`, t, ev }]);
     };
-    for (const type of ["error", "decision", "voice", "cause", "fix", "fixed", "heal"]) es.addEventListener(type, push);
-    return () => es.close();
+    const handlers: Record<string, (d: unknown) => void> = {};
+    for (const type of ["error", "decision", "voice", "cause", "fix", "fixed", "heal"]) handlers[type] = push;
+    return liveFeed(`${WATCHER}/public/feed/${session}`, handlers);
   }, [session]);
 
   useEffect(() => {
@@ -117,8 +117,8 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ session, flow: f, exam, country, heal }),
         });
-        const body = (await res.json()) as { error?: string; build?: string; status?: number; result?: { ok?: boolean; error?: string } };
-        if (!res.ok) setNote(body.error ?? "Something went wrong.");
+        const body = ((await res.json().catch(() => ({}))) ?? {}) as { error?: string; build?: string; status?: number; result?: { ok?: boolean; error?: string } };
+        if (!res.ok) setNote(body.error ?? (res.status >= 500 ? "The live server is restarting. Try again in a few seconds." : "Something went wrong."));
         else if (body.build === "fixed") {
           setNote(
             body.status && body.status < 500

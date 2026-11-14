@@ -47,6 +47,7 @@ export function Clips({ clips }: { clips: Clip[] }) {
   const strip = useRef<HTMLOListElement | null>(null);
   const seekTo = useRef<number | null>(null);
   const [idx, setIdx] = useState(0);
+  const fails = useRef(0);
   const [cur, setCur] = useState(0);
   const [durs, setDurs] = useState<number[]>(() => clips.map((c) => FILES[c.id]?.secs ?? 10));
   const [muted, setMuted] = useState(true);
@@ -213,14 +214,26 @@ export function Clips({ clips }: { clips: Clip[] }) {
               width={tall ? 720 : 1280}
               height={tall ? 1280 : 720}
               aria-label={`Step ${idx + 1} of ${n}: ${clip.title}. ${clip.caption}`}
-              onLoadedMetadata={onMeta}
+              onLoadedMetadata={() => {
+                fails.current = 0;
+                onMeta();
+              }}
               onEnded={() => go(idx + 1)}
               onTimeUpdate={(e) => {
                 if (!shouldPlay) setCur(e.currentTarget.currentTime);
               }}
             >
               <source src={`/clips/${src}.webm`} type="video/webm" />
-              <source src={`/clips/${src}.mp4`} type="video/mp4" />
+              <source
+                src={`/clips/${src}.mp4`}
+                type="video/mp4"
+                onError={() => {
+                  // Both files failed (offline, or a deploy in progress): keep the poster, try the next clip
+                  // after a pause, and stop advancing after a full round of failures.
+                  fails.current += 1;
+                  if (fails.current < n) setTimeout(() => go(idx + 1), 4000);
+                }}
+              />
             </video>
             {anySound && muted && (
               <button type="button" className="pl-sound-cta" onClick={() => setMuted(false)}>
