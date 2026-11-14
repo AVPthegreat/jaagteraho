@@ -178,7 +178,7 @@ The message is not in the fingerprint, because it often contains changing values
 
 ### 4.5 Decision layer
 
-**Facts code knows (no model):** critical flow (route matches the project's critical patterns), exam window open, owner away, hits in the last 10 minutes, new or reopened, learn mode on.
+**Facts code knows (no model):** critical flow (route matches the project's critical patterns), exam window open, owner away, hits in the last 10 minutes, new or reopened, learn mode on, a startup failure (no route, boot-time error; `startupFailure` in decide.ts), a release first seen in the last 30 minutes.
 
 **Questions to Claude Haiku**, answered five times each with a JSON schema. For each question the majority answer counts; the vote share is shown as "4 of 5, uncalibrated".
 
@@ -195,6 +195,7 @@ The message is not in the fingerprint, because it often contains changing values
 | # | When | Action |
 |---|---|---|
 | 1 | Learn mode is on, or the fingerprint was marked as old backlog | log |
+| 11 | No request route, a boot-time failure (`ImproperlyConfigured`, `ImportError`/`ModuleNotFoundError`, a refused connection raised from settings/wsgi/asgi/manage/app factory/`__init__`, or module-level code in such a file) **and** 2 or more hits in 10 minutes or a release first seen in the last 30 minutes: the app fails to start | **wake** |
 | 2 | Critical flow failing while an exam window is open | **wake** |
 | 3 | Critical flow failing, with 3 or more hits in 10 minutes | wake if away, otherwise notify |
 | 4 | Critical flow failing | notify |
@@ -207,7 +208,7 @@ The message is not in the fingerprint, because it often contains changing values
 
 People are counted from a one-way hash of the SDK's user id (`jr_user`, HMAC with a server secret) or, on the demo, the visitor session; the id itself is never stored.
 
-Rules 2 to 4 cannot be lowered by any model answer. If the model fails (8-second timeout, refusal, invalid answer, cap reached), it retries once and then the incident is treated as **notify**, never ignore. The alert says the decision was made by rules alone.
+Rules 2 to 4 and 11 cannot be lowered by any model answer. Rule 11 is checked right after rule 1. If the model fails (8-second timeout, refusal, invalid answer, cap reached), it retries once and then the incident is treated as **notify**, never ignore. The alert says the decision was made by rules alone.
 
 **Caps:** at most 3 wakes a night per project; after that, wakes become notifications with a note.
 

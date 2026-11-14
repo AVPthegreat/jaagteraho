@@ -31,6 +31,10 @@ export type Facts = {
   change: "new" | "reopened";
   learn_mode: boolean;
   backlog: boolean;
+  /** Why this looks like the app failing to start (no request route, a boot-time failure), or null. */
+  startup?: string | null;
+  /** The release this error came from started reporting in the last 30 minutes (a fresh deploy). */
+  new_release?: boolean;
 };
 
 export type Decision = {
@@ -61,8 +65,28 @@ type IncidentCtx = {
   status: string;
   hits: number;
   users?: number;
-  event: { exception_type: string; message: string; transaction: string | null; frames: CleanFrame[]; tags: Record<string, string> };
+  event: { exception_type: string; message: string; transaction: string | null; frames: CleanFrame[]; tags: Record<string, string>; release?: string | null };
 };
+
+// ---- the app failing to start (rule 11) ----
+// An error with no request route, raised while the app boots, means every request fails, but rules 2 to 4
+// need a route to call a flow critical. These are recognised from the stack and the exception, in code.
+const BOOT_TYPES = /^(?:[\w.]+\.)?(ImproperlyConfigured|ImportError|ModuleNotFoundError|AppRegistryNotReady|SyntaxError|IndentationError)$/;
+const CONNECT_TYPES = /^(?:[\w.]+\.)?(OperationalError|ConnectionError|ConnectionRefusedError|InterfaceError|TimeoutError|ServerSelectionTimeoutError|MongoServerSelectionError|SequelizeConnectionError|PrismaClientInitializationError)$/;
+const CONNECT_TEXT = /connection refused|could not connect|ECONNREFUSED|ENOTFOUND|Name or service not known|Error 111|connect ETIMEDOUT/i;
+const BOOT_FILE = /(?:^|[\\/])(settings(?:[\\/][\w-]+)?|wsgi|asgi|manage|__init__|app|application|main|server|index|bootstrap|config|startup|celery)\.(?:py|js|mjs|cjs|ts)$/i;
+const BOOT_FUNCTION = /^(?:<module>|create_app|make_app|get_wsgi_application|get_asgi_application|setup|bootstrap|main|execute_from_command_line|ready|startServer|listen|Module\._compile|Object\.<anonymous>)$/;
+
+/** Why an error looks like the app failing to start, or null. Pure: used by computeFacts and the tests. */
+export function startupFailure(e: { transaction: string | null; exception_type: string; message: string; frames: CleanFrame[] }): string | null {
+  if (e.transaction) return null; // a request route: rules 2 to 10 judge it
+  const bootFrame = e.frames.some((f) => (BOOT_FILE.test(f.filename ?? f.abs_path ?? "") && f.in_app) || (f.in_app && BOOT_FUNCTION.test(f.function ?? "")));
+  if (BOOT_TYPES.test(e.exception_type)) return "it cannot load its code or settings";
+  if ((CONNECT_TYPES.test(e.exception_type) || CONNECT_TEXT.test(e.message)) && bootFrame) return "it cannot reach a service it needs to start";
+  const top = [...e.frames].reverse().find((f) => f.in_app);
+  if (top && top.function === "<module>" && BOOT_FILE.test(top.filename ?? top.abs_path ?? "")) return "its startup code fails";
+  return null;
+}
 
 /** Distinct people who hit an incident recently: hashed user ids, or visitor sessions on the demo. */
 export function usersAffected(db: DB, incidentId: number, minutes: number, now = new Date()): number {
@@ -75,6 +99,13 @@ export function usersAffected(db: DB, incidentId: number, minutes: number, now =
       )
       .get(incidentId, since) as { n: number }
   ).n;
+}
+
+/** True when this release first reported in the last 30 minutes: the error arrived with a fresh deploy. */
+function newRelease(db: DB, projectId: number, release: string | null, now: Date): boolean {
+  if (!release) return false;
+  const first = (db.prepare("SELECT MIN(received_at) AS at FROM events WHERE project_id = ? AND release = ?").get(projectId, release) as { at: string | null }).at;
+  return !!first && now.getTime() - Date.parse(first) < 30 * 60_000;
 }
 
 export function computeFacts(db: DB, ctx: IncidentCtx, now = new Date()): Facts {
@@ -97,6 +128,8 @@ export function computeFacts(db: DB, ctx: IncidentCtx, now = new Date()): Facts 
     change: ctx.change,
     learn_mode: !!s.learn_until && Date.parse(s.learn_until) > now.getTime(),
     backlog: ctx.status === "backlog",
+    startup: startupFailure(ctx.event),
+    new_release: newRelease(db, ctx.projectId, ctx.event.release ?? null, now),
   };
 }
 
@@ -169,6 +202,10 @@ export function applyRules(f: Facts, v: Votes, modelFailed: boolean): Pick<Decis
 
 function baseRules(f: Facts, v: Votes, modelFailed: boolean): Pick<Decision, "action" | "rule" | "rule_text"> {
   if (f.learn_mode || f.backlog) return { action: "log", rule: 1, rule_text: "learn mode or old backlog" };
+  // Rule 11: the app fails to start (no request route, a boot-time failure) and it is not a one-off: it
+  // repeats, or it came with a fresh deploy. Every request is affected, so no model answer can lower it.
+  if (f.startup && (f.hits_10m >= 2 || f.new_release))
+    return { action: "wake", rule: 11, rule_text: `the app fails to start (${f.startup}): every request is affected` };
   if (f.critical && f.exam_open) return { action: "wake", rule: 2, rule_text: `critical flow (${f.critical}) failing during an exam` };
   if (f.critical && f.hits_10m >= 3)
     return f.owner_away
