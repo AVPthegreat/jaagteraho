@@ -306,7 +306,9 @@ export function Playground() {
   // The real case once the server picked one for "Surprise me".
   const runCaseId = (run?.events.find((e) => e.step === "plant")?.data.case_id as string | undefined) ?? run?.case_id;
   const bugInfo = run ? apps?.find((a) => a.name === run.app)?.cases.find((c) => c.id === runCaseId) : undefined;
-  const sentence = run ? narrate(run.events.at(-1), run.app, bugInfo) : "";
+  // The scorecard ("done") follows the hidden test's verdict; the narrator keeps saying the verdict, which matters more.
+  const lastSaid = run ? ([...run.events].reverse().find((e) => e.step !== "done") ?? run.events.at(-1)) : undefined;
+  const sentence = run ? narrate(lastSaid, run.app, bugInfo) : "";
   const timeline = useMemo(() => (run?.events ?? []).filter((e) => STEP_LABEL[e.step]), [run]);
   const card = run?.scorecard ?? null;
   const working = run?.state === "running";
