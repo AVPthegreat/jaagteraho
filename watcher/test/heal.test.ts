@@ -31,9 +31,11 @@ function facts(over: Partial<HealFacts> = {}): HealFacts {
 }
 
 describe("heal policy", () => {
-  it("defaults to the owner approving every fix", () => {
-    assert.equal(DEFAULT_POLICY.mode, "ask");
-    assert.equal(normalisePolicy({}).mode, "ask");
+  it("defaults to healing an unanswered wake-up after 3 minutes", () => {
+    assert.equal(DEFAULT_POLICY.mode, "auto-after");
+    assert.equal(DEFAULT_POLICY.after_min, 3);
+    assert.equal(normalisePolicy({}).mode, "auto-after");
+    assert.equal(normalisePolicy({}).after_min, 3);
     assert.equal(normalisePolicy({ mode: "nonsense" as never, after_min: 9999, max_per_night: 0 }).after_min, 240);
     assert.equal(normalisePolicy({ max_per_night: 0 }).max_per_night, 1);
   });
@@ -41,7 +43,7 @@ describe("heal policy", () => {
   it("parses /heal words", () => {
     assert.equal(parseHealArgs([]), "show");
     assert.deepEqual(parseHealArgs(["off"]), { patch: { mode: "off", suspended_until: null, suspended_reason: null } });
-    assert.equal((parseHealArgs(["auto"]) as { patch: { after_min: number } }).patch.after_min, 10);
+    assert.equal((parseHealArgs(["auto"]) as { patch: { after_min: number } }).patch.after_min, 3);
     assert.deepEqual((parseHealArgs(["auto", "25m"]) as { patch: object }).patch, { mode: "auto-after", after_min: 25, suspended_until: null, suspended_reason: null });
     assert.ok("error" in (parseHealArgs(["auto", "1m"]) as object));
     assert.deepEqual((parseHealArgs(["now", "/api/submit"]) as { patch: { flows: string[] } }).patch.flows, ["/api/submit"]);
@@ -189,6 +191,7 @@ describe("healer: real apps", () => {
     const { github, calls } = fakeGitHub();
     const h = new Healer(db, tg, { twinFixed: "http://x", github });
     const s = seed(db);
+    savePolicy(db, s.pid, { mode: "ask" });
     assert.equal(policyOf(db, s.pid).mode, "ask");
     assert.equal(await h.onFix(s.inc, { session: null, action: "wake" }), null);
     await h.tick();

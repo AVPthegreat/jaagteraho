@@ -1,7 +1,7 @@
 /*
   "One night": the Submit bug on our demo exam portal, told as five moments. The times follow the
   speeds we measured there (a decision in about 2 s, a checked fix in about 12 s) and the default
-  /heal auto 10m rule. On wide screens with motion allowed, GSAP pins the section and scroll walks
+  /heal auto 3m rule (the default). On wide screens with motion allowed, GSAP pins the section and scroll walks
   through the moments; otherwise it is a plain timeline with every scene shown.
 */
 const STEPS: Array<{ t: string; ampm: string; title: string; text: React.ReactNode; scene: React.ReactNode }> = [
@@ -81,10 +81,10 @@ const STEPS: Array<{ t: string; ampm: string; title: string; text: React.ReactNo
     ),
   },
   {
-    t: "02:17:12",
+    t: "02:10:12",
     ampm: "am",
     title: "You slept through it. Your rule lets it heal.",
-    text: "No one acknowledged in 10 minutes, so the fix goes in. It watches the errors for 30 minutes, and Undo is one tap away.",
+    text: "No one picked up in 3 minutes, so the fix goes in. It watches the errors for 30 minutes, and Undo is one tap away.",
     scene: (
       <div className="sc sc-healed">
         <span className="stamp ok">Healed</span>

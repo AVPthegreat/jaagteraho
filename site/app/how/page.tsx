@@ -90,7 +90,7 @@ const COMMANDS: Array<[string, string]> = [
   ["/critical /api/checkout checkout", "Mark a page as critical, so failures there always reach you"],
   ["/github and /repo", "Give read access to your code, or change which repository"],
   ["/credits", "How much of your $5 is left"],
-  ["/heal", "Your heal rule: /heal ask (approve every fix, the default), /heal auto 10m (heal if a wake-up goes unanswered for 10 min), /heal now, /heal off, /heal max 2"],
+  ["/heal", "Your heal rule: /heal ask (approve every fix), /heal auto 3m (the default: heal if a wake-up goes unanswered for 3 min), /heal now, /heal off, /heal max 2"],
   ["/pause and /resume", "Stop or restart all AI calls, fixes, heals and wake-ups"],
 ];
 
@@ -351,11 +351,11 @@ export default function How() {
               </p>
               <ul data-rv>
                 <li>
-                  <b>Ask</b> (the default): nothing goes in until you approve it.
+                  <b>Ask</b>: nothing goes in until you approve it.
                 </li>
                 <li>
-                  <b>Heal after 10 minutes</b>: if a wake-up is not acknowledged in time (after the repeated calls), the fix goes in on its own. You choose the
-                  minutes.
+                  <b>Heal after 3 minutes</b> (the default): if a wake-up is not acknowledged in time, a fix that passed every check goes in on its own. Never in
+                  protected areas such as payments or login, at most 2 a night, and Undo is one tap. You choose the minutes.
                 </li>
                 <li>
                   <b>Heal right away</b>: for the routes you name, or all of them.

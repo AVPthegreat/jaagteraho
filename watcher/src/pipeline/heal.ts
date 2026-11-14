@@ -52,7 +52,9 @@ export type HealStatus =
   | "undo_failed" // the undo could not be done; the owner was told once
   | "failed"; // could not be applied (error in detail)
 
-export const DEFAULT_POLICY: HealPolicy = { mode: "ask", after_min: 10, max_per_night: 2, flows: [] };
+// Default (founder, 14 Nov): a WAKE that nobody answers in 3 minutes heals on its own, but only with a fix that passed
+// every check and its own test, never in a protected area (payments, login...), at most 2 a night, always with Undo.
+export const DEFAULT_POLICY: HealPolicy = { mode: "auto-after", after_min: 3, max_per_night: 2, flows: [] };
 export const NIGHT_MS = 12 * 3_600_000;
 export const SUSPEND_MS = 12 * 3_600_000;
 /** Real apps without release tags: the deploy is assumed this long after the merge. */
@@ -96,7 +98,7 @@ export function savePolicy(db: DB, projectId: number, patch: Partial<HealPolicy>
 
 /**
  * Reads the words after /heal. Returns a patch to save, or an error to show, or "show" for no words.
- *   /heal off | /heal ask | /heal auto [10m] | /heal now [/route ...] | /heal max 2
+ *   /heal off | /heal ask | /heal auto [3m] | /heal now [/route ...] | /heal max 2
  */
 export function parseHealArgs(args: string[]): { patch: Partial<HealPolicy> } | { error: string } | "show" {
   const [word, ...rest] = args.map((a) => a.trim()).filter(Boolean);
@@ -109,9 +111,9 @@ export function parseHealArgs(args: string[]): { patch: Partial<HealPolicy> } | 
       return { patch: { mode: "ask", ...resume } };
     case "auto":
     case "after": {
-      const m = (rest[0] ?? "10m").match(/^(\d{1,3})\s*(m|min|mins|minutes?)?$/i);
+      const m = (rest[0] ?? "3m").match(/^(\d{1,3})\s*(m|min|mins|minutes?)?$/i);
       const n = m ? Number(m[1]) : NaN;
-      if (!Number.isInteger(n) || n < 3 || n > 240) return { error: "Give the minutes to wait, from 3 to 240: /heal auto 10m" };
+      if (!Number.isInteger(n) || n < 3 || n > 240) return { error: "Give the minutes to wait, from 3 to 240: /heal auto 3m" };
       return { patch: { mode: "auto-after", after_min: n, ...resume } };
     }
     case "now": {
@@ -125,7 +127,7 @@ export function parseHealArgs(args: string[]): { patch: Partial<HealPolicy> } | 
       return { patch: { max_per_night: n } };
     }
     default:
-      return { error: "Use /heal ask, /heal auto 10m, /heal now, /heal off or /heal max 2." };
+      return { error: "Use /heal ask, /heal auto 3m, /heal now, /heal off or /heal max 2." };
   }
 }
 

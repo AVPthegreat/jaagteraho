@@ -28,7 +28,7 @@ const HELP = [
   "Every morning at 8 (India time) you get a short summary of the night, if anything happened.",
   "/pause and /resume: stop or restart model calls, fixes and wakes",
   "/critical /api/checkout checkout: mark a route as critical (failures there always reach you); /critical alone lists them",
-  "/heal: your self-healing rule. /heal ask (you approve every fix, the default), /heal auto 10m (heal on its own if you don't acknowledge a wake-up in 10 min), /heal now (heal right away), /heal off, /heal max 2",
+  "/heal: your self-healing rule. /heal ask (you approve every fix), /heal auto 3m (the default: heal on its own if you don't acknowledge a wake-up in 3 min), /heal now (heal right away), /heal off, /heal max 2",
 ].join("\n");
 
 export function parseDuration(s: string | undefined): number | null {
@@ -306,7 +306,7 @@ export class Bot {
             "",
             "Rules that always hold: only fixes that passed all six code checks with every review vote agreeing heal on their own; never in login, sessions, tokens, admin, payments, exams, grading, migrations, settings, config, CI or infrastructure; no new imports, processes, network calls, file writes or decoding; at most your nightly cap; if the errors don't drop after your deploy, it is undone, you are woken again and self-healing pauses for 12 hours. Every heal comes with one-tap Undo.",
             "",
-            "/heal ask · /heal auto 10m · /heal now · /heal now /api/submit · /heal off · /heal max 2",
+            "/heal ask · /heal auto 3m · /heal now · /heal now /api/submit · /heal off · /heal max 2",
           ].join("\n"),
         );
       }
