@@ -70,7 +70,7 @@ function Benchmarks() {
       {b && (
         <div className="doc">
           <h2 id="bench-h" data-rv>
-            JR-Bench: planted bugs in 7 sample apps
+            JR-Bench: planted bugs in 7 live apps we built
           </h2>
           <div className="body">
             <p className="soft" data-rv>
@@ -125,7 +125,7 @@ function Benchmarks() {
               ]}
             />
             <p className="small soft">
-              Measured {benchmarks.measured_at}. The datasets, sample apps and scripts that produce these numbers are in the repository (
+              Measured {benchmarks.measured_at}. The datasets, apps and scripts that produce these numbers are in the repository (
               <code>watcher/eval</code> and <code>bench</code>).
             </p>
           </div>
@@ -180,7 +180,7 @@ export default async function Evidence() {
             </h2>
             <div className="body">
               <p className="soft" data-rv>
-                20 planted bugs and 4 harmless errors in 7 sample apps, each triggered for real. Every bar is one of them, as tall as the alert it got.
+                20 planted bugs and 4 harmless errors in 7 apps we built and run, each triggered for real. Every bar is one of them, as tall as the alert it got.
               </p>
               <Bars />
             </div>
@@ -191,7 +191,7 @@ export default async function Evidence() {
             </h2>
             <div className="body">
               <p className="soft" data-rv>
-                Counted by the watcher itself from people using the <a href="/demo">live demo</a>. The benchmark tables below come from scripts in the
+                Counted by the watcher itself from people using the <a href="/demo">exam portal</a>. The benchmark tables below come from scripts in the
                 repository, run against real bugs and planted ones. Model vote shares are not probabilities. Faurus&apos;s own failure counts stay
                 private.
               </p>
@@ -205,7 +205,7 @@ export default async function Evidence() {
                   <ul className="ev-grid" data-rv>
                     <li>
                       <b>{ev.runs}</b>
-                      <span>runs on the live demo</span>
+                      <span>runs on the exam portal</span>
                     </li>
                     <li>
                       <b>{ev.people}</b>
@@ -220,7 +220,7 @@ export default async function Evidence() {
                       <span>median, error to checked fix</span>
                     </li>
                   </ul>
-                  <Table label="Live demo counts" head={["Measure", "Value"]} rows={rows} />
+                  <Table label="Exam portal counts" head={["Measure", "Value"]} rows={rows} />
                 </>
               )}
               {ev && ev.countries.length > 0 && <p className="soft">Countries: {ev.countries.map((c) => `${c.country} (${c.n})`).join(", ")}</p>}

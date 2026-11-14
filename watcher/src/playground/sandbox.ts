@@ -141,10 +141,16 @@ const PY = () => process.env.JR_BENCH_PYTHON ?? "python3";
 export const RUN_TIMEOUT_MS = 20_000;
 
 /** Runs the case's trigger in the app copy (our code, from cases.json). */
-export function runTrigger(dir: string, code: string): Promise<Ran> {
-  return isNodeApp(dir)
-    ? run(process.execPath, [...nodeArgs(dir), "-e", code], dir, cleanEnv(), RUN_TIMEOUT_MS)
-    : run(PY(), ["-E", "-s", "-c", `${PY_PRELUDE}\n${code}`], dir, cleanEnv(), RUN_TIMEOUT_MS);
+export async function runTrigger(dir: string, code: string): Promise<Ran> {
+  if (isNodeApp(dir)) return run(process.execPath, [...nodeArgs(dir), "-e", code], dir, cleanEnv(), RUN_TIMEOUT_MS);
+  // The confinement is imported from a file, so the trigger's own line numbers stay close to what it says.
+  const guard = join(dir, "jr_sandbox.py");
+  await writeFile(guard, PY_PRELUDE);
+  try {
+    return await run(PY(), ["-E", "-s", "-c", `import jr_sandbox\n${code}`], dir, cleanEnv(), RUN_TIMEOUT_MS);
+  } finally {
+    await rm(guard, { force: true });
+  }
 }
 
 /** The error report as the app prints it: a Python traceback, or a Node.js error and its stack. */

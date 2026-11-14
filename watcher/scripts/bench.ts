@@ -45,6 +45,7 @@ const BENCH = resolve(new URL("../../bench", import.meta.url).pathname);
 const args = process.argv.slice(2);
 const only = args.includes("--only") ? args[args.indexOf("--only") + 1] : null;
 const validateOnly = args.includes("--validate");
+const casesFile = args.includes("--cases") ? resolve(args[args.indexOf("--cases") + 1]) : join(BENCH, "cases.json");
 const STOP_AT_USD = 1.5;
 const PY = process.env.JR_BENCH_PYTHON ?? "python3";
 const tmpDirs: string[] = [];
@@ -108,7 +109,7 @@ function validate(c: Case): { ok: boolean; problems: string[]; traceback?: strin
 }
 
 async function main() {
-  const bench = JSON.parse(readFileSync(join(BENCH, "cases.json"), "utf8")) as Bench;
+  const bench = JSON.parse(readFileSync(casesFile, "utf8")) as Bench;
   const cases = bench.cases.filter((c) => !only || c.app === only || c.id === only);
 
   console.log("Validating cases (no model calls)...");
@@ -248,7 +249,8 @@ async function main() {
     "|---|---|---|---|---|---|---|---|",
     ...results.map((r) => `| ${r.id} | ${r.kind === "noise" ? "noise" : r.difficulty === "root_elsewhere" ? "bug (cause elsewhere)" : "bug"} | ${r.decision}${r.decision_right ? "" : " ✗"} | ${r.kind === "bug" ? (r.right_file ? "yes" : "no") : "-"} | ${r.gate ?? "-"} | ${r.kind === "bug" ? (r.fix_works ? "yes" : "no") : "-"} | ${r.own_test ?? "-"} | $${r.cost_usd} |`),
   ].join("\n");
-  const tag = process.env.JR_RELATED_FILES === "0" ? "-no-related" : "";
+  // Extra case files (e.g. the playground's) never overwrite the published results.
+  const tag = (process.env.JR_RELATED_FILES === "0" ? "-no-related" : "") + (args.includes("--cases") ? "-extra" : "");
   writeFileSync(join(BENCH, `RESULTS${tag}.md`), `${md}\n`);
   writeFileSync(join(BENCH, `results${tag}.json`), JSON.stringify(results, null, 2));
   console.log(`\n${md.split("\n").slice(5, 18).join("\n")}`);

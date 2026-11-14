@@ -43,7 +43,7 @@ export function playgroundRoutes(pg: Playground, allowedOrigins: string[]) {
   });
 
   app.post("/public/playground/watch", async (c) => {
-    const body = ((await c.req.json().catch(() => ({}))) ?? {}) as { session?: unknown; app?: unknown };
+    const body = ((await c.req.json().catch(() => ({}))) ?? {}) as { session?: unknown; app?: unknown; open?: unknown };
     const session = typeof body.session === "string" ? body.session : "";
     if (!SESSION.test(session) || !pg.hasApp(body.app)) return c.json({ error: "Choose one of the live apps." }, 400);
     const ip = clientIp(c);
@@ -51,7 +51,9 @@ export function playgroundRoutes(pg: Playground, allowedOrigins: string[]) {
     if (!limits.peek(`wip:${ip}`, 120, 3_600_000)) return c.json({ error: "Easy there. Try again in a while." }, 429);
     if (!limits.allowAll([[`wip:${ip}`, 120, 3_600_000], [`w:${session}`, 20, 60_000], ["w:global", 6_000, 3_600_000]])) return c.json({ error: "Easy there. Try again in a minute." }, 429);
     pg.watch(session, body.app);
-    const started = pg.startNow(body.app, Date.now(), true);
+    // "open": the visitor just opened this app, so a run starts at once if none is in flight. Heartbeats
+    // (open false) only keep the visitor counted; the ticker then plants a bug every minute.
+    const started = body.open === true ? pg.startNow(body.app, Date.now(), true) : null;
     return c.json({ ok: true, started, ...pg.snapshot(body.app) });
   });
 

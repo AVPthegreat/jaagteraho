@@ -99,6 +99,8 @@ describe("playground runner", () => {
     const crash = feed.got.find((e) => e.step === "crash")!;
     assert.match(String(crash.data.traceback), /Traceback \(most recent call last\)/);
     assert.equal(crash.data.exception_type, "KeyError");
+    assert.doesNotMatch(String(crash.data.traceback), /jrplay-/, "no temp paths shown");
+    assert.equal(crash.data.where, "messmenu/booking/service.py:14");
     const card = pg.latest(1)[0];
     assert.equal(card.case_id, CASE_ID);
     assert.equal(card.case_source, "benchmark");
@@ -242,7 +244,7 @@ describe("playground routes", () => {
       assert.equal((await post(body)).status, 400, body);
     }
     assert.equal((await app.request("/public/playground/feed/__proto__")).status, 400);
-    const ok = await post('{"session":"aaaaaaaaaa","app":"messmenu"}');
+    const ok = await post('{"session":"aaaaaaaaaa","app":"messmenu","open":true}');
     assert.equal(ok.status, 200);
     assert.equal(((await ok.json()) as { started: unknown }).started, null, "no budget and no past run: nothing starts");
   });

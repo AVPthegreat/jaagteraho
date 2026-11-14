@@ -352,10 +352,12 @@ export class Playground {
         const tb = crashReport(broken, ran.stderr);
         const parsed = tb ? parseTraceback(tb) : null;
         if (ran.status === 0 || !parsed) throw new Error("the planted bug did not crash the app");
-        const top = [...parsed.frames].reverse().find((f) => f.in_app) ?? null;
-        const where = top ? `${top.filename}:${top.lineno}` : null;
+        const top = [...parsed.frames].reverse().find((f) => f.in_app && (f.abs_path ?? "").startsWith(broken + sep)) ?? null;
+        const where = top ? `${top.abs_path!.slice(broken.length + 1)}:${top.lineno}` : null;
+        // Viewers see paths inside the app, not our temp folder.
+        const shownTb = tb.replaceAll(`${broken}${sep}`, "");
         const tCrash = Date.now();
-        emit("crash", { traceback: tb.slice(-4000), exception_type: parsed.exception_type, message: parsed.message.slice(0, 300), route: c.route, where });
+        emit("crash", { traceback: shownTb.slice(-4000), exception_type: parsed.exception_type, message: parsed.message.slice(0, 300), route: c.route, where });
 
         const appCfg = this.bench.apps[app];
         setSettings(this.db, projectId, { critical: appCfg.critical, exam_until: appCfg.exam_open ? new Date(Date.now() + 3_600_000).toISOString() : null });

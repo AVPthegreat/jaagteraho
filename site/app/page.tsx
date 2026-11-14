@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import benchmarks from "./evidence/benchmarks.json";
 import { Clips } from "./home/clips";
 import { HomeMotion } from "./home/home-motion";
+import { LiveStrip } from "./home/live-strip";
 import { NightStory } from "./home/night-story";
 import { Radar } from "./home/radar";
 import { Shield } from "./home/shield";
@@ -25,6 +26,7 @@ export default async function Home() {
         <div className="hero4-sky" aria-hidden="true" />
         <div className="frame hero4-grid">
           <div className="hero4-copy">
+            <LiveStrip />
             <p className="eyebrow" data-h>
               <span className="eyebrow-dot" aria-hidden="true" /> The AI night watchman for your app
             </p>
@@ -35,9 +37,9 @@ export default async function Home() {
               It wakes you only when it matters, finds the cause and brings a checked fix. You approve, or let it heal under your rules.
             </p>
             <div className="actions" data-h>
-              <a className="btn btn-lg" href="#try">
-                Break our demo app <span className="arrow" aria-hidden="true">→</span>
-              </a>
+              <Link className="btn btn-lg" href="/playground">
+                Open the playground <span className="arrow" aria-hidden="true">→</span>
+              </Link>
               <Link className="btn btn-ghost btn-lg" href="/connect">
                 Connect your app
               </Link>
@@ -157,7 +159,7 @@ export default async function Home() {
             </li>
           </ul>
           <p className="nums-note" data-rv>
-            JR-Bench: {bench.bugs} planted bugs and {bench.noise} harmless errors in 7 sample apps. On {real.in_trace.cases} real bugs from open-source
+            JR-Bench: {bench.bugs} planted bugs and {bench.noise} harmless errors in 7 live apps we built and run. On {real.in_trace.cases} real bugs from open-source
             projects, it named the right file {real.in_trace.right_file} of {real.in_trace.cases} times when the traceback shows it.{" "}
             <Link className="textlink" href="/evidence">
               How each number was measured →

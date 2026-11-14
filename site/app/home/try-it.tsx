@@ -2,16 +2,15 @@
 
 import Link from "next/link";
 import { useRef, useState } from "react";
-import { BreakIt } from "../break-it";
 import { ConnectForm } from "../connect/connect-form";
 import { PasteForm } from "../paste/paste-form";
 
 /*
-  "Try it yourself": the three live ways in, as tabs. Only the open tab is mounted, so the demo's
-  live feed starts only for people who choose it. Each also has its own page (/demo, /paste, /connect).
+  "Try it yourself": the three live ways in, as tabs. Only the open tab is mounted. Each also has its own
+  page (/playground, /paste, /connect).
 */
 const TABS = [
-  { id: "break", label: "Break the demo app", page: "/demo" },
+  { id: "play", label: "Live playground", page: "/playground" },
   { id: "paste", label: "Paste an error", page: "/paste" },
   { id: "connect", label: "Connect your app", page: "/connect" },
 ] as const;
@@ -55,14 +54,21 @@ export function TryIt({ country }: { country: string | null }) {
         ))}
       </div>
       <div className="try-panel" role="tabpanel" id="try-panel" aria-labelledby={`try-${tab.id}`}>
-        {tab.id === "break" && (
-          <>
+        {tab.id === "play" && (
+          <div className="try-connect">
             <p className="try-intro">
-              A real Django exam portal we run so you can break it. Each button triggers one planted bug; your logbook fills in live, with a timer. No
-              sign-up.
+              Seven live apps we built and run. Pick one: a real bug is planted in its code every minute, the app really crashes, and you watch
+              JaagteRaho decide, find the cause, write a fix and prove it with a hidden test it never sees. You do nothing. No sign-up.
             </p>
-            <BreakIt country={country} />
-          </>
+            <p>
+              <Link className="btn btn-lg" href="/playground">
+                Open the playground <span className="arrow" aria-hidden="true">→</span>
+              </Link>
+            </p>
+            <p className="small soft">
+              Prefer to break something yourself? <Link className="textlink" href="/demo">Break our exam portal</Link>.
+            </p>
+          </div>
         )}
         {tab.id === "paste" && (
           <PasteForm

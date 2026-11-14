@@ -1,0 +1,974 @@
+{
+  "about": "Playground-only planted-bug cases for the JaagteRaho Live playground. They are NOT part of the published JR-Bench numbers (those are computed on bench/cases.json only). Same format as cases.json: each bug is planted into a clean generated app (inject: exact find/replace, optional clean_inject), 'trigger' runs in the app folder and must raise, and 'test' is a hidden test that must pass on the clean app and fail on the broken one, accepting any sensible fix (a clear 4xx answer or success).",
+  "apps": {
+    "messmenu": {
+      "critical": []
+    },
+    "ledgerly": {
+      "critical": [
+        {
+          "name": "payments",
+          "match": "/api/payments"
+        },
+        {
+          "name": "invoicing",
+          "match": "/api/invoices"
+        }
+      ]
+    },
+    "fleetwise": {
+      "critical": []
+    },
+    "clinicq": {
+      "critical": [
+        {
+          "name": "appointments",
+          "match": "/api/appointments"
+        }
+      ]
+    },
+    "campuskart": {
+      "critical": [
+        {
+          "name": "orders",
+          "match": "/api/orders"
+        }
+      ]
+    },
+    "examhall": {
+      "critical": [
+        {
+          "name": "code submission",
+          "match": "/api/submissions"
+        },
+        {
+          "name": "exam attempt",
+          "match": "/api/attempts"
+        },
+        {
+          "name": "fee payment",
+          "match": "/api/payments"
+        }
+      ],
+      "exam_open": true
+    },
+    "tiffinbox": {
+      "critical": [
+        {
+          "name": "orders",
+          "match": "/api/orders"
+        }
+      ],
+      "language": "node"
+    }
+  },
+  "cases": [
+    {
+      "id": "pg-messmenu-plates-string",
+      "app": "messmenu",
+      "route": "/api/meals",
+      "kind": "bug",
+      "difficulty": "root_elsewhere",
+      "story": "A commit dropped the int() around plates; the hostel form posts plates as text, and the check in the model blows up.",
+      "inject": [
+        {
+          "file": "messmenu/meal/service.py",
+          "find": "plates=int(data[\"plates\"]),",
+          "replace": "plates=data[\"plates\"],"
+        }
+      ],
+      "trigger": "from messmenu.app import handle\nhandle('POST', '/api/meals', {'title': 'Poha', 'price': '30', 'served_on': '2026-11-14', 'plates': '150'})",
+      "test": "import unittest\nfrom messmenu.app import handle\n\nclass T(unittest.TestCase):\n    def test_plates_as_text(self):\n        r = handle('POST', '/api/meals', {'title': 'Poha', 'price': '30', 'served_on': '2026-11-14', 'plates': '150'})\n        self.assertIn(r['status'], (201, 400))\n        r = handle('POST', '/api/meals', {'title': 'Idli', 'price': '40', 'served_on': '2026-11-14', 'plates': 80})\n        self.assertEqual(r['status'], 201)\n"
+    },
+    {
+      "id": "pg-messmenu-meal-first-tag",
+      "app": "messmenu",
+      "route": "/api/meals",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "The menu line now shows the meal's first tag, but most meals have no tags yet.",
+      "inject": [
+        {
+          "file": "messmenu/meal/model.py",
+          "find": "return f\"{self.title} · ₹{self.price} · on {self.served_on.isoformat()}\"",
+          "replace": "return f\"{self.title} · ₹{self.price} · on {self.served_on.isoformat()} · {self.tags[0]}\""
+        }
+      ],
+      "trigger": "from messmenu.app import handle\nhandle('POST', '/api/meals', {'title': 'Rajma chawal', 'price': '60', 'served_on': '2026-11-13', 'plates': 200})",
+      "test": "import unittest\nfrom messmenu.app import handle\n\nclass T(unittest.TestCase):\n    def test_meal_without_tags(self):\n        r = handle('POST', '/api/meals', {'title': 'Rajma chawal', 'price': '60', 'served_on': '2026-11-13', 'plates': 200})\n        self.assertEqual(r['status'], 201)\n        self.assertIn('Rajma chawal', r['data'])\n        self.assertEqual(handle('GET', '/api/meals')['status'], 200)\n"
+    },
+    {
+      "id": "pg-messmenu-booking-latest-empty",
+      "app": "messmenu",
+      "route": "/api/bookings/summary",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "A tidy-up removed default=None from max(); the bookings summary crashes before the first booking.",
+      "inject": [
+        {
+          "file": "messmenu/booking/service.py",
+          "find": "\"latest_booked_on\": max((i.booked_on for i in items), default=None),",
+          "replace": "\"latest_booked_on\": max(i.booked_on for i in items),"
+        }
+      ],
+      "trigger": "from messmenu.app import handle\nhandle('GET', '/api/bookings/summary')",
+      "test": "import unittest\nfrom messmenu.app import handle\n\nclass T(unittest.TestCase):\n    def test_empty_summary(self):\n        r = handle('GET', '/api/bookings/summary')\n        self.assertEqual(r['status'], 200)\n        self.assertEqual(r['data']['count'], 0)\n        handle('POST', '/api/meals', {'title': 'Rajma chawal', 'price': '60', 'served_on': '2026-11-13', 'plates': 200})\n        handle('POST', '/api/bookings', {'student': 'Asha', 'meal_id': 1, 'plates': 1, 'booked_on': '2026-11-13'})\n        self.assertEqual(handle('GET', '/api/bookings/summary')['data']['count'], 1)\n"
+    },
+    {
+      "id": "pg-messmenu-plates-left",
+      "app": "messmenu",
+      "route": "/api/bookings",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "A commit started counting down the plates left on a meal, using a field the Meal model never got.",
+      "inject": [
+        {
+          "file": "messmenu/booking/service.py",
+          "find": "    meal_repo.find(booking.meal_id)\n",
+          "replace": "    meal = meal_repo.find(booking.meal_id)\n    meal.plates_left -= booking.plates\n"
+        }
+      ],
+      "trigger": "from messmenu.app import handle\nhandle('POST', '/api/meals', {'title': 'Rajma chawal', 'price': '60', 'served_on': '2026-11-13', 'plates': 200})\nhandle('POST', '/api/bookings', {'student': 'Asha', 'meal_id': 1, 'plates': 2, 'booked_on': '2026-11-13'})",
+      "test": "import unittest\nfrom messmenu.app import handle\n\nclass T(unittest.TestCase):\n    def test_booking(self):\n        handle('POST', '/api/meals', {'title': 'Rajma chawal', 'price': '60', 'served_on': '2026-11-13', 'plates': 200})\n        r = handle('POST', '/api/bookings', {'student': 'Asha', 'meal_id': 1, 'plates': 2, 'booked_on': '2026-11-13'})\n        self.assertEqual(r['status'], 201)\n"
+    },
+    {
+      "id": "pg-messmenu-plates-per-meal",
+      "app": "messmenu",
+      "route": "/api/meals/summary",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "The meals summary now shows plates per meal and divides by the number of meals, which is zero on a fresh menu.",
+      "inject": [
+        {
+          "file": "messmenu/meal/service.py",
+          "find": "\"total_plates\": sum(i.plates for i in items),",
+          "replace": "\"plates_per_meal\": sum(i.plates for i in items) // len(items),"
+        }
+      ],
+      "trigger": "from messmenu.app import handle\nhandle('GET', '/api/meals/summary')",
+      "test": "import unittest\nfrom messmenu.app import handle\n\nclass T(unittest.TestCase):\n    def test_empty_meals_summary(self):\n        r = handle('GET', '/api/meals/summary')\n        self.assertEqual(r['status'], 200)\n        handle('POST', '/api/meals', {'title': 'Rajma chawal', 'price': '60', 'served_on': '2026-11-13', 'plates': 200})\n        self.assertEqual(handle('GET', '/api/meals/summary')['status'], 200)\n"
+    },
+    {
+      "id": "pg-messmenu-fail-message",
+      "app": "messmenu",
+      "route": "/api/meals",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "fail() was changed to read error.message, a Python 2 habit; every 4xx answer now crashes instead.",
+      "inject": [
+        {
+          "file": "messmenu/core/http.py",
+          "find": "return {\"status\": error.status, \"error\": str(error)}",
+          "replace": "return {\"status\": error.status, \"error\": error.message}"
+        }
+      ],
+      "trigger": "from messmenu.app import handle\nhandle('POST', '/api/meals', {'title': 'Poha'})",
+      "test": "import unittest\nfrom messmenu.app import handle\n\nclass T(unittest.TestCase):\n    def test_missing_fields_give_400(self):\n        r = handle('POST', '/api/meals', {'title': 'Poha'})\n        self.assertEqual(r['status'], 400)\n        self.assertEqual(handle('GET', '/api/nowhere')['status'], 404)\n"
+    },
+    {
+      "id": "pg-messmenu-booking-date-format",
+      "app": "messmenu",
+      "route": "/api/bookings",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "Booking dates are now parsed as DD-MM-YYYY, the way the mess office types them, but the app sends ISO dates.",
+      "inject": [
+        {
+          "file": "messmenu/booking/service.py",
+          "find": "booked_on=parse_date(data[\"booked_on\"]),",
+          "replace": "booked_on=datetime.strptime(data[\"booked_on\"], \"%d-%m-%Y\").date(),"
+        },
+        {
+          "file": "messmenu/booking/service.py",
+          "find": "from ..core.dates import is_past, parse_date\n",
+          "replace": "from datetime import datetime\n\nfrom ..core.dates import is_past, parse_date\n"
+        }
+      ],
+      "trigger": "from messmenu.app import handle\nhandle('POST', '/api/meals', {'title': 'Rajma chawal', 'price': '60', 'served_on': '2026-11-13', 'plates': 200})\nhandle('POST', '/api/bookings', {'student': 'Ravi', 'meal_id': 1, 'plates': 1, 'booked_on': '2026-11-14'})",
+      "test": "import unittest\nfrom messmenu.app import handle\n\nclass T(unittest.TestCase):\n    def test_iso_booking_date(self):\n        handle('POST', '/api/meals', {'title': 'Rajma chawal', 'price': '60', 'served_on': '2026-11-13', 'plates': 200})\n        r = handle('POST', '/api/bookings', {'student': 'Ravi', 'meal_id': 1, 'plates': 1, 'booked_on': '2026-11-14'})\n        self.assertEqual(r['status'], 201)\n        self.assertIn('2026-11-14', r['data'])\n"
+    },
+    {
+      "id": "pg-messmenu-service-charge-float",
+      "app": "messmenu",
+      "route": "/api/meals/summary",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "A 5% mess service charge was added to the menu total with a float, mixed into Decimal money.",
+      "inject": [
+        {
+          "file": "messmenu/meal/service.py",
+          "find": "\"total_price\": str(total(i.price for i in items)),",
+          "replace": "\"total_price\": str(total(i.price for i in items) * 1.05),"
+        }
+      ],
+      "trigger": "from messmenu.app import handle\nhandle('POST', '/api/meals', {'title': 'Rajma chawal', 'price': '60', 'served_on': '2026-11-13', 'plates': 200})\nhandle('GET', '/api/meals/summary')",
+      "test": "import unittest\nfrom messmenu.app import handle\n\nclass T(unittest.TestCase):\n    def test_summary_total(self):\n        handle('POST', '/api/meals', {'title': 'Rajma chawal', 'price': '60', 'served_on': '2026-11-13', 'plates': 200})\n        r = handle('GET', '/api/meals/summary')\n        self.assertEqual(r['status'], 200)\n        self.assertEqual(r['data']['count'], 1)\n"
+    },
+    {
+      "id": "pg-messmenu-meal-key-renamed",
+      "app": "messmenu",
+      "route": "/api/bookings",
+      "kind": "bug",
+      "difficulty": "root_elsewhere",
+      "story": "The booking service was moved to a new field name 'meal' while every client still sends meal_id; the None crashes in the store.",
+      "inject": [
+        {
+          "file": "messmenu/booking/service.py",
+          "find": "meal_id=int(data[\"meal_id\"]),",
+          "replace": "meal_id=data.get(\"meal\"),"
+        }
+      ],
+      "trigger": "from messmenu.app import handle\nhandle('POST', '/api/meals', {'title': 'Rajma chawal', 'price': '60', 'served_on': '2026-11-13', 'plates': 200})\nhandle('POST', '/api/bookings', {'student': 'Asha', 'meal_id': 1, 'plates': 1, 'booked_on': '2026-11-13'})",
+      "test": "import unittest\nfrom messmenu.app import handle\n\nclass T(unittest.TestCase):\n    def test_booking_by_meal_id(self):\n        handle('POST', '/api/meals', {'title': 'Rajma chawal', 'price': '60', 'served_on': '2026-11-13', 'plates': 200})\n        r = handle('POST', '/api/bookings', {'student': 'Asha', 'meal_id': 1, 'plates': 1, 'booked_on': '2026-11-13'})\n        self.assertEqual(r['status'], 201)\n        r = handle('POST', '/api/bookings', {'student': 'Asha', 'meal_id': 99, 'plates': 1, 'booked_on': '2026-11-13'})\n        self.assertEqual(r['status'], 404)\n"
+    },
+    {
+      "id": "pg-tiffinbox-order-kitchen-name",
+      "app": "tiffinbox",
+      "route": "/api/orders",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "Orders now copy the kitchen's name from the menu, but menus only store kitchenId.",
+      "inject": [
+        {
+          "file": "src/order/service.js",
+          "find": "  menuRepo.find(item.menuId);",
+          "replace": "  item.kitchen = menuRepo.find(item.menuId).kitchen.name;"
+        }
+      ],
+      "trigger": "const { handle } = require('./src/app');\nhandle('POST', '/api/kitchens', { name: 'Maa ki Rasoi', rating: 4, opened_on: '2025-01-02' });\nhandle('POST', '/api/menus', { kitchen_id: 1, dish: 'Rajma chawal', price: '80', served_on: '2026-11-13' });\nhandle('POST', '/api/orders', { menu_id: 1, plates: 2, total: '160', placed_on: '2026-11-14' });",
+      "test": "const { test } = require('node:test');\nconst assert = require('node:assert');\nconst { handle } = require('./src/app');\n\ntest('order', () => {\n  handle('POST', '/api/kitchens', { name: 'Maa ki Rasoi', rating: 4, opened_on: '2025-01-02' });\n  handle('POST', '/api/menus', { kitchen_id: 1, dish: 'Rajma chawal', price: '80', served_on: '2026-11-13' });\n  const r = handle('POST', '/api/orders', { menu_id: 1, plates: 2, total: '160', placed_on: '2026-11-14' });\n  assert.strictEqual(r.status, 201);\n  assert.match(r.data, /160\\.00/);\n});\n"
+    },
+    {
+      "id": "pg-tiffinbox-parse-date-number",
+      "app": "tiffinbox",
+      "route": "/api/kitchens",
+      "kind": "bug",
+      "difficulty": "root_elsewhere",
+      "story": "parseDate was 'simplified' to return Date.UTC(...), which is a number of milliseconds, not a Date; isoDay breaks later.",
+      "inject": [
+        {
+          "file": "src/core/dates.js",
+          "find": "return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));",
+          "replace": "return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));"
+        }
+      ],
+      "trigger": "const { handle } = require('./src/app');\nhandle('POST', '/api/kitchens', { name: 'Maa ki Rasoi', rating: 4, opened_on: '2025-01-02' });",
+      "test": "const { test } = require('node:test');\nconst assert = require('node:assert');\nconst { handle } = require('./src/app');\n\ntest('kitchen date', () => {\n  const r = handle('POST', '/api/kitchens', { name: 'Maa ki Rasoi', rating: 4, opened_on: '2025-01-02' })\n  assert.strictEqual(r.status, 201);\n  assert.match(r.data, /2025-01-02/);\n});\n"
+    },
+    {
+      "id": "pg-tiffinbox-payout-amount-string",
+      "app": "tiffinbox",
+      "route": "/api/payouts",
+      "kind": "bug",
+      "difficulty": "root_elsewhere",
+      "story": "A commit stopped running payout amounts through toMoney; the string from the form reaches toFixed in describe.",
+      "inject": [
+        {
+          "file": "src/payout/service.js",
+          "find": "amount: toMoney(data.amount),",
+          "replace": "amount: data.amount,"
+        }
+      ],
+      "trigger": "const { handle } = require('./src/app');\nhandle('POST', '/api/riders', { name: 'Imran', trips: 12, joined_on: '2026-03-01' });\nhandle('POST', '/api/payouts', { rider_id: 1, amount: '250', paid_on: '2026-11-14' });",
+      "test": "const { test } = require('node:test');\nconst assert = require('node:assert');\nconst { handle } = require('./src/app');\n\ntest('payout', () => {\n  handle('POST', '/api/riders', { name: 'Imran', trips: 12, joined_on: '2026-03-01' });\n  const r = handle('POST', '/api/payouts', { rider_id: 1, amount: '250', paid_on: '2026-11-14' });\n  assert.strictEqual(r.status, 201);\n  assert.match(r.data, /250\\.00/);\n});\n"
+    },
+    {
+      "id": "pg-tiffinbox-store-all-iterator",
+      "app": "tiffinbox",
+      "route": "/api/riders",
+      "kind": "bug",
+      "difficulty": "root_elsewhere",
+      "story": "Store.all() now returns the Map's values iterator to save a copy; list pages call slice on it.",
+      "inject": [
+        {
+          "file": "src/core/store.js",
+          "find": "all() { return [...this.rows.values()]; }",
+          "replace": "all() { return this.rows.values(); }"
+        }
+      ],
+      "trigger": "const { handle } = require('./src/app');\nhandle('POST', '/api/riders', { name: 'Imran', trips: 12, joined_on: '2026-03-01' });\nhandle('GET', '/api/riders');",
+      "test": "const { test } = require('node:test');\nconst assert = require('node:assert');\nconst { handle } = require('./src/app');\n\ntest('rider list', () => {\n  handle('POST', '/api/riders', { name: 'Imran', trips: 12, joined_on: '2026-03-01' });\n  const r = handle('GET', '/api/riders');\n  assert.strictEqual(r.status, 200);\n  assert.strictEqual(r.data.total, 1);\n});\n"
+    },
+    {
+      "id": "pg-tiffinbox-rating-tofixed",
+      "app": "tiffinbox",
+      "route": "/api/kitchens",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "Kitchen ratings are now rounded to one decimal with toFixed, but the web form posts the rating as a string.",
+      "inject": [
+        {
+          "file": "src/kitchen/service.js",
+          "find": "rating: Number(data.rating),",
+          "replace": "rating: data.rating.toFixed(1),"
+        }
+      ],
+      "trigger": "const { handle } = require('./src/app');\nhandle('POST', '/api/kitchens', { name: 'Annapurna', rating: '4.5', opened_on: '2025-06-01' });",
+      "test": "const { test } = require('node:test');\nconst assert = require('node:assert');\nconst { handle } = require('./src/app');\n\ntest('rating as text', () => {\n  const r = handle('POST', '/api/kitchens', { name: 'Annapurna', rating: '4.5', opened_on: '2025-06-01' });\n  assert.ok([201, 400].includes(r.status));\n  assert.strictEqual(handle('POST', '/api/kitchens', { name: 'Maa', rating: 4, opened_on: '2025-01-02' }).status, 201);\n});\n"
+    },
+    {
+      "id": "pg-tiffinbox-total-reduce-empty",
+      "app": "tiffinbox",
+      "route": "/api/menus/summary",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "total() lost the reduce() starting value in a refactor; it throws on an empty list, so a new kitchen's summary fails.",
+      "inject": [
+        {
+          "file": "src/core/money.js",
+          "find": "return toMoney(amounts.reduce((sum, a) => sum + toMoney(a), 0));",
+          "replace": "return toMoney(amounts.reduce((sum, a) => sum + toMoney(a)));"
+        }
+      ],
+      "trigger": "const { handle } = require('./src/app');\nhandle('GET', '/api/menus/summary');",
+      "test": "const { test } = require('node:test');\nconst assert = require('node:assert');\nconst { handle } = require('./src/app');\n\ntest('empty summary', () => {\n  const r = handle('GET', '/api/menus/summary');\n  assert.strictEqual(r.status, 200);\n  assert.strictEqual(r.data.count, 0);\n  handle('POST', '/api/kitchens', { name: 'Maa ki Rasoi', rating: 4, opened_on: '2025-01-02' });\n  handle('POST', '/api/menus', { kitchen_id: 1, dish: 'Rajma chawal', price: '80', served_on: '2026-11-13' });\n  assert.strictEqual(handle('GET', '/api/menus/summary').data.count, 1);\n});\n"
+    },
+    {
+      "id": "pg-ledgerly-credit-commas",
+      "app": "ledgerly",
+      "route": "/api/customers",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "Credit limits typed as '5,000' are now cleaned with .replace(), but the mobile app sends the limit as a number.",
+      "inject": [
+        {
+          "file": "ledgerly/customer/service.py",
+          "find": "credit_limit=to_money(data[\"credit_limit\"]),",
+          "replace": "credit_limit=to_money(data[\"credit_limit\"].replace(\",\", \"\")),"
+        }
+      ],
+      "trigger": "from ledgerly.app import handle\nhandle('POST', '/api/customers', {'name': 'Gupta Traders', 'credit_limit': 5000, 'since': '2026-02-01'})",
+      "test": "import unittest\nfrom ledgerly.app import handle\n\nclass T(unittest.TestCase):\n    def test_numeric_credit_limit(self):\n        r = handle('POST', '/api/customers', {'name': 'Gupta Traders', 'credit_limit': 5000, 'since': '2026-02-01'})\n        self.assertEqual(r['status'], 201)\n        self.assertEqual(handle('POST', '/api/customers', {'name': 'Asha Stores', 'credit_limit': '5000', 'since': '2026-01-02'})['status'], 201)\n"
+    },
+    {
+      "id": "pg-ledgerly-expense-category",
+      "app": "ledgerly",
+      "route": "/api/expenses",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "The optional expense category is now added to the label, but the code reads it as if it were always sent.",
+      "inject": [
+        {
+          "file": "ledgerly/expense/service.py",
+          "find": "label=str(data[\"label\"]).strip(),",
+          "replace": "label=f'{str(data[\"label\"]).strip()} ({data[\"category\"]})',"
+        }
+      ],
+      "trigger": "from ledgerly.app import handle\nhandle('POST', '/api/expenses', {'label': 'Shop rent', 'amount': '12000', 'spent_on': '2026-11-01'})",
+      "test": "import unittest\nfrom ledgerly.app import handle\n\nclass T(unittest.TestCase):\n    def test_expense_without_category(self):\n        r = handle('POST', '/api/expenses', {'label': 'Shop rent', 'amount': '12000', 'spent_on': '2026-11-01'})\n        self.assertEqual(r['status'], 201)\n        self.assertIn('Shop rent', r['data'])\n        r = handle('POST', '/api/expenses', {'label': 'Tea', 'amount': '40', 'spent_on': '2026-11-01', 'category': 'staff'})\n        self.assertEqual(r['status'], 201)\n"
+    },
+    {
+      "id": "pg-ledgerly-future-expense-tz",
+      "app": "ledgerly",
+      "route": "/api/expenses",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "A new check rejects future-dated expenses, but it builds a naive datetime and compares it with the UTC clock.",
+      "inject": [
+        {
+          "file": "ledgerly/expense/service.py",
+          "find": "from ..core.dates import is_past, parse_date\n",
+          "replace": "from datetime import datetime\n\nfrom ..core.dates import is_past, now_utc, parse_date\nfrom ..core.errors import ValidationError\n"
+        },
+        {
+          "file": "ledgerly/expense/service.py",
+          "find": "    return repo.save(expense)",
+          "replace": "    if datetime.combine(expense.spent_on, datetime.min.time()) > now_utc():\n        raise ValidationError(\"expense date is in the future\")\n    return repo.save(expense)"
+        }
+      ],
+      "trigger": "from ledgerly.app import handle\nhandle('POST', '/api/expenses', {'label': 'Electricity', 'amount': '2300', 'spent_on': '2026-11-01'})",
+      "test": "import unittest\nfrom ledgerly.app import handle\n\nclass T(unittest.TestCase):\n    def test_expense_dates(self):\n        r = handle('POST', '/api/expenses', {'label': 'Electricity', 'amount': '2300', 'spent_on': '2026-11-01'})\n        self.assertEqual(r['status'], 201)\n        r = handle('POST', '/api/expenses', {'label': 'Later', 'amount': '10', 'spent_on': '2099-01-01'})\n        self.assertIn(r['status'], (201, 400))\n"
+    },
+    {
+      "id": "pg-ledgerly-gst-rate-string",
+      "app": "ledgerly",
+      "route": "/api/invoices",
+      "kind": "bug",
+      "difficulty": "root_elsewhere",
+      "story": "A commit removed float() around gst_rate; the billing form sends '18' and the range check in the model fails on a string.",
+      "inject": [
+        {
+          "file": "ledgerly/invoice/service.py",
+          "find": "gst_rate=float(data[\"gst_rate\"]),",
+          "replace": "gst_rate=data[\"gst_rate\"],"
+        }
+      ],
+      "trigger": "from ledgerly.app import handle\nhandle('POST', '/api/customers', {'name': 'Asha Stores', 'credit_limit': '5000', 'since': '2026-01-02'})\nhandle('POST', '/api/invoices', {'customer_id': 1, 'amount': '1200', 'gst_rate': '18', 'issued_on': '2026-11-01'})",
+      "test": "import unittest\nfrom ledgerly.app import handle\n\nclass T(unittest.TestCase):\n    def test_gst_rate_as_text(self):\n        handle('POST', '/api/customers', {'name': 'Asha Stores', 'credit_limit': '5000', 'since': '2026-01-02'})\n        r = handle('POST', '/api/invoices', {'customer_id': 1, 'amount': '1200', 'gst_rate': '18', 'issued_on': '2026-11-01'})\n        self.assertEqual(r['status'], 201)\n        r = handle('POST', '/api/invoices', {'customer_id': 1, 'amount': '1200', 'gst_rate': 5, 'issued_on': '2026-11-01'})\n        self.assertEqual(r['status'], 201)\n"
+    },
+    {
+      "id": "pg-ledgerly-missing-fields-concat",
+      "app": "ledgerly",
+      "route": "/api/customers",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "require_fields now joins the message with +, adding a list to a string; any form with a missing field crashes.",
+      "inject": [
+        {
+          "file": "ledgerly/core/http.py",
+          "find": "raise ValidationError(\"missing: \" + \", \".join(missing))",
+          "replace": "raise ValidationError(\"missing: \" + missing)"
+        }
+      ],
+      "trigger": "from ledgerly.app import handle\nhandle('POST', '/api/customers', {'name': 'Asha Stores'})",
+      "test": "import unittest\nfrom ledgerly.app import handle\n\nclass T(unittest.TestCase):\n    def test_missing_fields(self):\n        r = handle('POST', '/api/customers', {'name': 'Asha Stores'})\n        self.assertEqual(r['status'], 400)\n        self.assertEqual(handle('POST', '/api/customers', {'name': 'Asha Stores', 'credit_limit': '5000', 'since': '2026-01-02'})['status'], 201)\n"
+    },
+    {
+      "id": "pg-ledgerly-top-customer-empty",
+      "app": "ledgerly",
+      "route": "/api/customers/summary",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "The customers summary now names the customer with the highest credit limit, taking [-1] of an empty list for a new shop.",
+      "inject": [
+        {
+          "file": "ledgerly/customer/service.py",
+          "find": "\"latest_since\": max((i.since for i in items), default=None),\n",
+          "replace": "\"latest_since\": max((i.since for i in items), default=None),\n        \"top_customer\": sorted(items, key=lambda c: c.credit_limit)[-1].name,\n"
+        }
+      ],
+      "trigger": "from ledgerly.app import handle\nhandle('GET', '/api/customers/summary')",
+      "test": "import unittest\nfrom ledgerly.app import handle\n\nclass T(unittest.TestCase):\n    def test_empty_customer_summary(self):\n        r = handle('GET', '/api/customers/summary')\n        self.assertEqual(r['status'], 200)\n        self.assertEqual(r['data']['count'], 0)\n        handle('POST', '/api/customers', {'name': 'Asha Stores', 'credit_limit': '5000', 'since': '2026-01-02'})\n        self.assertEqual(handle('GET', '/api/customers/summary')['status'], 200)\n"
+    },
+    {
+      "id": "pg-ledgerly-since-not-parsed",
+      "app": "ledgerly",
+      "route": "/api/customers",
+      "kind": "bug",
+      "difficulty": "root_elsewhere",
+      "story": "A commit stored 'since' exactly as sent, skipping parse_date; describe() later calls isoformat() on a string.",
+      "inject": [
+        {
+          "file": "ledgerly/customer/service.py",
+          "find": "since=parse_date(data[\"since\"]),",
+          "replace": "since=data[\"since\"],"
+        }
+      ],
+      "trigger": "from ledgerly.app import handle\nhandle('POST', '/api/customers', {'name': 'Asha Stores', 'credit_limit': '5000', 'since': '2026-01-02'})",
+      "test": "import unittest\nfrom ledgerly.app import handle\n\nclass T(unittest.TestCase):\n    def test_customer_since(self):\n        r = handle('POST', '/api/customers', {'name': 'Asha Stores', 'credit_limit': '5000', 'since': '2026-01-02'})\n        self.assertEqual(r['status'], 201)\n        self.assertIn('2026-01-02', r['data'])\n"
+    },
+    {
+      "id": "pg-clinicq-fee-per-slot-empty",
+      "app": "clinicq",
+      "route": "/api/doctors/summary",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "The doctors summary now shows fee per slot, dividing Decimal money by the total slots, which is zero with no doctors.",
+      "inject": [
+        {
+          "file": "clinicq/doctor/service.py",
+          "find": "\"total_slots\": sum(i.slots for i in items),",
+          "replace": "\"fee_per_slot\": str(to_money(total(i.fee for i in items) / sum(i.slots for i in items))),"
+        }
+      ],
+      "trigger": "from clinicq.app import handle\nhandle('GET', '/api/doctors/summary')",
+      "test": "import unittest\nfrom clinicq.app import handle\n\nclass T(unittest.TestCase):\n    def test_empty_doctor_summary(self):\n        r = handle('GET', '/api/doctors/summary')\n        self.assertEqual(r['status'], 200)\n        handle('POST', '/api/doctors', {'name': 'Dr Mehta', 'fee': '500', 'slots': 20})\n        self.assertEqual(handle('GET', '/api/doctors/summary')['status'], 200)\n"
+    },
+    {
+      "id": "pg-clinicq-max-age-undefined",
+      "app": "clinicq",
+      "route": "/api/patients",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "An upper age check was added to Patient.validate, referencing a constant that was never defined.",
+      "inject": [
+        {
+          "file": "clinicq/patient/model.py",
+          "find": "if self.age < 0:",
+          "replace": "if self.age < 0 or self.age > MAX_PATIENT_AGE:"
+        }
+      ],
+      "trigger": "from clinicq.app import handle\nhandle('POST', '/api/patients', {'name': 'Asha', 'age': 30, 'joined_on': '2026-01-01'})",
+      "test": "import unittest\nfrom clinicq.app import handle\n\nclass T(unittest.TestCase):\n    def test_patient(self):\n        r = handle('POST', '/api/patients', {'name': 'Asha', 'age': 30, 'joined_on': '2026-01-01'})\n        self.assertEqual(r['status'], 201)\n"
+    },
+    {
+      "id": "pg-clinicq-next-token-empty",
+      "app": "clinicq",
+      "route": "/api/appointments/summary",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "The appointments summary now shows the next queue token from the last appointment, and fails when the day has none.",
+      "inject": [
+        {
+          "file": "clinicq/appointment/service.py",
+          "find": "\"total_token\": sum(i.token for i in items),",
+          "replace": "\"next_token\": items[-1].token + 1,"
+        }
+      ],
+      "trigger": "from clinicq.app import handle\nhandle('GET', '/api/appointments/summary')",
+      "test": "import unittest\nfrom clinicq.app import handle\n\nclass T(unittest.TestCase):\n    def test_empty_queue_summary(self):\n        r = handle('GET', '/api/appointments/summary')\n        self.assertEqual(r['status'], 200)\n        self.assertEqual(r['data']['count'], 0)\n        handle('POST', '/api/patients', {'name': 'Asha', 'age': 30, 'joined_on': '2026-01-01'})\n        handle('POST', '/api/doctors', {'name': 'Dr Mehta', 'fee': '500', 'slots': 20})\n        handle('POST', '/api/appointments', {'patient_id': 1, 'doctor_id': 1, 'on': '2026-11-14', 'token': 7})\n        self.assertEqual(handle('GET', '/api/appointments/summary')['data']['count'], 1)\n"
+    },
+    {
+      "id": "pg-clinicq-page-size-key",
+      "app": "clinicq",
+      "route": "/api/medicines",
+      "kind": "bug",
+      "difficulty": "root_elsewhere",
+      "story": "The medicines list asks settings for 'pageSize', a camelCase name copied from the JS app; the KeyError surfaces in config.",
+      "inject": [
+        {
+          "file": "clinicq/medicine/routes.py",
+          "find": "size = query_int(request, \"size\", setting(\"page_size\"))",
+          "replace": "size = query_int(request, \"size\", setting(\"pageSize\"))"
+        }
+      ],
+      "trigger": "from clinicq.app import handle\nhandle('GET', '/api/medicines')",
+      "test": "import unittest\nfrom clinicq.app import handle\n\nclass T(unittest.TestCase):\n    def test_medicine_list(self):\n        handle('POST', '/api/medicines', {'name': 'Paracetamol', 'price': '20', 'stock': 300})\n        r = handle('GET', '/api/medicines')\n        self.assertEqual(r['status'], 200)\n        self.assertEqual(r['data']['total'], 1)\n"
+    },
+    {
+      "id": "pg-clinicq-report-tags-none",
+      "app": "clinicq",
+      "route": "/api/reports",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "Lab reports now merge the lab's tags with tags from the request, assuming the request always sends a list.",
+      "inject": [
+        {
+          "file": "clinicq/report/service.py",
+          "find": "    lab_repo.find(report.lab_id)\n",
+          "replace": "    lab = lab_repo.find(report.lab_id)\n    report.tags = lab.tags + data.get(\"tags\")\n"
+        }
+      ],
+      "trigger": "from clinicq.app import handle\nhandle('POST', '/api/patients', {'name': 'Asha', 'age': 30, 'joined_on': '2026-01-01'})\nhandle('POST', '/api/labs', {'name': 'CBC', 'price': '350', 'hours': 6})\nhandle('POST', '/api/reports', {'lab_id': 1, 'patient_id': 1, 'ready_on': '2026-11-15'})",
+      "test": "import unittest\nfrom clinicq.app import handle\n\nclass T(unittest.TestCase):\n    def test_report_without_tags(self):\n        handle('POST', '/api/patients', {'name': 'Asha', 'age': 30, 'joined_on': '2026-01-01'})\n        handle('POST', '/api/labs', {'name': 'CBC', 'price': '350', 'hours': 6})\n        r = handle('POST', '/api/reports', {'lab_id': 1, 'patient_id': 1, 'ready_on': '2026-11-15'})\n        self.assertEqual(r['status'], 201)\n        r = handle('POST', '/api/reports', {'lab_id': 1, 'patient_id': 1, 'ready_on': '2026-11-15', 'tags': ['urgent']})\n        self.assertEqual(r['status'], 201)\n"
+    },
+    {
+      "id": "pg-clinicq-bill-discount-float",
+      "app": "clinicq",
+      "route": "/api/bills",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "Bills now apply the discount at creation, multiplying the Decimal amount by a float.",
+      "inject": [
+        {
+          "file": "clinicq/bill/service.py",
+          "find": "    appointment_repo.find(bill.appointment_id)\n",
+          "replace": "    appointment_repo.find(bill.appointment_id)\n    bill.amount = bill.amount * (1 - bill.discount_rate / 100)\n"
+        }
+      ],
+      "trigger": "from clinicq.app import handle\nhandle('POST', '/api/patients', {'name': 'Asha', 'age': 30, 'joined_on': '2026-01-01'})\nhandle('POST', '/api/doctors', {'name': 'Dr Mehta', 'fee': '500', 'slots': 20})\nhandle('POST', '/api/appointments', {'patient_id': 1, 'doctor_id': 1, 'on': '2026-11-14', 'token': 7})\nhandle('POST', '/api/bills', {'appointment_id': 1, 'amount': '500', 'discount_rate': 10})",
+      "test": "import unittest\nfrom clinicq.app import handle\n\nclass T(unittest.TestCase):\n    def test_bill(self):\n        handle('POST', '/api/patients', {'name': 'Asha', 'age': 30, 'joined_on': '2026-01-01'})\n        handle('POST', '/api/doctors', {'name': 'Dr Mehta', 'fee': '500', 'slots': 20})\n        handle('POST', '/api/appointments', {'patient_id': 1, 'doctor_id': 1, 'on': '2026-11-14', 'token': 7})\n        r = handle('POST', '/api/bills', {'appointment_id': 1, 'amount': '500', 'discount_rate': 10})\n        self.assertEqual(r['status'], 201)\n"
+    },
+    {
+      "id": "pg-clinicq-store-all-dict",
+      "app": "clinicq",
+      "route": "/api/patients",
+      "kind": "bug",
+      "difficulty": "root_elsewhere",
+      "story": "Store.all() now returns the rows dict itself; callers that loop over it get ids, not records.",
+      "inject": [
+        {
+          "file": "clinicq/core/store.py",
+          "find": "return list(self.rows.values())",
+          "replace": "return self.rows"
+        }
+      ],
+      "trigger": "from clinicq.app import handle\nhandle('POST', '/api/patients', {'name': 'Asha', 'age': 30, 'joined_on': '2026-01-01'})\nhandle('GET', '/api/patients')",
+      "test": "import unittest\nfrom clinicq.app import handle\n\nclass T(unittest.TestCase):\n    def test_patient_list(self):\n        handle('POST', '/api/patients', {'name': 'Asha', 'age': 30, 'joined_on': '2026-01-01'})\n        r = handle('GET', '/api/patients')\n        self.assertEqual(r['status'], 200)\n        self.assertEqual(r['data']['total'], 1)\n        self.assertEqual(handle('GET', '/api/patients/summary')['data']['count'], 1)\n"
+    },
+    {
+      "id": "pg-campuskart-coupon-expiry-tz",
+      "app": "campuskart",
+      "route": "/api/coupons",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "A new expiry check compares the coupon's date with now_utc(), a datetime.",
+      "inject": [
+        {
+          "file": "campuskart/coupon/service.py",
+          "find": "from ..core.dates import is_past, parse_date\n",
+          "replace": "from ..core.dates import is_past, now_utc, parse_date\nfrom ..core.errors import ValidationError\n"
+        },
+        {
+          "file": "campuskart/coupon/service.py",
+          "find": "    return repo.save(coupon)",
+          "replace": "    if coupon.valid_until < now_utc():\n        raise ValidationError(\"coupon has already expired\")\n    return repo.save(coupon)"
+        }
+      ],
+      "trigger": "from campuskart.app import handle\nhandle('POST', '/api/coupons', {'code': 'FRESHER10', 'discount_rate': 10, 'valid_until': '2030-01-01'})",
+      "test": "import unittest\nfrom campuskart.app import handle\n\nclass T(unittest.TestCase):\n    def test_coupon(self):\n        r = handle('POST', '/api/coupons', {'code': 'FRESHER10', 'discount_rate': 10, 'valid_until': '2030-01-01'})\n        self.assertEqual(r['status'], 201)\n        r = handle('POST', '/api/coupons', {'code': 'OLD', 'discount_rate': 10, 'valid_until': '2020-01-01'})\n        self.assertIn(r['status'], (201, 400))\n"
+    },
+    {
+      "id": "pg-campuskart-star-label-off-by-one",
+      "app": "campuskart",
+      "route": "/api/reviews",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "Reviews now show a label for their stars, indexing a 5-item tuple with the 1-to-5 star count.",
+      "inject": [
+        {
+          "file": "campuskart/review/model.py",
+          "find": "return f\"{self.text}\"",
+          "replace": "return f\"{('Poor', 'Fair', 'Good', 'Great', 'Excellent')[self.stars]} · {self.text}\""
+        }
+      ],
+      "trigger": "from campuskart.app import handle\nhandle('POST', '/api/sellers', {'name': 'Asha', 'rating_sum': 40, 'joined_on': '2026-07-01'})\nhandle('POST', '/api/listings', {'seller_id': 1, 'title': 'Used cycle', 'price': '2500', 'listed_on': '2026-11-01'})\nhandle('POST', '/api/orders', {'listing_id': 1, 'quantity': 1, 'total': '2500', 'placed_on': '2026-11-02'})\nhandle('POST', '/api/reviews', {'order_id': 1, 'stars': 5, 'text': 'Smooth deal'})",
+      "test": "import unittest\nfrom campuskart.app import handle\n\nclass T(unittest.TestCase):\n    def test_five_star_review(self):\n        handle('POST', '/api/sellers', {'name': 'Asha', 'rating_sum': 40, 'joined_on': '2026-07-01'})\n        handle('POST', '/api/listings', {'seller_id': 1, 'title': 'Used cycle', 'price': '2500', 'listed_on': '2026-11-01'})\n        handle('POST', '/api/orders', {'listing_id': 1, 'quantity': 1, 'total': '2500', 'placed_on': '2026-11-02'})\n        r = handle('POST', '/api/reviews', {'order_id': 1, 'stars': 5, 'text': 'Smooth deal'})\n        self.assertEqual(r['status'], 201)\n        self.assertIn('Smooth deal', r['data'])\n        self.assertEqual(handle('POST', '/api/reviews', {'order_id': 1, 'stars': 1, 'text': 'Late'})['status'], 201)\n"
+    },
+    {
+      "id": "pg-campuskart-payout-fee-float",
+      "app": "campuskart",
+      "route": "/api/payouts",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "A 2% platform fee is now taken from seller payouts with a float rate on a Decimal amount.",
+      "inject": [
+        {
+          "file": "campuskart/payout/service.py",
+          "find": "    seller_repo.find(payout.seller_id)\n",
+          "replace": "    seller_repo.find(payout.seller_id)\n    payout.amount = payout.amount - payout.amount * 0.02\n"
+        }
+      ],
+      "trigger": "from campuskart.app import handle\nhandle('POST', '/api/sellers', {'name': 'Asha', 'rating_sum': 40, 'joined_on': '2026-07-01'})\nhandle('POST', '/api/payouts', {'seller_id': 1, 'amount': '2500', 'paid_on': '2026-11-10'})",
+      "test": "import unittest\nfrom campuskart.app import handle\n\nclass T(unittest.TestCase):\n    def test_payout(self):\n        handle('POST', '/api/sellers', {'name': 'Asha', 'rating_sum': 40, 'joined_on': '2026-07-01'})\n        r = handle('POST', '/api/payouts', {'seller_id': 1, 'amount': '2500', 'paid_on': '2026-11-10'})\n        self.assertEqual(r['status'], 201)\n"
+    },
+    {
+      "id": "pg-campuskart-listing-tags-none",
+      "app": "campuskart",
+      "route": "/api/listings",
+      "kind": "bug",
+      "difficulty": "root_elsewhere",
+      "story": "Listing.tags now defaults to None to 'save memory'; the code that tags new listings still appends to it.",
+      "inject": [
+        {
+          "file": "campuskart/listing/model.py",
+          "find": "tags: list = field(default_factory=list)",
+          "replace": "tags: list = None"
+        },
+        {
+          "file": "campuskart/listing/service.py",
+          "find": "    seller_repo.find(listing.seller_id)\n",
+          "replace": "    seller_repo.find(listing.seller_id)\n    listing.tags.append(\"new\")\n"
+        }
+      ],
+      "clean_inject": [
+        {
+          "file": "campuskart/listing/service.py",
+          "find": "    seller_repo.find(listing.seller_id)\n",
+          "replace": "    seller_repo.find(listing.seller_id)\n    listing.tags.append(\"new\")\n"
+        }
+      ],
+      "trigger": "from campuskart.app import handle\nhandle('POST', '/api/sellers', {'name': 'Asha', 'rating_sum': 40, 'joined_on': '2026-07-01'})\nhandle('POST', '/api/listings', {'seller_id': 1, 'title': 'Used cycle', 'price': '2500', 'listed_on': '2026-11-01'})",
+      "test": "import unittest\nfrom campuskart.app import handle\n\nclass T(unittest.TestCase):\n    def test_listing(self):\n        handle('POST', '/api/sellers', {'name': 'Asha', 'rating_sum': 40, 'joined_on': '2026-07-01'})\n        r = handle('POST', '/api/listings', {'seller_id': 1, 'title': 'Used cycle', 'price': '2500', 'listed_on': '2026-11-01'})\n        self.assertEqual(r['status'], 201)\n        r = handle('POST', '/api/listings', {'seller_id': 1, 'title': 'Lab coat', 'price': '300', 'listed_on': '2026-11-02'})\n        self.assertEqual(r['status'], 201)\n"
+    },
+    {
+      "id": "pg-campuskart-pickup-time-format",
+      "app": "campuskart",
+      "route": "/api/pickups",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "Pickups now parse a time too ('%Y-%m-%d %H:%M'), but the app still sends only the date.",
+      "inject": [
+        {
+          "file": "campuskart/pickup/service.py",
+          "find": "at=parse_date(data[\"at\"]),",
+          "replace": "at=datetime.strptime(data[\"at\"], \"%Y-%m-%d %H:%M\"),"
+        },
+        {
+          "file": "campuskart/pickup/service.py",
+          "find": "from ..core.dates import is_past, parse_date\n",
+          "replace": "from datetime import datetime\n\nfrom ..core.dates import is_past, parse_date\n"
+        }
+      ],
+      "trigger": "from campuskart.app import handle\nhandle('POST', '/api/sellers', {'name': 'Asha', 'rating_sum': 40, 'joined_on': '2026-07-01'})\nhandle('POST', '/api/listings', {'seller_id': 1, 'title': 'Used cycle', 'price': '2500', 'listed_on': '2026-11-01'})\nhandle('POST', '/api/orders', {'listing_id': 1, 'quantity': 1, 'total': '2500', 'placed_on': '2026-11-02'})\nhandle('POST', '/api/pickups', {'order_id': 1, 'spot': 'Library gate', 'at': '2026-11-14'})",
+      "test": "import unittest\nfrom campuskart.app import handle\n\nclass T(unittest.TestCase):\n    def test_pickup(self):\n        handle('POST', '/api/sellers', {'name': 'Asha', 'rating_sum': 40, 'joined_on': '2026-07-01'})\n        handle('POST', '/api/listings', {'seller_id': 1, 'title': 'Used cycle', 'price': '2500', 'listed_on': '2026-11-01'})\n        handle('POST', '/api/orders', {'listing_id': 1, 'quantity': 1, 'total': '2500', 'placed_on': '2026-11-02'})\n        r = handle('POST', '/api/pickups', {'order_id': 1, 'spot': 'Library gate', 'at': '2026-11-14'})\n        self.assertEqual(r['status'], 201)\n        self.assertIn('Library gate', r['data'])\n"
+    },
+    {
+      "id": "pg-campuskart-category-items-blank",
+      "app": "campuskart",
+      "route": "/api/categories",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "Item count was made optional for new categories; the admin form posts an empty string, which int() rejects.",
+      "inject": [
+        {
+          "file": "campuskart/category/routes.py",
+          "find": "require_fields(body, \"name\", \"items\")",
+          "replace": "require_fields(body, \"name\")"
+        },
+        {
+          "file": "campuskart/category/service.py",
+          "find": "items=int(data[\"items\"]),",
+          "replace": "items=int(data.get(\"items\", 0)),"
+        }
+      ],
+      "trigger": "from campuskart.app import handle\nhandle('POST', '/api/categories', {'name': 'Books', 'items': ''})",
+      "test": "import unittest\nfrom campuskart.app import handle\n\nclass T(unittest.TestCase):\n    def test_category_items(self):\n        r = handle('POST', '/api/categories', {'name': 'Books', 'items': ''})\n        self.assertIn(r['status'], (201, 400))\n        self.assertEqual(handle('POST', '/api/categories', {'name': 'Cycles', 'items': 3})['status'], 201)\n"
+    },
+    {
+      "id": "pg-campuskart-notfound-base",
+      "app": "campuskart",
+      "route": "/api/wishlists",
+      "kind": "bug",
+      "difficulty": "root_elsewhere",
+      "story": "NotFound was moved off AppError onto Exception; the routes no longer catch it, so a missing listing becomes a crash instead of a 404.",
+      "inject": [
+        {
+          "file": "campuskart/core/errors.py",
+          "find": "class NotFound(AppError):",
+          "replace": "class NotFound(Exception):"
+        }
+      ],
+      "trigger": "from campuskart.app import handle\nhandle('POST', '/api/wishlists', {'student': 'Ravi', 'listing_id': 99, 'added_on': '2026-11-14'})",
+      "test": "import unittest\nfrom campuskart.app import handle\n\nclass T(unittest.TestCase):\n    def test_missing_listing(self):\n        r = handle('POST', '/api/wishlists', {'student': 'Ravi', 'listing_id': 99, 'added_on': '2026-11-14'})\n        self.assertTrue(400 <= r['status'] < 500)\n"
+    },
+    {
+      "id": "pg-fleetwise-average-seats-empty",
+      "app": "fleetwise",
+      "route": "/api/buses/summary",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "The buses summary now shows average seats and divides by the bus count, which is zero for a new depot.",
+      "inject": [
+        {
+          "file": "fleetwise/bus/service.py",
+          "find": "\"total_seats\": sum(i.seats for i in items),",
+          "replace": "\"average_seats\": sum(i.seats for i in items) / len(items),"
+        }
+      ],
+      "trigger": "from fleetwise.app import handle\nhandle('GET', '/api/buses/summary')",
+      "test": "import unittest\nfrom fleetwise.app import handle\n\nclass T(unittest.TestCase):\n    def test_empty_bus_summary(self):\n        r = handle('GET', '/api/buses/summary')\n        self.assertEqual(r['status'], 200)\n        handle('POST', '/api/buses', {'plate': 'UP32 AB 1234', 'seats': 40, 'bought_on': '2024-04-01'})\n        self.assertEqual(handle('GET', '/api/buses/summary')['status'], 200)\n"
+    },
+    {
+      "id": "pg-fleetwise-licence-days-left",
+      "app": "fleetwise",
+      "route": "/api/drivers",
+      "kind": "bug",
+      "difficulty": "root_elsewhere",
+      "story": "Drivers are now tagged with licence days left, passing now_utc() (a datetime) to days_between with a date.",
+      "inject": [
+        {
+          "file": "fleetwise/driver/service.py",
+          "find": "from ..core.dates import is_past, parse_date\n",
+          "replace": "from ..core.dates import days_between, is_past, now_utc, parse_date\n"
+        },
+        {
+          "file": "fleetwise/driver/service.py",
+          "find": "    return repo.save(driver)",
+          "replace": "    driver.tags.append(f\"licence: {days_between(now_utc(), driver.licence_until)} days left\")\n    return repo.save(driver)"
+        }
+      ],
+      "trigger": "from fleetwise.app import handle\nhandle('POST', '/api/drivers', {'name': 'Ramesh', 'licence_until': '2028-05-01', 'trips': 0})",
+      "test": "import unittest\nfrom fleetwise.app import handle\n\nclass T(unittest.TestCase):\n    def test_driver(self):\n        r = handle('POST', '/api/drivers', {'name': 'Ramesh', 'licence_until': '2028-05-01', 'trips': 0})\n        self.assertEqual(r['status'], 201)\n"
+    },
+    {
+      "id": "pg-fleetwise-trip-capacity-typo",
+      "app": "fleetwise",
+      "route": "/api/trips",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "A new check stops overloaded trips but reads bus.capacity; the Bus model calls it seats.",
+      "inject": [
+        {
+          "file": "fleetwise/trip/service.py",
+          "find": "from ..core.dates import is_past, parse_date\n",
+          "replace": "from ..core.dates import is_past, parse_date\nfrom ..core.errors import ValidationError\n"
+        },
+        {
+          "file": "fleetwise/trip/service.py",
+          "find": "    bus_repo.find(trip.bus_id)\n",
+          "replace": "    bus = bus_repo.find(trip.bus_id)\n    if trip.riders > bus.capacity:\n        raise ValidationError(\"more riders than seats\")\n"
+        }
+      ],
+      "trigger": "from fleetwise.app import handle\nhandle('POST', '/api/buses', {'plate': 'UP32 AB 1234', 'seats': 40, 'bought_on': '2024-04-01'})\nhandle('POST', '/api/routes', {'name': 'Gomti Nagar', 'km': 18, 'fare': '30'})\nhandle('POST', '/api/trips', {'bus_id': 1, 'route_id': 1, 'riders': 30, 'ran_on': '2026-11-13'})",
+      "test": "import unittest\nfrom fleetwise.app import handle\n\nclass T(unittest.TestCase):\n    def test_trip(self):\n        handle('POST', '/api/buses', {'plate': 'UP32 AB 1234', 'seats': 40, 'bought_on': '2024-04-01'})\n        handle('POST', '/api/routes', {'name': 'Gomti Nagar', 'km': 18, 'fare': '30'})\n        self.assertEqual(handle('POST', '/api/trips', {'bus_id': 1, 'route_id': 1, 'riders': 30, 'ran_on': '2026-11-13'})['status'], 201)\n        r = handle('POST', '/api/trips', {'bus_id': 1, 'route_id': 1, 'riders': 99, 'ran_on': '2026-11-13'})\n        self.assertIn(r['status'], (201, 400))\n"
+    },
+    {
+      "id": "pg-fleetwise-complaint-severity",
+      "app": "fleetwise",
+      "route": "/api/complaints",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "Complaints are now tagged with a severity read straight from the body; the student app does not send one.",
+      "inject": [
+        {
+          "file": "fleetwise/complaint/service.py",
+          "find": "    trip_repo.find(complaint.trip_id)\n",
+          "replace": "    trip_repo.find(complaint.trip_id)\n    complaint.tags.append(data[\"severity\"].lower())\n"
+        }
+      ],
+      "trigger": "from fleetwise.app import handle\nhandle('POST', '/api/buses', {'plate': 'UP32 AB 1234', 'seats': 40, 'bought_on': '2024-04-01'})\nhandle('POST', '/api/routes', {'name': 'Gomti Nagar', 'km': 18, 'fare': '30'})\nhandle('POST', '/api/trips', {'bus_id': 1, 'route_id': 1, 'riders': 30, 'ran_on': '2026-11-13'})\nhandle('POST', '/api/complaints', {'text': 'Bus came late', 'trip_id': 1, 'filed_on': '2026-11-13'})",
+      "test": "import unittest\nfrom fleetwise.app import handle\n\nclass T(unittest.TestCase):\n    def test_complaint_without_severity(self):\n        handle('POST', '/api/buses', {'plate': 'UP32 AB 1234', 'seats': 40, 'bought_on': '2024-04-01'})\n        handle('POST', '/api/routes', {'name': 'Gomti Nagar', 'km': 18, 'fare': '30'})\n        handle('POST', '/api/trips', {'bus_id': 1, 'route_id': 1, 'riders': 30, 'ran_on': '2026-11-13'})\n        r = handle('POST', '/api/complaints', {'text': 'Bus came late', 'trip_id': 1, 'filed_on': '2026-11-13'})\n        self.assertEqual(r['status'], 201)\n        r = handle('POST', '/api/complaints', {'text': 'Rash driving', 'trip_id': 1, 'filed_on': '2026-11-13', 'severity': 'HIGH'})\n        self.assertEqual(r['status'], 201)\n"
+    },
+    {
+      "id": "pg-fleetwise-route-km-renamed",
+      "app": "fleetwise",
+      "route": "/api/routes",
+      "kind": "bug",
+      "difficulty": "root_elsewhere",
+      "story": "The route service reads a new key 'distance_km' while clients still send km; the None fails in Route.validate.",
+      "inject": [
+        {
+          "file": "fleetwise/route/service.py",
+          "find": "km=int(data[\"km\"]),",
+          "replace": "km=data.get(\"distance_km\"),"
+        }
+      ],
+      "trigger": "from fleetwise.app import handle\nhandle('POST', '/api/routes', {'name': 'Gomti Nagar', 'km': 18, 'fare': '30'})",
+      "test": "import unittest\nfrom fleetwise.app import handle\n\nclass T(unittest.TestCase):\n    def test_route(self):\n        r = handle('POST', '/api/routes', {'name': 'Gomti Nagar', 'km': 18, 'fare': '30'})\n        self.assertEqual(r['status'], 201)\n"
+    },
+    {
+      "id": "pg-fleetwise-validate-not-called",
+      "app": "fleetwise",
+      "route": "/api/buses",
+      "kind": "bug",
+      "difficulty": "root_elsewhere",
+      "story": "A refactor of the bus repo dropped the () after validate, so the store is handed a bound method instead of the bus.",
+      "inject": [
+        {
+          "file": "fleetwise/bus/repo.py",
+          "find": "BUSES.add(bus.validate())",
+          "replace": "BUSES.add(bus.validate)"
+        }
+      ],
+      "trigger": "from fleetwise.app import handle\nhandle('POST', '/api/buses', {'plate': 'UP32 AB 1234', 'seats': 40, 'bought_on': '2024-04-01'})",
+      "test": "import unittest\nfrom fleetwise.app import handle\n\nclass T(unittest.TestCase):\n    def test_bus(self):\n        r = handle('POST', '/api/buses', {'plate': 'UP32 AB 1234', 'seats': 40, 'bought_on': '2024-04-01'})\n        self.assertEqual(r['status'], 201)\n        self.assertEqual(handle('POST', '/api/buses', {'plate': 'UP32 X 1', 'seats': -1, 'bought_on': '2024-04-01'})['status'], 400)\n"
+    },
+    {
+      "id": "pg-fleetwise-previous-stop",
+      "app": "fleetwise",
+      "route": "/api/stops",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "Stops are now labelled with the stop before them, but the first stop on a route has none.",
+      "inject": [
+        {
+          "file": "fleetwise/stop/service.py",
+          "find": "    route_repo.find(stop.route_id)\n",
+          "replace": "    route_repo.find(stop.route_id)\n    earlier = [s for s in repo.all_stops() if s.route_id == stop.route_id]\n    stop.tags.append(f\"after {earlier[stop.order - 2].name}\")\n"
+        }
+      ],
+      "trigger": "from fleetwise.app import handle\nhandle('POST', '/api/routes', {'name': 'Gomti Nagar', 'km': 18, 'fare': '30'})\nhandle('POST', '/api/stops', {'name': 'Hazratganj', 'route_id': 1, 'order': 1})",
+      "test": "import unittest\nfrom fleetwise.app import handle\n\nclass T(unittest.TestCase):\n    def test_first_stop(self):\n        handle('POST', '/api/routes', {'name': 'Gomti Nagar', 'km': 18, 'fare': '30'})\n        r = handle('POST', '/api/stops', {'name': 'Hazratganj', 'route_id': 1, 'order': 1})\n        self.assertEqual(r['status'], 201)\n        r = handle('POST', '/api/stops', {'name': 'Polytechnic', 'route_id': 1, 'order': 2})\n        self.assertEqual(r['status'], 201)\n"
+    },
+    {
+      "id": "pg-examhall-batch-share-zero",
+      "app": "examhall",
+      "route": "/api/batches",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "Batches are now tagged with their share of the college, dividing by the college's student count, which is 0 for a newly onboarded college.",
+      "inject": [
+        {
+          "file": "examhall/batch/service.py",
+          "find": "    college_repo.find(batch.college_id)\n",
+          "replace": "    college = college_repo.find(batch.college_id)\n    batch.tags.append(f\"{batch.size * 100 // college.students}% of college\")\n"
+        }
+      ],
+      "trigger": "from examhall.app import handle\nhandle('POST', '/api/colleges', {'name': 'New Institute', 'students': 0, 'joined_on': '2026-11-01'})\nhandle('POST', '/api/batches', {'name': 'CSE 2027', 'college_id': 1, 'size': 60})",
+      "test": "import unittest\nfrom examhall.app import handle\n\nclass T(unittest.TestCase):\n    def test_batch_in_new_college(self):\n        handle('POST', '/api/colleges', {'name': 'New Institute', 'students': 0, 'joined_on': '2026-11-01'})\n        r = handle('POST', '/api/batches', {'name': 'CSE 2027', 'college_id': 1, 'size': 60})\n        self.assertIn(r['status'], (201, 400))\n        handle('POST', '/api/colleges', {'name': 'IET Lucknow', 'students': 900, 'joined_on': '2026-01-01'})\n        self.assertEqual(handle('POST', '/api/batches', {'name': 'ECE 2027', 'college_id': 2, 'size': 60})['status'], 201)\n"
+    },
+    {
+      "id": "pg-examhall-validate-returns-none",
+      "app": "examhall",
+      "route": "/api/colleges",
+      "kind": "bug",
+      "difficulty": "root_elsewhere",
+      "story": "A cleanup removed 'return self' from College.validate; the repo saves its None and the store fails.",
+      "inject": [
+        {
+          "file": "examhall/college/model.py",
+          "find": "        return self\n\n    def describe",
+          "replace": "\n    def describe"
+        }
+      ],
+      "trigger": "from examhall.app import handle\nhandle('POST', '/api/colleges', {'name': 'IET Lucknow', 'students': 900, 'joined_on': '2026-01-01'})",
+      "test": "import unittest\nfrom examhall.app import handle\n\nclass T(unittest.TestCase):\n    def test_college(self):\n        r = handle('POST', '/api/colleges', {'name': 'IET Lucknow', 'students': 900, 'joined_on': '2026-01-01'})\n        self.assertEqual(r['status'], 201)\n        self.assertIn('IET Lucknow', r['data'])\n"
+    },
+    {
+      "id": "pg-examhall-notice-sort-attr",
+      "app": "examhall",
+      "route": "/api/notices",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "The notice board now lists newest first, sorting by posted_at; the field is posted_on.",
+      "inject": [
+        {
+          "file": "examhall/notice/routes.py",
+          "find": "rows = [r.describe() for r in repo.all_notices()]",
+          "replace": "rows = [r.describe() for r in sorted(repo.all_notices(), key=lambda n: n.posted_at, reverse=True)]"
+        }
+      ],
+      "trigger": "from examhall.app import handle\nhandle('POST', '/api/notices', {'title': 'Hall tickets out', 'posted_on': '2026-11-10'})\nhandle('GET', '/api/notices')",
+      "test": "import unittest\nfrom examhall.app import handle\n\nclass T(unittest.TestCase):\n    def test_notice_list(self):\n        handle('POST', '/api/notices', {'title': 'Hall tickets out', 'posted_on': '2026-11-10'})\n        handle('POST', '/api/notices', {'title': 'Results', 'posted_on': '2026-11-12'})\n        r = handle('GET', '/api/notices')\n        self.assertEqual(r['status'], 200)\n        self.assertEqual(r['data']['total'], 2)\n"
+    },
+    {
+      "id": "pg-examhall-student-first-name",
+      "app": "examhall",
+      "route": "/api/students",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "The student service now builds the name from first_name and last_name; the registration form still sends name.",
+      "inject": [
+        {
+          "file": "examhall/student/service.py",
+          "find": "name=str(data[\"name\"]).strip(),",
+          "replace": "name=f'{data[\"first_name\"]} {data[\"last_name\"]}'.strip(),"
+        }
+      ],
+      "trigger": "from examhall.app import handle\nhandle('POST', '/api/colleges', {'name': 'IET Lucknow', 'students': 900, 'joined_on': '2026-01-01'})\nhandle('POST', '/api/students', {'name': 'Asha', 'college_id': 1, 'joined_on': '2026-01-05'})",
+      "test": "import unittest\nfrom examhall.app import handle\n\nclass T(unittest.TestCase):\n    def test_student(self):\n        handle('POST', '/api/colleges', {'name': 'IET Lucknow', 'students': 900, 'joined_on': '2026-01-01'})\n        r = handle('POST', '/api/students', {'name': 'Asha', 'college_id': 1, 'joined_on': '2026-01-05'})\n        self.assertEqual(r['status'], 201)\n        self.assertIn('Asha', r['data'])\n"
+    },
+    {
+      "id": "pg-examhall-store-sorted",
+      "app": "examhall",
+      "route": "/api/halls",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "Store.all() now sorts rows for a stable order, but records have no ordering, so any table with two rows fails.",
+      "inject": [
+        {
+          "file": "examhall/core/store.py",
+          "find": "return list(self.rows.values())",
+          "replace": "return sorted(self.rows.values())"
+        }
+      ],
+      "trigger": "from examhall.app import handle\nhandle('POST', '/api/halls', {'name': 'Hall A', 'seats': 120})\nhandle('POST', '/api/halls', {'name': 'Hall B', 'seats': 80})\nhandle('GET', '/api/halls')",
+      "test": "import unittest\nfrom examhall.app import handle\n\nclass T(unittest.TestCase):\n    def test_hall_list(self):\n        handle('POST', '/api/halls', {'name': 'Hall A', 'seats': 120})\n        handle('POST', '/api/halls', {'name': 'Hall B', 'seats': 80})\n        r = handle('GET', '/api/halls')\n        self.assertEqual(r['status'], 200)\n        self.assertEqual(r['data']['total'], 2)\n"
+    },
+    {
+      "id": "pg-examhall-exam-ist-date",
+      "app": "examhall",
+      "route": "/api/exams",
+      "kind": "bug",
+      "difficulty": "root_elsewhere",
+      "story": "Exam lines now show the start in India time via to_ist(), but starts_on is a date, not a datetime.",
+      "inject": [
+        {
+          "file": "examhall/exam/model.py",
+          "find": "on {self.starts_on.isoformat()}",
+          "replace": "on {to_ist(self.starts_on).date().isoformat()}"
+        },
+        {
+          "file": "examhall/exam/model.py",
+          "find": "from ..core.errors import ValidationError\n",
+          "replace": "from ..core.dates import to_ist\nfrom ..core.errors import ValidationError\n"
+        }
+      ],
+      "trigger": "from examhall.app import handle\nhandle('POST', '/api/exams', {'title': 'DSA midterm', 'duration_min': 90, 'starts_on': '2026-11-20', 'fee': '500'})",
+      "test": "import unittest\nfrom examhall.app import handle\n\nclass T(unittest.TestCase):\n    def test_exam(self):\n        r = handle('POST', '/api/exams', {'title': 'DSA midterm', 'duration_min': 90, 'starts_on': '2026-11-20', 'fee': '500'})\n        self.assertEqual(r['status'], 201)\n        self.assertIn('2026-11-20', r['data'])\n"
+    },
+    {
+      "id": "pg-examhall-proctor-event-map",
+      "app": "examhall",
+      "route": "/api/proctorlogs",
+      "kind": "bug",
+      "difficulty": "in_trace",
+      "story": "Proctor event codes are now mapped to labels, but the map misses codes the exam client already sends, like camera_off.",
+      "inject": [
+        {
+          "file": "examhall/proctorlog/service.py",
+          "find": "event=str(data[\"event\"]).strip(),",
+          "replace": "event=EVENTS[str(data[\"event\"]).strip()],"
+        },
+        {
+          "file": "examhall/proctorlog/service.py",
+          "find": "from .model import Proctorlog\n",
+          "replace": "from .model import Proctorlog\n\nEVENTS = {\"tab_switch\": \"Switched tab\", \"fullscreen_exit\": \"Left full screen\"}\n"
+        }
+      ],
+      "trigger": "from examhall.app import handle\nhandle('POST', '/api/colleges', {'name': 'IET Lucknow', 'students': 900, 'joined_on': '2026-01-01'})\nhandle('POST', '/api/students', {'name': 'Asha', 'college_id': 1, 'joined_on': '2026-01-05'})\nhandle('POST', '/api/exams', {'title': 'DSA midterm', 'duration_min': 90, 'starts_on': '2026-11-20', 'fee': '500'})\nhandle('POST', '/api/attempts', {'exam_id': 1, 'student_id': 1, 'started_on': '2026-11-20', 'answered': 0})\nhandle('POST', '/api/proctorlogs', {'attempt_id': 1, 'event': 'camera_off', 'at': '2026-11-20'})",
+      "test": "import unittest\nfrom examhall.app import handle\n\nclass T(unittest.TestCase):\n    def test_proctor_events(self):\n        handle('POST', '/api/colleges', {'name': 'IET Lucknow', 'students': 900, 'joined_on': '2026-01-01'})\n        handle('POST', '/api/students', {'name': 'Asha', 'college_id': 1, 'joined_on': '2026-01-05'})\n        handle('POST', '/api/exams', {'title': 'DSA midterm', 'duration_min': 90, 'starts_on': '2026-11-20', 'fee': '500'})\n        handle('POST', '/api/attempts', {'exam_id': 1, 'student_id': 1, 'started_on': '2026-11-20', 'answered': 0})\n        r = handle('POST', '/api/proctorlogs', {'attempt_id': 1, 'event': 'tab_switch', 'at': '2026-11-20'})\n        self.assertEqual(r['status'], 201)\n        r = handle('POST', '/api/proctorlogs', {'attempt_id': 1, 'event': 'camera_off', 'at': '2026-11-20'})\n        self.assertIn(r['status'], (201, 400))\n"
+    }
+  ]
+}

@@ -4,7 +4,7 @@ import { DemoSection } from "../ui/demo-section";
 import { getEvidence } from "../watcher";
 
 export const metadata: Metadata = {
-  title: "Live demo: break our exam portal · JaagteRaho",
+  title: "Break our exam portal · JaagteRaho",
   description: "Break a real demo exam portal and watch JaagteRaho decide, wake the owner, explain the cause and heal it, live, with a timer. No sign-up.",
 };
 
