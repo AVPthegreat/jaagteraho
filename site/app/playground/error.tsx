@@ -1,10 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
+import { isChunkError, reloadOnce } from "../ui/chunk-reload";
 import "./playground.css";
 
 /* If anything on the playground page breaks, the visitor gets this, in our design, never the framework's error screen. */
-export default function PlaygroundError({ reset }: { error: Error; reset: () => void }) {
+export default function PlaygroundError({ error, reset }: { error: Error; reset: () => void }) {
+  useEffect(() => {
+    // Old chunks after a deploy: one quiet reload fixes it.
+    if (isChunkError(error)) reloadOnce();
+  }, [error]);
   return (
     <section className="section pg-page" aria-labelledby="pg-err-h">
       <div className="frame">

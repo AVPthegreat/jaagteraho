@@ -1,31 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { Clip } from "../site";
+import { useEffect, useRef, useState } from "react";
 
 /*
-  "See it work": one playlist. The clips play 1 → 6 and start over, each step's card lights up while
-  its clip plays, and one seek bar covers the whole sequence (one segment per clip). Autoplay starts
-  muted (browser rule) and only while the section is on screen; one tap turns sound on for the whole
-  sequence. With reduced motion nothing plays on its own and the video shows its own controls.
+  "See it work": one continuous 30-second film. It starts when the section comes into view (with sound
+  if the browser allows it, otherwise muted with a "Tap for sound" button), pauses exactly where it is
+  when the section leaves the view and resumes from there when it comes back. The step list beside it
+  follows the film; clicking a step jumps there. With reduced motion nothing plays on its own.
 */
 
-/*
-  The files for each clip, in one place. `base` is the silent 16:9 file, `tall` a 9:16 version used on
-  phones, `sound` a 16:9 version with an audio track (preferred everywhere when present, so sound
-  works on phones too). Each name means <name>.webm and <name>.mp4 in public/clips; posters are
-  <base>.jpg and <tall>.jpg.
-*/
-const FILES: Record<string, { base: string; tall?: string; sound?: string; secs: number }> = {
-  "night-scene": { base: "night-scene", tall: "night-scene-9x16", sound: "night-scene-sound", secs: 6.4 },
-  "error-to-cause": { base: "error-to-cause", sound: "error-to-cause-sound", secs: 6 },
-  "fix-checked": { base: "fix-checked", tall: "fix-checked-9x16", sound: "fix-checked-sound", secs: 5.7 },
-  "heal-undo": { base: "heal-undo", sound: "heal-undo-sound", secs: 6 },
-  scenarios: { base: "scenarios", sound: "scenarios-sound", secs: 6.2 },
-  connect: { base: "connect", sound: "connect-sound", secs: 6.1 },
-};
-
-const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+/* The film and its steps. Start times (seconds) come from the 30 s plan (jr-video/final/plan30.json + its .srt). */
+const FILM = { src: "/clips/jaagteraho-30s", poster: "/clips/jaagteraho-30s.jpg" };
+const STEPS: Array<{ at: number; title: string; line: string }> = [
+  { at: 0, title: "It breaks at 2 am", line: "Your exam portal crashes while you sleep." },
+  { at: 7.6, title: "It calls you", line: "Something serious? Your phone rings. Press 1." },
+  { at: 11.5, title: "The cause is waiting", line: "Plain words, file and line, on Telegram." },
+  { at: 14.0, title: "It fixes itself", line: "No answer? A fix checked three ways, one tap to undo." },
+  { at: 20.8, title: "Watch it live", line: "A real bug, fixed live in our playground." },
+  { at: 24.3, title: "62 fixes for $1.19", line: "Bugs fixed with proof, for $1.19 of AI in total." },
+];
 
 function SpeakerIcon({ on }: { on: boolean }) {
   return (
@@ -40,252 +33,181 @@ function SpeakerIcon({ on }: { on: boolean }) {
   );
 }
 
-export function Clips({ clips }: { clips: Clip[] }) {
-  const n = clips.length;
-  const root = useRef<HTMLDivElement | null>(null);
+export function Clips() {
+  const box = useRef<HTMLDivElement | null>(null);
   const video = useRef<HTMLVideoElement | null>(null);
-  const strip = useRef<HTMLOListElement | null>(null);
-  const seekTo = useRef<number | null>(null);
-  const [idx, setIdx] = useState(0);
-  const fails = useRef(0);
-  const [cur, setCur] = useState(0);
-  const [durs, setDurs] = useState<number[]>(() => clips.map((c) => FILES[c.id]?.secs ?? 10));
+  const [t, setT] = useState(0);
+  const [dur, setDur] = useState(31);
+  const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
-  const [paused, setPaused] = useState(false); // the viewer pressed pause
-  const [visible, setVisible] = useState(false);
   const [still, setStill] = useState(false);
-  const [narrow, setNarrow] = useState(false);
+  const [userPaused, setUserPaused] = useState(false);
+  const interacted = useRef(false);
+  const userMuted = useRef(false);
+  const visible = useRef(false);
 
   useEffect(() => {
     setStill(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    const mq = window.matchMedia("(max-width: 640px)");
-    setNarrow(mq.matches);
-    const on = () => setNarrow(mq.matches);
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
+    // Any real interaction on the page lets the browser play sound: remember it.
+    const mark = (e: Event) => {
+      interacted.current = true;
+      // The film's own sound buttons handle themselves.
+      if (e.target instanceof Element && e.target.closest(".film-sound, .film-btn")) return;
+      // The first touch or key anywhere lets the browser play sound: turn it on if the film is playing muted.
+      const v = video.current;
+      if (v && !v.paused && v.muted && !userMuted.current) {
+        v.muted = false;
+        setMuted(false);
+      }
+    };
+    window.addEventListener("pointerdown", mark, { once: true, passive: true });
+    window.addEventListener("keydown", mark, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", mark);
+      window.removeEventListener("keydown", mark);
+    };
   }, []);
 
-  // Play only while the section is on screen.
+  /** Plays with sound when allowed; if the browser refuses, plays muted and shows "Tap for sound". */
+  const start = async () => {
+    const v = video.current;
+    if (!v) return;
+    // Sound unless the visitor muted it themselves.
+    v.muted = userMuted.current;
+    try {
+      await v.play();
+      setMuted(v.muted);
+    } catch {
+      v.muted = true;
+      setMuted(true);
+      await v.play().catch(() => undefined);
+    }
+  };
+
+  // Play while in view, pause exactly where it is when it leaves; resume from there.
   useEffect(() => {
-    const el = root.current;
-    if (!el || !("IntersectionObserver" in window)) return;
-    const io = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { threshold: 0.3 });
+    const el = box.current;
+    if (!el || still || !("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        visible.current = e.isIntersecting;
+        const v = video.current;
+        if (!v) return;
+        if (e.isIntersecting && !userPaused) {
+          if (v.paused) void start();
+        } else if (!e.isIntersecting && !v.paused) v.pause();
+      },
+      { threshold: 0.45 },
+    );
     io.observe(el);
     return () => io.disconnect();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [still, userPaused]);
 
-  const clip = clips[idx];
-  const f = FILES[clip.id] ?? { base: clip.id, secs: 10 };
-  const hasSound = Boolean(f.sound);
-  const anySound = clips.some((c) => FILES[c.id]?.sound);
-  const tall = narrow && !f.sound && Boolean(f.tall);
-  const src = f.sound ?? (tall ? f.tall! : f.base);
-  const poster = `/clips/${tall ? f.tall : f.base}.jpg`;
-  const shouldPlay = visible && !paused && !still;
-
-  useEffect(() => {
+  const toggle = () => {
     const v = video.current;
     if (!v) return;
-    v.muted = muted;
-    if (shouldPlay) v.play().catch(() => undefined);
-    else v.pause();
-  }, [shouldPlay, idx, muted, src]);
-
-  // Smooth progress while playing.
-  useEffect(() => {
-    if (!shouldPlay) return;
-    let raf = 0;
-    const loop = () => {
-      if (video.current) setCur(video.current.currentTime);
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [shouldPlay, idx]);
-
-  // Keep the active step in view inside the phone strip (scrolls the strip only, never the page).
-  useEffect(() => {
-    const s = strip.current;
-    const li = s?.children[idx] as HTMLElement | undefined;
-    if (s && li && s.scrollWidth > s.clientWidth) s.scrollTo({ left: li.offsetLeft - 16, behavior: still ? "auto" : "smooth" });
-  }, [idx, still]);
-
-  const go = useCallback(
-    (i: number, at = 0) => {
-      seekTo.current = at;
-      setCur(at);
-      setIdx(((i % n) + n) % n);
-      setPaused(false);
-    },
-    [n],
-  );
-
-  const onMeta = () => {
+    if (v.paused) {
+      setUserPaused(false);
+      void start();
+    } else {
+      setUserPaused(true);
+      v.pause();
+    }
+  };
+  const toggleSound = () => {
     const v = video.current;
     if (!v) return;
-    if (Number.isFinite(v.duration) && v.duration > 0) {
-      setDurs((d) => (Math.abs(d[idx] - v.duration) < 0.05 ? d : d.map((x, k) => (k === idx ? v.duration : x))));
-    }
-    if (seekTo.current) v.currentTime = Math.min(seekTo.current, Math.max(0, v.duration - 0.1));
-    seekTo.current = null;
-  };
-
-  const total = durs.reduce((a, b) => a + b, 0);
-  const before = durs.slice(0, idx).reduce((a, b) => a + b, 0);
-  const elapsed = before + Math.min(cur, durs[idx]);
-
-  // Seek to a point on the whole sequence (seconds from the start).
-  const seekAll = (s: number) => {
-    s = Math.max(0, Math.min(total - 0.05, s));
-    let acc = 0;
-    for (let k = 0; k < n; k++) {
-      if (s < acc + durs[k]) {
-        if (k === idx && video.current) {
-          video.current.currentTime = s - acc;
-          setCur(s - acc);
-        } else go(k, s - acc);
-        return;
-      }
-      acc += durs[k];
+    v.muted = !v.muted;
+    userMuted.current = v.muted;
+    setMuted(v.muted);
+    if (v.paused) {
+      setUserPaused(false);
+      void v.play().catch(() => undefined);
     }
   };
-  const onBar = (e: React.PointerEvent<HTMLDivElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    seekAll(((e.clientX - r.left) / r.width) * total);
-  };
-  const onBarKey = (e: React.KeyboardEvent) => {
-    const step = ({ ArrowRight: 5, ArrowLeft: -5, PageUp: 15, PageDown: -15 } as Record<string, number>)[e.key];
-    if (step !== undefined) {
-      e.preventDefault();
-      seekAll(elapsed + step);
-    } else if (e.key === "Home") {
-      e.preventDefault();
-      go(0);
-    }
-  };
-
-  const playing = shouldPlay;
-  const togglePlay = () => {
+  const seek = (i: number) => {
     const v = video.current;
-    if (still && v) {
-      // Reduced motion: the viewer starts and stops it by hand.
-      if (v.paused) v.play().catch(() => undefined);
-      else v.pause();
-      return;
+    if (!v) return;
+    v.currentTime = STEPS[i].at + 0.05;
+    setT(v.currentTime);
+    if (v.paused) {
+      setUserPaused(false);
+      void start();
     }
-    setPaused(playing);
+  };
+
+  let idx = 0;
+  STEPS.forEach((s, i) => {
+    if (t >= s.at) idx = i;
+  });
+  const fill = (i: number) => {
+    const end = STEPS[i + 1]?.at ?? dur;
+    return i < idx ? 1 : i > idx ? 0 : Math.min(1, Math.max(0, (t - STEPS[i].at) / (end - STEPS[i].at)));
   };
 
   return (
-    <div className="pl" ref={root}>
-      <ol className="pl-steps" ref={strip} aria-label="Steps">
-        {clips.map((c, i) => (
-          <li key={c.id}>
-            <button type="button" aria-current={i === idx ? "step" : undefined} onClick={() => go(i)}>
-              <span className="ps-n">{i + 1}</span>
-              <span className="ps-t">{c.title}</span>
-              <span className="ps-c">{c.caption}</span>
-              <span className="ps-fill" aria-hidden="true">
-                <i style={{ transform: `scaleX(${i < idx ? 1 : i === idx ? Math.min(1, cur / durs[i]) : 0})` }} />
+    <div className="film" ref={box}>
+      <div className="film-main">
+        <div className="film-screen">
+          <video
+            ref={video}
+            className="film-video"
+            playsInline
+            muted
+            preload="metadata"
+            poster={FILM.poster}
+            width={1920}
+            height={1080}
+            controls={still}
+            aria-label="JaagteRaho in 30 seconds"
+            onTimeUpdate={(e) => setT(e.currentTarget.currentTime)}
+            onLoadedMetadata={(e) => Number.isFinite(e.currentTarget.duration) && setDur(e.currentTarget.duration)}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+            onEnded={(e) => {
+              // Loop while the section is in view.
+              e.currentTarget.currentTime = 0;
+              if (visible.current) void e.currentTarget.play().catch(() => undefined);
+            }}
+          >
+            <source src={`${FILM.src}.webm`} type="video/webm" />
+            <source src={`${FILM.src}.mp4`} type="video/mp4" />
+          </video>
+          {muted && playing ? (
+            <button type="button" className="film-sound" onClick={toggleSound}>
+              <SpeakerIcon on /> Tap for sound
+            </button>
+          ) : null}
+        </div>
+        <div className="film-bar">
+          <button type="button" className="film-btn" onClick={toggle} aria-label={playing ? "Pause" : "Play"}>
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              {playing ? <path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor" /> : <path d="M8 5v14l11-7L8 5Z" fill="currentColor" />}
+            </svg>
+          </button>
+          <button type="button" className="film-btn" onClick={toggleSound} aria-label={muted ? "Turn sound on" : "Mute"} aria-pressed={!muted}>
+            <SpeakerIcon on={!muted} />
+          </button>
+          <span className="film-time" aria-hidden="true">
+            {Math.floor(t)} s / {Math.round(dur)} s
+          </span>
+        </div>
+      </div>
+      <ol className="film-steps" aria-label="Chapters">
+        {STEPS.map((s, i) => (
+          <li key={s.at}>
+            <button type="button" aria-current={i === idx ? "step" : undefined} onClick={() => seek(i)}>
+              <span className="fs-n">{i + 1}</span>
+              <span className="fs-t">{s.title}</span>
+              <span className="fs-c">{s.line}</span>
+              <span className="fs-fill" aria-hidden="true">
+                <i style={{ transform: `scaleX(${fill(i)})` }} />
               </span>
             </button>
           </li>
         ))}
       </ol>
-
-      <div className="pl-main">
-        <div className="clip-frame">
-          <span className="clip-dots" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </span>
-          <span className="clip-tag">Demo data</span>
-          <div className={`clip-screen${tall ? " is-tall" : ""}`}>
-            <video
-              key={src}
-              ref={video}
-              className="clip-video"
-              muted
-              playsInline
-              preload={visible ? "auto" : "none"}
-              controls={still}
-              poster={poster}
-              width={tall ? 720 : 1280}
-              height={tall ? 1280 : 720}
-              aria-label={`Step ${idx + 1} of ${n}: ${clip.title}. ${clip.caption}`}
-              onLoadedMetadata={() => {
-                fails.current = 0;
-                onMeta();
-              }}
-              onEnded={() => go(idx + 1)}
-              onTimeUpdate={(e) => {
-                if (!shouldPlay) setCur(e.currentTarget.currentTime);
-              }}
-            >
-              <source src={`/clips/${src}.webm`} type="video/webm" />
-              <source
-                src={`/clips/${src}.mp4`}
-                type="video/mp4"
-                onError={() => {
-                  // Both files failed (offline, or a deploy in progress): keep the poster, try the next clip
-                  // after a pause, and stop advancing after a full round of failures.
-                  fails.current += 1;
-                  if (fails.current < n) setTimeout(() => go(idx + 1), 4000);
-                }}
-              />
-            </video>
-            {anySound && muted && (
-              <button type="button" className="pl-sound-cta" onClick={() => setMuted(false)}>
-                <SpeakerIcon on /> Tap for sound
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="pl-bar">
-          <button type="button" className="pl-btn" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"}>
-            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              {playing ? <path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor" /> : <path d="M8 5v14l11-7L8 5Z" fill="currentColor" />}
-            </svg>
-          </button>
-          <div
-            className="pl-seek"
-            role="slider"
-            tabIndex={0}
-            aria-label="Position in the whole sequence"
-            aria-valuemin={0}
-            aria-valuemax={Math.round(total)}
-            aria-valuenow={Math.round(elapsed)}
-            aria-valuetext={`Step ${idx + 1} of ${n}, ${mmss(elapsed)} of ${mmss(total)}`}
-            onPointerDown={onBar}
-            onKeyDown={onBarKey}
-          >
-            {durs.map((d, k) => (
-              <span key={k} className={`pl-seg${k === idx ? " on" : ""}`} style={{ flexGrow: d }}>
-                <i style={{ transform: `scaleX(${k < idx ? 1 : k === idx ? Math.min(1, cur / d) : 0})` }} />
-              </span>
-            ))}
-          </div>
-          {anySound && (
-            <button type="button" className="pl-btn" onClick={() => setMuted((m) => !m)} aria-pressed={!muted} aria-label="Sound">
-              <SpeakerIcon on={!muted} />
-            </button>
-          )}
-        </div>
-        <p className="pl-meta">
-          <span aria-live="polite">
-            <b>
-              Step {idx + 1} of {n}
-            </b>{" "}
-            · {clip.title}
-            {anySound && !hasSound && <span className="soft"> · this step has no sound</span>}
-          </span>
-          <span className="pl-time" aria-hidden="true">
-            {mmss(elapsed)} / {mmss(total)}
-          </span>
-        </p>
-      </div>
     </div>
   );
 }

@@ -118,3 +118,31 @@ export function loadSession(): string {
     return newSession();
   }
 }
+
+/*
+  The playground keeps its own visitor id, under a versioned key, so state saved by an older version of
+  this page (or junk) is never read back: anything that is not exactly the expected shape is replaced.
+*/
+export const PLAY_KEY = "jr_pg2_session";
+const PLAY_RE = /^v[0-9a-f]{24}$/;
+
+export function loadPlaySession(): string {
+  try {
+    const s = localStorage.getItem(PLAY_KEY);
+    if (s && PLAY_RE.test(s)) return s;
+    const fresh = newSession();
+    localStorage.setItem(PLAY_KEY, fresh);
+    return fresh;
+  } catch {
+    return newSession();
+  }
+}
+
+/** Forgets the playground's saved id (used when the page has to start over after an error). */
+export function resetPlaySession() {
+  try {
+    localStorage.removeItem(PLAY_KEY);
+  } catch {
+    // nothing stored
+  }
+}

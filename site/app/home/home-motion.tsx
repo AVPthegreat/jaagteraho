@@ -76,14 +76,15 @@ export function HomeMotion() {
           if (clock) clock.textContent = steps[i].dataset.time ?? "";
         };
         show(0);
-        const section = pin.closest<HTMLElement>("section") ?? pin;
+        // Pin the story's own inner block, never the <section>: GSAP wraps what it pins in a spacer div,
+        // and if that wrapped a top-level section React could not remove it when you navigate to another
+        // page ("removeChild ... not a child"), which crashed client navigation from the home page.
         const st = ScrollTrigger.create({
-          trigger: section,
+          trigger: pin,
           pin: true,
           start: "top top",
-          end: () => `+=${window.innerHeight * 2.4}`,
-          scrub: 0.4,
-          anticipatePin: 1,
+          end: () => `+=${window.innerHeight * 1.6}`,
+          scrub: true,
           onUpdate: (self) => {
             show(Math.min(steps.length - 1, Math.floor(self.progress * steps.length * 0.999)));
             if (bar) bar.style.transform = `scaleY(${self.progress})`;
@@ -97,19 +98,16 @@ export function HomeMotion() {
         };
       });
 
-      // "What it watches" and "How safe is it": pinned, and scroll walks through the cards / layers.
+      // "What it watches" and "How safe is it": no pinning (it felt like the page stuck). As the section
+      // scrolls through the view, the active card / layer follows the scroll position.
       mm.add("(min-width: 960px) and (min-height: 640px) and (prefers-reduced-motion: no-preference)", () => {
         const made = gsap.utils.toArray<HTMLElement>("[data-pin-steps]").map((sec) => {
           const n = Number(sec.dataset.pinSteps) || 1;
           let cur = -1;
-          sec.dataset.pinned = "";
           return ScrollTrigger.create({
             trigger: sec,
-            pin: true,
-            start: "top top",
-            end: () => `+=${window.innerHeight * 0.55 * n}`,
-            scrub: 0.3,
-            anticipatePin: 1,
+            start: "top 60%",
+            end: "bottom 60%",
             onUpdate: (self) => {
               const i = Math.min(n - 1, Math.floor(self.progress * n * 0.999));
               if (i === cur) return;
@@ -118,11 +116,7 @@ export function HomeMotion() {
             },
           });
         });
-        ScrollTrigger.refresh();
-        return () => {
-          made.forEach((st) => st.kill());
-          gsap.utils.toArray<HTMLElement>("[data-pin-steps]").forEach((sec) => delete sec.dataset.pinned);
-        };
+        return () => made.forEach((st) => st.kill());
       });
 
       cleanup = () => mm.revert();
