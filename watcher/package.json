@@ -1,0 +1,35 @@
+{
+  "name": "jaagteraho-watcher",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node --import tsx src/server.ts",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "project:add": "tsx scripts/project-add.ts",
+    "check:keys": "tsx scripts/check-keys.ts",
+    "project:dsn": "tsx scripts/project-dsn.ts",
+    "eval:real": "tsx scripts/eval-real.ts",
+    "bench": "tsx scripts/bench.ts",
+    "bench:publish": "tsx scripts/publish-benchmarks.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "@hono/node-server": "^2.1.8",
+    "better-sqlite3": "^12.11.1",
+    "hono": "^4.13.18",
+    "tsx": "^4.23.15",
+    "typescript-parser": "npm:typescript@^5.9.3",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}
