@@ -1,0 +1,17 @@
+{
+  "about": "Faurus boot failures from the Faurus bench (jr-faurus-bench, severity 5, utils/redis_layout.py). The bench driver calls the helper directly; in Faurus it is called at module level by oj/settings.py line 397 while Django loads settings, so these keep the bench's exception and helper frame and add the real caller chain.",
+  "cases": [
+    {
+      "id": "faurus-utils-redis_layout-key_rename-L29",
+      "traceback": "Traceback (most recent call last):\n  File \"/app/OnlineJudge/manage.py\", line 22, in <module>\n    main()\n  File \"/app/OnlineJudge/manage.py\", line 18, in main\n    execute_from_command_line(sys.argv)\n  File \"/usr/local/lib/python3.12/site-packages/django/core/management/__init__.py\", line 442, in execute_from_command_line\n    utility.execute()\n  File \"/usr/local/lib/python3.12/site-packages/django/conf/__init__.py\", line 81, in __getattr__\n    self._setup(name)\n  File \"/usr/local/lib/python3.12/site-packages/django/conf/__init__.py\", line 175, in __init__\n    mod = importlib.import_module(self.SETTINGS_MODULE)\n  File \"<frozen importlib._bootstrap>\", line 1387, in _gcd_import\n  File \"/app/OnlineJudge/oj/settings.py\", line 397, in <module>\n    \"bulk\": redis_config(db=None, location=bulk_cache_location(get_env, REDIS_CONF), ignore_exceptions=True),\n  File \"/app/OnlineJudge/utils/redis_layout.py\", line 29, in bulk_cache_location\n    host = get_env(\"REDIS_CACHE_HOST\", \"\") or state_conf[\"hosts\"]\nKeyError: 'hosts'"
+    },
+    {
+      "id": "faurus-utils-redis_layout-drop_cast-L34",
+      "traceback": "Traceback (most recent call last):\n  File \"/app/OnlineJudge/oj/wsgi.py\", line 16, in <module>\n    application = get_wsgi_application()\n  File \"/usr/local/lib/python3.12/site-packages/django/core/wsgi.py\", line 12, in get_wsgi_application\n    django.setup(set_prefix=False)\n  File \"/usr/local/lib/python3.12/site-packages/django/conf/__init__.py\", line 175, in __init__\n    mod = importlib.import_module(self.SETTINGS_MODULE)\n  File \"/app/OnlineJudge/oj/settings.py\", line 397, in <module>\n    \"bulk\": redis_config(db=None, location=bulk_cache_location(get_env, REDIS_CONF), ignore_exceptions=True),\n  File \"/app/OnlineJudge/utils/redis_layout.py\", line 34, in bulk_cache_location\n    if not 0 <= db < 16:\nTypeError: '<' not supported between instances of 'str' and 'int'"
+    },
+    {
+      "id": "faurus-utils-redis_layout-get_to_index-L31",
+      "traceback": "Traceback (most recent call last):\n  File \"/app/OnlineJudge/oj/settings.py\", line 397, in <module>\n    \"bulk\": redis_config(db=None, location=bulk_cache_location(get_env, REDIS_CONF), ignore_exceptions=True),\n  File \"/app/OnlineJudge/utils/redis_layout.py\", line 31, in bulk_cache_location\n    password = state_conf[\"password\"]\nKeyError: 'password'"
+    }
+  ]
+}

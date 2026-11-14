@@ -74,7 +74,7 @@ type IncidentCtx = {
 const BOOT_TYPES = /^(?:[\w.]+\.)?(ImproperlyConfigured|ImportError|ModuleNotFoundError|AppRegistryNotReady|SyntaxError|IndentationError)$/;
 const CONNECT_TYPES = /^(?:[\w.]+\.)?(OperationalError|ConnectionError|ConnectionRefusedError|InterfaceError|TimeoutError|ServerSelectionTimeoutError|MongoServerSelectionError|SequelizeConnectionError|PrismaClientInitializationError)$/;
 const CONNECT_TEXT = /connection refused|could not connect|ECONNREFUSED|ENOTFOUND|Name or service not known|Error 111|connect ETIMEDOUT/i;
-const BOOT_FILE = /(?:^|[\\/])(settings(?:[\\/][\w-]+)?|wsgi|asgi|manage|__init__|app|application|main|server|index|bootstrap|config|startup|celery)\.(?:py|js|mjs|cjs|ts)$/i;
+const BOOT_FILE = /(?:^|[\\/])(settings[\w-]*(?:[\\/][\w-]+)?|wsgi|asgi|manage|__init__|apps|app|application|main|server|index|bootstrap|config|startup|celery)\.(?:py|js|mjs|cjs|ts)$/i;
 const BOOT_FUNCTION = /^(?:<module>|create_app|make_app|get_wsgi_application|get_asgi_application|setup|bootstrap|main|execute_from_command_line|ready|startServer|listen|Module\._compile|Object\.<anonymous>)$/;
 
 /** Why an error looks like the app failing to start, or null. Pure: used by computeFacts and the tests. */
@@ -83,8 +83,13 @@ export function startupFailure(e: { transaction: string | null; exception_type: 
   const bootFrame = e.frames.some((f) => (BOOT_FILE.test(f.filename ?? f.abs_path ?? "") && f.in_app) || (f.in_app && BOOT_FUNCTION.test(f.function ?? "")));
   if (BOOT_TYPES.test(e.exception_type)) return "it cannot load its code or settings";
   if ((CONNECT_TYPES.test(e.exception_type) || CONNECT_TEXT.test(e.message)) && bootFrame) return "it cannot reach a service it needs to start";
-  const top = [...e.frames].reverse().find((f) => f.in_app);
-  if (top && top.function === "<module>" && BOOT_FILE.test(top.filename ?? top.abs_path ?? "")) return "its startup code fails";
+  // Any of the app's own frames running module-level code in a boot file (settings, wsgi/asgi, manage.py,
+  // __init__.py, an app factory) or an AppConfig.ready(): the crash may be deep in a helper that settings.py
+  // calls while loading (e.g. oj/settings.py building the Redis address), and it still stops the app starting.
+  const booting = [...e.frames].reverse().find(
+    (f) => f.in_app && ((f.function === "<module>" && BOOT_FILE.test(f.filename ?? f.abs_path ?? "")) || (f.function === "ready" && /(?:^|[\\/])apps\.py$/.test(f.filename ?? f.abs_path ?? ""))),
+  );
+  if (booting) return `its startup code fails (${(booting.filename ?? booting.abs_path ?? "").split(/[\\/]/).slice(-2).join("/")} while loading)`;
   return null;
 }
 

@@ -109,4 +109,20 @@ redis.exceptions.ConnectionError: Error 111 connecting to redis:6379. Connection
     assert.notEqual(applyRules({ ...base, startup, hits_10m: 1 }, quiet, false).rule, 11, "a single boot error with no new release is judged as before");
     assert.equal(applyRules({ ...base, startup, hits_10m: 5, learn_mode: true }, quiet, false).action, "log", "learn mode still comes first");
   });
+
+  it("Faurus boot failures: a helper that settings.py calls while loading (bench severity 5, redis_layout)", () => {
+    const fx = JSON.parse(readFileSync(new URL("./fixtures/faurus-boot.json", import.meta.url), "utf8")) as { cases: Array<{ id: string; traceback: string }> };
+    const quiet = votes(ans({ severity: "2" }), ans({ severity: "2" }), ans({ severity: "2" }), ans({ severity: "2" }), ans({ severity: "2" }));
+    for (const c of fx.cases) {
+      const startup = startupFailure(ev(tb(c.traceback)));
+      assert.match(startup ?? "", /startup code fails \(oj\/settings\.py while loading\)/, c.id);
+      const r = applyRules({ ...base, startup, hits_10m: 2 }, quiet, false);
+      assert.equal(r.action, "wake", c.id);
+      assert.equal(r.rule, 11, c.id);
+    }
+    // The same crash in a request (a route) or in a helper called by a request handler is not a boot failure.
+    assert.equal(startupFailure(ev(tb(fx.cases[0].traceback), "/api/submission")), null);
+    const inHandler = tb(fx.cases[2].traceback.replace('File "/app/OnlineJudge/oj/settings.py", line 397, in <module>', 'File "/app/OnlineJudge/submission/views.py", line 88, in post'));
+    assert.equal(startupFailure(ev(inHandler)), null);
+  });
 });
