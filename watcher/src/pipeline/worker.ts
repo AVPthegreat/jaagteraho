@@ -31,7 +31,13 @@ const MAX_PINGS = 3;
 const CONCURRENCY = 4;
 const DAILY_SONNET = 80; // about $0.75 a day at the measured $0.009 per diagnosis
 /** Live diagnoses a day per lane, so the demo and outside apps can never use up Faurus's (ai/claude.ts has the $ caps). */
-export const DAILY_DIAGNOSES: Record<Lane, number> = { faurus: DAILY_SONNET, demo: envInt("JR_DEMO_DIAGNOSES_PER_DAY", 80, 0, 2000), outside: 40, paste: 0 };
+export const DAILY_DIAGNOSES: Record<Lane, number> = {
+  faurus: DAILY_SONNET,
+  demo: envInt("JR_DEMO_DIAGNOSES_PER_DAY", 80, 0, 2000),
+  outside: 40,
+  paste: 0,
+  playground: envInt("JR_PLAYGROUND_DIAGNOSES_PER_DAY", 150, 0, 5000),
+};
 const VOICE_REUSE_MS = 15 * 60 * 1000;
 const SANDBOX_LIVE_PER_FAULT = envInt("JR_DEMO_LIVE_PER_FAULT", 15, 0, 1000);
 const MAX_WAKES_PER_NIGHT = 3;
@@ -68,6 +74,7 @@ export function sourceFor(project: ProjectRow): SourceProvider | null {
 export function laneFor(db: DB, projectId: number): Lane {
   const p = db.prepare("SELECT kind, settings FROM projects WHERE id = ?").get(projectId) as { kind: string; settings: string } | undefined;
   if (!p) return "faurus";
+  if (p.settings.includes('"playground":true')) return "playground";
   if (p.kind === "sandbox") return "demo";
   return p.settings.includes('"outside":true') ? "outside" : "faurus";
 }
@@ -76,8 +83,15 @@ export function laneFor(db: DB, projectId: number): Lane {
  * Real phone calls ring the founder's own number. The public demo is pressed by anonymous visitors,
  * so it never rings anyone unless JR_DEMO_PHONE=1 is set (only for the founder's own recorded demo).
  */
-export function phoneAllowedFor(kind: string, env: NodeJS.ProcessEnv = process.env): boolean {
+export function phoneAllowedFor(kind: string, env: NodeJS.ProcessEnv = process.env, settings: { playground?: boolean } = {}): boolean {
+  // The playground (playground/runner.ts) never rings anyone, whatever JR_DEMO_PHONE says.
+  if (settings.playground === true) return false;
   return kind !== "sandbox" || env.JR_DEMO_PHONE === "1";
+}
+
+/** Playground apps are run by playground/runner.ts, never by this worker: no cards, messages, calls or heals. */
+export function isPlaygroundProject(db: DB, projectId: number): boolean {
+  return getSettings(db, projectId).playground === true;
 }
 
 export class Worker {
@@ -172,6 +186,7 @@ export class Worker {
       | undefined;
     if (!inc) return;
     const project = this.db.prepare("SELECT id, name, kind, repo, created_at, github_installation FROM projects WHERE id = ?").get(inc.project_id) as ProjectRow;
+    if (isPlaygroundProject(this.db, project.id)) return;
     const ev = this.db
       .prepare("SELECT exception_type, message_masked, transaction_name, frames, tags, release FROM events WHERE project_id = ? AND event_id = ?")
       .get(project.id, payload.event_id) as EventRow | undefined;
@@ -259,7 +274,7 @@ export class Worker {
     // A real phone call on a WAKE, only when a fresh alert card went out (so Acknowledge and the repeats
     // have a card to work with). It never blocks the alert or the diagnosis, and a failure is only logged.
     const phoneDone =
-      decision.action === "wake" && cardSent && this.phone && phoneAllowedFor(project.kind)
+      decision.action === "wake" && cardSent && this.phone && phoneAllowedFor(project.kind, process.env, getSettings(this.db, project.id))
         ? this.phone
             .wake(inc.id, project.id, { project: project.name, flow: decision.facts.critical ?? event.transaction ?? "the app", hits: inc.hits, exam: decision.facts.exam_open })
             .catch((e) => console.error("phone:", String(e)))

@@ -11,6 +11,9 @@ import { Healer } from "./pipeline/heal.js";
 import { Telegram } from "./telegram/api.js";
 import { Bot } from "./telegram/bot.js";
 import { publicRoutes } from "./web/public.js";
+import { playgroundRoutes } from "./web/playground.js";
+import { Playground } from "./playground/runner.js";
+import { runnerMode } from "./runner/client.js";
 import { pasteRoutes } from "./web/paste.js";
 import { ownerRoutes } from "./web/owner.js";
 import { connectRoutes } from "./web/connect.js";
@@ -85,6 +88,22 @@ app.route(
   }),
 );
 
+// The Live playground: real bugs planted into our live apps, handled by the real pipeline (playground/runner.ts).
+// It needs the isolated runner (JR_RUNNER_SOCKET), because it runs app code and AI-written fixes; without
+// one it stays off. JR_PLAYGROUND=off turns it off; it is also off when the bench folder is missing.
+let playground: Playground | null = null;
+try {
+  if (process.env.JR_PLAYGROUND === "off") console.log("playground off: JR_PLAYGROUND=off");
+  else if (!runnerMode()) console.log("playground off: no isolated runner (JR_RUNNER_SOCKET)");
+  else playground = new Playground(db, ai);
+} catch (e) {
+  console.error("playground off:", String(e));
+}
+if (playground) {
+  playground.start();
+  app.route("/", playgroundRoutes(playground, (process.env.JR_SITE_ORIGINS ?? "http://localhost:3000").split(",").filter(Boolean)));
+}
+
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? "127.0.0.1";
 serve({ fetch: app.fetch, port, hostname: host }, () =>
@@ -95,6 +114,7 @@ const shutdown = () => {
   bot?.stop();
   worker.stop();
   healer.stop();
+  playground?.stop();
   db.close();
   process.exit(0);
 };

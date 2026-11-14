@@ -1859,3 +1859,70 @@ table.nums {
     grid-template-columns: 44px minmax(0, 1fr);
   }
 }
+
+/* The home page's LIVE line: the playground's latest real run. */
+.live-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 100%;
+  margin: 0 0 22px;
+  padding: 8px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: rgba(14, 19, 30, 0.72);
+  color: var(--soft);
+  font-size: var(--step-sm);
+  text-decoration: none;
+  width: fit-content;
+}
+.live-strip:hover,
+.live-strip:focus-visible {
+  border-color: var(--lantern);
+  color: var(--text);
+}
+.live-strip-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--wake);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  font-size: var(--step-xs);
+  flex: none;
+}
+.live-strip-tag i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--wake);
+  box-shadow: 0 0 10px var(--wake);
+  animation: pulse 2s ease-in-out infinite;
+}
+.live-strip-text {
+  font-family: var(--font-m);
+  font-size: 0.8rem;
+  min-width: 0;
+  line-height: 1.45;
+}
+.live-strip-go {
+  color: var(--lantern-2);
+  flex: none;
+}
+@media (max-width: 640px) {
+  .live-strip {
+    border-radius: 12px;
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+  .live-strip-text {
+    white-space: normal;
+    flex-basis: 100%;
+    order: 3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-strip-tag i {
+    animation: none;
+  }
+}

@@ -15,8 +15,14 @@ const HIGHEST_PRICE: [number, number] = [Math.max(...Object.values(PRICES).map((
  * Who a model call is for. Each lane has its own daily budget, so public use (paste, outside apps, the
  * demo) can never use up what Faurus needs. Calls made outside any context count as "faurus" (our own).
  */
-export type Lane = "faurus" | "demo" | "outside" | "paste";
-export const LANES: Lane[] = ["faurus", "demo", "outside", "paste"];
+export type Lane = "faurus" | "demo" | "outside" | "paste" | "playground";
+export const LANES: Lane[] = ["faurus", "demo", "outside", "paste", "playground"];
+/**
+ * The Live playground's lane is fenced off: its spend counts only against its own daily cap (and the
+ * all-lane caps when the playground itself picks a model), never against what other lanes may spend,
+ * so a busy playground can never stop Faurus, the exam portal demo, outside apps or pastes.
+ */
+export const FENCED: Lane[] = ["playground"];
 
 /** The app a model call is made for, so spend can be charged to its owner's free credit and its lane. */
 export const spendContext = new AsyncLocalStorage<{ projectId: number; lane?: Lane }>();
@@ -36,6 +42,7 @@ export function dailyCaps(env: NodeJS.ProcessEnv = process.env): DailyCaps {
     demo: money(env.JR_SPEND_DAILY_DEMO, 3),
     outside: money(env.JR_SPEND_DAILY_OUTSIDE, 1.5),
     paste: money(env.JR_SPEND_DAILY_PASTE, 0.5),
+    playground: money(env.JR_SPEND_DAILY_PLAYGROUND, 3),
   };
 }
 
@@ -50,16 +57,20 @@ export class SpendGuard {
     private daily: DailyCaps = dailyCaps(),
   ) {}
 
-  total(): number {
-    return (this.db.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS t FROM spend").get() as { t: number }).t;
+  /** All-time dollars; unfenced: without the fenced lanes' spend (what an ordinary lane is stopped by). */
+  total(unfenced = false): number {
+    return unfenced
+      ? (this.db.prepare(`SELECT COALESCE(SUM(cost_usd), 0) AS t FROM spend WHERE COALESCE(lane, 'faurus') NOT IN (${FENCED.map(() => "?").join(",")})`).get(...FENCED) as { t: number }).t
+      : (this.db.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS t FROM spend").get() as { t: number }).t;
   }
 
-  /** Dollars spent in the last 24 hours, by one lane or by all. */
-  spentToday(lane?: Lane): number {
+  /** Dollars spent in the last 24 hours, by one lane or by all (unfenced: all but the fenced lanes). */
+  spentToday(lane?: Lane, unfenced = false): number {
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-    return lane
-      ? (this.db.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS t FROM spend WHERE at > ? AND COALESCE(lane, 'faurus') = ?").get(since, lane) as { t: number }).t
-      : (this.db.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS t FROM spend WHERE at > ?").get(since) as { t: number }).t;
+    if (lane) return (this.db.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS t FROM spend WHERE at > ? AND COALESCE(lane, 'faurus') = ?").get(since, lane) as { t: number }).t;
+    if (unfenced)
+      return (this.db.prepare(`SELECT COALESCE(SUM(cost_usd), 0) AS t FROM spend WHERE at > ? AND COALESCE(lane, 'faurus') NOT IN (${FENCED.map(() => "?").join(",")})`).get(since, ...FENCED) as { t: number }).t;
+    return (this.db.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS t FROM spend WHERE at > ?").get(since) as { t: number }).t;
   }
 
   /** Calls for one purpose in the last 24 hours, by one lane or by all. */
@@ -75,10 +86,12 @@ export class SpendGuard {
    * at the daily cap for all lanes, or at the daily cap of the lane this call is for.
    */
   pick(model: string, cheaper: string): string | null {
-    const t = this.total();
-    if (t >= this.stopAt) return null;
-    if (this.spentToday() >= this.daily.total) return null;
     const lane = currentLane();
+    // A fenced lane (the playground) is held by everything; every other lane ignores the fenced lanes' spend.
+    const unfenced = !FENCED.includes(lane);
+    const t = this.total(unfenced);
+    if (t >= this.stopAt) return null;
+    if (this.spentToday(undefined, unfenced) >= this.daily.total) return null;
     if (this.spentToday(lane) >= this.daily[lane]) return null;
     if (t >= this.haikuOnlyAt) return cheaper;
     return model;

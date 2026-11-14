@@ -8,7 +8,7 @@ const LINKS: Array<[string, string]> = [
   ["/#night", "One night"],
   ["/#watches", "What it watches"],
   ["/#safety", "Safety"],
-  ["/#try", "Try it"],
+  ["/playground", "Live playground"],
 ];
 
 /* The main navigation: a row on wide screens, a menu button on a phone. */

@@ -67,7 +67,7 @@ const NIGHT = [
   },
   {
     t: "The fix is checked",
-    d: "Code checks the fix applies cleanly to your real file and is still valid code. Then Claude reviews it again: is it good, does it touch payments or login, could it break something else? The fix gets one of three labels (below). On our demo app we also run Claude's test: it must fail on the broken code and pass on the fixed code.",
+    d: "Code checks the fix applies cleanly to your real file and is still valid code. Then Claude reviews it again: is it good, does it touch payments or login, could it break something else? The fix gets one of three labels (below). On our own live apps (the exam portal and the playground) we also run Claude's test: it must fail on the broken code and pass on the fixed code.",
     meta: "a few seconds",
   },
   {
@@ -187,7 +187,7 @@ export default function How() {
                 <li data-rv>
                   <b>This website</b>
                   <span>
-                    To sign up, to <Link href="/demo">try it on our demo app</Link>, to <Link href="/paste">paste an error</Link> you already have, and to
+                    To sign up, to <Link href="/playground">watch it in the live playground</Link>, to <Link href="/paste">paste an error</Link> you already have, and to
                     see our <Link href="/evidence">test results</Link>.
                   </span>
                 </li>
@@ -276,7 +276,7 @@ export default function How() {
                 <li data-rv>
                   <b>Recommended</b>
                   <span>
-                    Passed every check. The only kind that can heal on its own, and only if your rule allows it. On the demo portal it must also be proved by
+                    Passed every check. The only kind that can heal on its own, and only if your rule allows it. On our exam portal it must also be proved by
                     its own test.
                   </span>
                 </li>
@@ -389,7 +389,7 @@ export default function How() {
                 <li>You get &ldquo;Healed while you were away&rdquo;: what broke, what changed, the proof, and one-tap Undo. Every step is in the logbook.</li>
               </ul>
               <p className="soft" data-rv>
-                On the demo portal, healing switches your session to the portal&apos;s fixed build and sends the failing request again to prove it works.
+                On our exam portal, healing switches your session to the portal&apos;s fixed build and sends the failing request again to prove it works.
               </p>
             </div>
           </div>
@@ -423,7 +423,7 @@ export default function How() {
               <li data-rv>
                 <strong>Break our demo exam portal</strong>
                 <p>
-                  In the <Link href="/demo">live demo</Link>, pick a bug and press its button. You watch the same steps as above happen
+                  In the <Link href="/demo">exam portal</Link>, pick a bug and press its button. Or open the <Link href="/playground">live playground</Link>, where a real bug is planted every minute. You watch the same steps as above happen
                   live, with a timer.
                 </p>
               </li>
@@ -452,8 +452,8 @@ export default function How() {
               <Link className="btn" href="/connect">
                 Connect your app <span className="arrow">→</span>
               </Link>
-              <Link className="textlink" href="/demo">
-                Try the live demo
+              <Link className="textlink" href="/playground">
+                Open the live playground
               </Link>
             </div>
           </div>

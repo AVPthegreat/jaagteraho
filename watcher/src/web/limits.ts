@@ -3,6 +3,7 @@
 
 import type { Context, MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { envInt } from "../envint.js";
 
 /** Every request body, unless the route says otherwise. JSON from the website is a few KB. */
 export const BODY_LIMIT_BYTES = 256 * 1024;
@@ -99,3 +100,51 @@ export class Slots {
     return this.total;
   }
 }
+
+/**
+ * The network an address belongs to, for caps a single network must not get around by using many
+ * addresses: IPv4 by /24, IPv6 by /64 (an IPv4-mapped IPv6 address counts as IPv4).
+ */
+export function netKey(ip: string): string {
+  const v4 = ip.replace(/^::ffff:/i, "");
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(v4)) return `v4:${v4.split(".").slice(0, 3).join(".")}`;
+  if (!ip.includes(":")) return `other:${ip}`;
+  const [head, tail = ""] = ip.toLowerCase().split("%")[0].split("::");
+  const left = head ? head.split(":") : [];
+  const right = tail ? tail.split(":") : [];
+  const full = ip.includes("::") ? [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill("0"), ...right] : left;
+  return `v6:${full.slice(0, 4).map((h) => (h || "0").replace(/^0+(?=.)/, "")).join(":")}`;
+}
+
+/** Open live feeds: per address, per network (so one network can hold at most a tenth of all), and in total. */
+export class NetSlots {
+  private ips: Slots;
+  private nets: Slots;
+  constructor(perIp: number, perNet: number, max: number) {
+    this.ips = new Slots(perIp, max);
+    this.nets = new Slots(perNet, max);
+  }
+
+  take(ip: string): boolean {
+    if (!this.ips.take(ip)) return false;
+    if (this.nets.take(netKey(ip))) return true;
+    this.ips.release(ip);
+    return false;
+  }
+
+  release(ip: string) {
+    this.ips.release(ip);
+    this.nets.release(netKey(ip));
+  }
+
+  get count() {
+    return this.ips.count;
+  }
+}
+
+/** Live feeds across the whole public API (the exam portal demo and the playground share one pool). */
+// A room of judges behind one NAT address shares one IP: demo and playground views come from the same pool.
+export const FEEDS_PER_IP = envInt("JR_FEEDS_PER_IP", 60, 5, 500);
+export const FEEDS_MAX = envInt("JR_FEEDS_MAX", 600, 50, 5000);
+export const FEEDS_PER_NET = Math.max(FEEDS_PER_IP * 2, Math.floor(FEEDS_MAX / 10));
+export const liveFeeds = new NetSlots(FEEDS_PER_IP, FEEDS_PER_NET, FEEDS_MAX);

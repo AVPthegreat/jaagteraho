@@ -54,7 +54,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <nav aria-label="Footer" className="footer-nav">
                 <div>
                   <h2>Try it</h2>
-                  <Link href="/demo">Live demo</Link>
+                  <Link href="/playground">Live playground</Link>
+                  <Link href="/demo">Break our exam portal</Link>
                   <Link href="/paste">Paste your error</Link>
                   <Link href="/connect">Connect your app</Link>
                 </div>

@@ -28,7 +28,7 @@ const LAYERS: Array<{ name: string; short: string; text: React.ReactNode }> = [
     short: "Fails before, passes after",
     text: (
       <>
-        Where it can run the code safely, as on our demo portal, it writes a regression test that must fail on the old code and pass on the fixed code,
+        Where it can run the code safely, as on our own live apps, it writes a regression test that must fail on the old code and pass on the fixed code,
         in a throwaway copy with no network or secrets.
       </>
     ),
