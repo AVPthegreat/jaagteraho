@@ -30,7 +30,6 @@ export const BUILT_WITH: Array<{ name: string; label: string; logo: string; href
   { name: "Gnani.ai", label: "Voice by Gnani.ai", logo: "/logos/gnani-white.svg", href: "https://gnani.ai", h: 30 },
   { name: "Twilio", label: "Calls by Twilio", logo: "/logos/twilio-white.svg", href: "https://www.twilio.com" },
 ];
-export const HACKATHON_LOGO = "/logos/hackglobal-white.png";
 
 /*
   Short looping product clips for the "See it work" section (demo data only). Files live in
