@@ -123,7 +123,7 @@ export default function How() {
           <li>
             <b>This website</b>
             <span>
-              To sign up, to <Link href="/">try it on our demo app</Link>, to <Link href="/paste">paste an error</Link> you already have, and to
+              To sign up, to <Link href="/#demo">try it on our demo app</Link>, to <Link href="/paste">paste an error</Link> you already have, and to
               see our <Link href="/evidence">test results</Link>.
             </span>
           </li>
@@ -223,7 +223,7 @@ export default function How() {
         <ol className="steps three">
           <li>
             <b className="ok">Recommended</b>
-            <span>Passed every check. On our demo app you can approve it from Telegram and a pull request opens; you still merge it.</span>
+            <span>Passed every check. You still read it, approve it and apply it yourself. On the demo portal, Approve switches you to a fixed copy so you can see it work.</span>
           </li>
           <li>
             <b>Use with care</b>
@@ -290,7 +290,7 @@ export default function How() {
             <div>
               <strong>Break our demo exam portal</strong>
               <p>
-                On the <Link href="/">home page</Link>, pick a bug and press the button. You watch the same steps as above happen live, with a timer.
+                In the <Link href="/#demo">live demo</Link> on the home page, pick a bug and press its button. You watch the same steps as above happen live, with a timer.
               </p>
             </div>
           </li>
@@ -325,8 +325,8 @@ export default function How() {
           <Link className="btn" href="/connect">
             Connect your app
           </Link>
-          <Link className="btn ghost" href="/">
-            Break the demo
+          <Link className="btn ghost" href="/#demo">
+            Try the live demo
           </Link>
         </div>
       </section>

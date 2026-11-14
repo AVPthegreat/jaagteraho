@@ -20,6 +20,11 @@ export default function Connect() {
           write to your code.
         </p>
         <p>
+          <b>What the form below does:</b> it creates your app in JaagteRaho and shows you a button that links your Telegram (alerts go only to
+          you), a one-line setup command with your app&apos;s private error address in it, the same address for setting up by hand, and a logs
+          address for a log drain. Nothing is installed until you run the command yourself.
+        </p>
+        <p>
           <a href="/how">See every step, and what reaches your phone →</a>
         </p>
       </div>

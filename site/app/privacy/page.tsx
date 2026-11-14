@@ -14,7 +14,7 @@ export default function Privacy() {
           before anything is stored. Emails, phone numbers, tokens and keys left in what remains are masked. Raw events are deleted after 30 days.
         </p>
         <p>
-          <strong>Who processes it:</strong> the watcher runs on a Vultr server. Masked error details and the relevant source files are sent to
+          <strong>Who processes it:</strong> the watcher runs on an AWS server in Mumbai, India (it moves to Vultr when our hackathon credits arrive). Masked error details and the relevant source files are sent to
           Claude through Anthropic&apos;s API (United States) for decisions and diagnosis. Alerts go to the owner on Telegram. Spoken wake-up
           calls use a text-to-speech provider and contain only flow names and counts.
         </p>

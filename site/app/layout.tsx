@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")),
   title: "JaagteRaho: an AI night watchman for your live app",
   description:
-    "Break our demo exam portal and watch an AI watchman decide whether to wake the owner, explain the cause in plain words and propose a fix only the owner can approve.",
+    "Your app breaks at 2 am and your users find out before you do. JaagteRaho watches your live app's errors, wakes you only when it matters, explains the cause in plain words and has a checked fix waiting for your approval.",
 };
 
 export const viewport: Viewport = { themeColor: "#0e1626", viewportFit: "cover" };
@@ -39,7 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </span>
             </Link>
             <nav className="site-nav" aria-label="Main">
-              <Link href="/">Break it</Link>
+              <Link href="/#demo">Live demo</Link>
               <Link href="/paste">Paste your error</Link>
               <Link href="/connect">Connect your app</Link>
               <Link href="/evidence">Evidence</Link>
@@ -52,10 +52,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <footer className="site-footer">
           <div className="wrap">
             <span>
-              Backend on Vultr · decisions and diagnosis by Claude (Anthropic API) · wake-up calls by Gnani · accepts events from the
-              open-source Sentry SDKs, not affiliated with Sentry
+              Built for HackGlobal 2026, Track 01 (Agentic and GenAI apps), by Anant Vardhan Pandey ·{" "}
+              <a href="https://github.com/AVPthegreat/jaagteraho">Source code on GitHub</a>
             </span>
-            <span>Built for HackGlobal 2026</span>
+            <span>
+              Runs on an AWS server in Mumbai today (moving to Vultr when our credits arrive) · decisions and diagnosis by Claude (Anthropic API) ·
+              wake-up calls by Gnani · accepts events from the open-source Sentry SDKs, not affiliated with Sentry
+            </span>
           </div>
         </footer>
       </body>

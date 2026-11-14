@@ -4,10 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { WATCHER } from "./watcher";
 
 type Flow = "submit" | "exam" | "pay";
-const FLOWS: Array<{ id: Flow; label: string }> = [
-  { id: "submit", label: "Submit code" },
-  { id: "exam", label: "Start exam" },
-  { id: "pay", label: "Pay fee" },
+// Each button calls one page of the demo portal that has a bug planted in it on purpose.
+const FLOWS: Array<{ id: Flow; label: string; bug: string }> = [
+  { id: "submit", label: "Submit code", bug: "A student submits code without picking a language. The server expects one and crashes." },
+  { id: "exam", label: "Start exam", bug: "The exam's start time is worked out without a time zone, so opening the exam crashes." },
+  { id: "pay", label: "Pay fee", bug: "A student pays with no coupon. The fee maths divides by the number of coupons: zero." },
 ];
 
 type Votes = Record<string, { value: string; count: number; of: number }>;
@@ -179,46 +180,42 @@ export function BreakIt({ country }: { country: string | null }) {
 
   return (
     <>
-      <section className="hero">
-        <div className="hero-text">
-          <p className="eyebrow">Night watch · live demo</p>
-          <h1>Break our exam portal. See who gets woken up.</h1>
-          <p className="lede">
-            This is a demo exam portal with three faults we planted on purpose. Break one, and JaagteRaho decides whether its owner should be
-            woken, explains the cause in plain words and proposes a fix, live, on this page.
+      <div className="demo">
+        <div className="panel demo-controls">
+          <label className="switch" htmlFor="exam">
+            <span>
+              <strong>Exam in progress</strong>
+              <small>
+                On: we tell the watchman an exam is running, so a failure here wakes the owner (rule 2). Off: the owner is usually sent a message instead.
+              </small>
+            </span>
+            <input id="exam" type="checkbox" checked={exam} onChange={(e) => setExam(e.target.checked)} />
+          </label>
+          <hr className="hr" />
+          <p className="eyebrow" style={{ color: "var(--muted)" }}>
+            Pick a page of the portal to break
           </p>
-          <div className="panel">
-            <label className="switch" htmlFor="exam">
-              <span>
-                <strong>Exam in progress</strong>
-                <small>Failures in a critical flow during an exam always wake the owner.</small>
-              </span>
-              <input id="exam" type="checkbox" checked={exam} onChange={(e) => setExam(e.target.checked)} />
-            </label>
-            <hr className="hr" />
-            <p className="eyebrow muted" style={{ color: "var(--muted)" }}>
-              Pick a flow to break
-            </p>
-            <div className="flows">
-              {FLOWS.map((f) => (
-                <button key={f.id} type="button" className="flow" data-active={flow === f.id} disabled={busy || !session} onClick={() => run(f.id)}>
-                  <strong>{f.label}</strong>
-                  <span>Critical flow</span>
-                </button>
-              ))}
-            </div>
-            <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-              No sign-up. No install. Buttons only, so nothing you type reaches the AI.{" "}
-              <button type="button" onClick={startOver} style={{ background: "none", border: 0, color: "var(--lantern)", cursor: "pointer", padding: 0, font: "inherit", textDecoration: "underline" }}>
-                Start over
+          <div className="flows">
+            {FLOWS.map((f) => (
+              <button key={f.id} type="button" className="flow" data-active={flow === f.id} disabled={busy || !session} onClick={() => run(f.id)}>
+                <strong>{f.label}</strong>
+                <span className="flow-bug">{f.bug}</span>
               </button>
-            </p>
+            ))}
           </div>
+          <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+            Pressing a button sends one real request to the portal, which crashes. No sign-up. You only press buttons, so nothing you type reaches
+            the AI. Each run uses a little of our AI credit, so the demo has a per-person limit.{" "}
+            <button type="button" className="linkish" onClick={startOver}>
+              Start over
+            </button>{" "}
+            clears your run and any fix you approved.
+          </p>
         </div>
 
         <div className="log" aria-live="polite" ref={logRef} style={{ scrollMarginTop: 12 }}>
           <div className="log-head">
-            <span className="label">{flowLabel ? `Your run · ${flowLabel} · exam ${exam ? "on" : "off"}` : "Your run"}</span>
+            <span className="label">{flowLabel ? `Your run · ${flowLabel} · exam ${exam ? "on" : "off"}` : "Your run · the owner's logbook"}</span>
             <span className="timer" aria-label={`Elapsed ${Math.round(elapsed)} seconds`}>
               {fmt(elapsed)}
             </span>
@@ -226,7 +223,8 @@ export function BreakIt({ country }: { country: string | null }) {
           {entries.length === 0 && !note ? (
             <div aria-label="Example of a run">
               <p className="empty" style={{ paddingBottom: 0 }}>
-                Nothing broken yet. Press a flow and this logbook fills in live. Here is an earlier run, so you know what to expect:
+                Nothing broken yet. Press a button and this logbook fills in live, the way the owner would see it. Below, greyed out, is an earlier run
+                so you know what to expect:
               </p>
               <ol style={{ opacity: 0.72 }} aria-hidden="true">
                 <li className="entry">
@@ -286,10 +284,10 @@ export function BreakIt({ country }: { country: string | null }) {
             </ol>
           )}
         </div>
-      </section>
+      </div>
 
-      <section className="section" aria-labelledby="sign-h">
-        <h2 id="sign-h">Tried it? Sign the logbook</h2>
+      <div className="sign-box" aria-labelledby="sign-h">
+        <h3 id="sign-h">Tried it? Sign the logbook</h3>
         {signed ? (
           <p>Thank you. You are in the logbook.</p>
         ) : (
@@ -311,9 +309,10 @@ export function BreakIt({ country }: { country: string | null }) {
           </form>
         )}
         <p className="muted" style={{ margin: 0, fontSize: 14 }}>
-          Optional. We keep only what you type here and your country, to count real users for the hackathon.
+          Optional. Signing adds your name to the count of people who tried the demo. We keep only what you type here, to count real users for
+          the hackathon.
         </p>
-      </section>
+      </div>
     </>
   );
 }
@@ -402,7 +401,7 @@ function EntryBody({
               <span className="title">Fix withheld</span>
               <span className="tag warn">safety rule</span>
             </span>
-            <span>{(d.reasons as string[]).join("; ")}. The owner reviews this one by hand.</span>
+            <span>{(d.reasons as string[]).join("; ")}. No fix is shown: the owner gets the cause and fixes this one by hand.</span>
           </>
         );
       }
@@ -416,8 +415,8 @@ function EntryBody({
             </span>
             {d.diff ? <Diff text={String(d.diff)} /> : null}
             <span className="muted" style={{ fontSize: 13 }}>
-              Code checks passed, but the reviewer flagged: {(d.reasons as string[]).join("; ")}. The owner sees it and decides; it cannot be
-              approved with one tap.
+              Code checks passed, but the reviewer flagged: {(d.reasons as string[]).join("; ")}. The owner reads it and decides; there is no
+              one-tap approve for a fix like this, so the demo stops here.
             </span>
           </>
         );
@@ -454,8 +453,8 @@ function EntryBody({
                 </button>
               </span>
               <span className="muted" style={{ fontSize: 13 }}>
-                Approve switches only your session to the fixed build, then tries again. On a real app the owner gets a pull request; a person
-                always merges.
+                Approve switches only your session to the fixed copy of the portal, then presses the same button again. On your own app you get
+                this change as a diff and apply it yourself.
               </span>
             </>
           )}

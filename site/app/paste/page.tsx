@@ -14,6 +14,10 @@ export default async function Paste({ searchParams }: { searchParams: Promise<{ 
           Paste a Python traceback or a JavaScript (Node.js or browser) stack trace from your app and the link to its public GitHub repository. JaagteRaho reads the files the traceback names,
           explains the cause in plain words and, if it passes every safety check, shows a fix you can apply yourself.
         </p>
+        <p>
+          Use this to see what JaagteRaho would tell you about an error you already have, without connecting anything. Press <b>Diagnose</b> and
+          the result appears on the right in about 10 seconds; <b>Copy share link</b> gives you a link to that result.
+        </p>
       </div>
       <PasteForm initialId={id && /^[0-9a-f]{12}$/.test(id) ? id : null} />
     </section>
