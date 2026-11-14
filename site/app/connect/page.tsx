@@ -9,8 +9,9 @@ export default async function Connect({ searchParams }: { searchParams: Promise<
   const initialName = typeof name === "string" ? name.slice(0, 40) : "";
   return (
     <>
-      <section className="page-head field-night" aria-labelledby="connect-h">
-        <div className="frame grid">
+      <section className="page-head" aria-labelledby="connect-h">
+        <div className="frame">
+          <p className="eyebrow">Connect</p>
           <h1 id="connect-h" className="display" data-rv>
             Connect your app
           </h1>
@@ -19,7 +20,7 @@ export default async function Connect({ searchParams }: { searchParams: Promise<
       </section>
 
       <section className="section">
-        <div className="frame grid split">
+        <div className="frame split">
           <div className="side prose">
             <p className="lead" data-rv>
               Two minutes: name your app here (or send <code>/new myapp</code> to the bot), run one command in your project, and deploy.
@@ -44,7 +45,7 @@ export default async function Connect({ searchParams }: { searchParams: Promise<
               </Link>
             </p>
           </div>
-          <div className="main" data-rv style={{ "--d": 1 } as React.CSSProperties}>
+          <div className="main panel" data-rv style={{ "--d": 1 } as React.CSSProperties}>
             <ConnectForm initialName={initialName} />
           </div>
         </div>

@@ -193,16 +193,25 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
 
   return (
     <>
-      <div className="grid demo">
+      <div className="demo">
         <div className="demo-index">
-          <div className="flows" role="group" aria-label="Pick a page of the portal to break">
+          <p className="demo-step" id="pick-h">
+            <span aria-hidden="true">1</span> Pick a page of the portal to break
+          </p>
+          <div className="flows" role="group" aria-labelledby="pick-h">
             {FLOWS.map((f) => (
               <button key={f.id} type="button" className="flow" data-active={flow === f.id} disabled={busy || !session} onClick={() => run(f.id)}>
                 <strong>{f.label}</strong>
                 <span>{f.bug}</span>
+                <span className="flow-go" aria-hidden="true">
+                  {busy && flow === f.id ? "Breaking…" : "Break it"}
+                </span>
               </button>
             ))}
           </div>
+          <p className="demo-step">
+            <span aria-hidden="true">2</span> Set the owner&apos;s rules
+          </p>
           <div className="switches">
             <label className="switch" htmlFor="exam">
               <span>
@@ -238,6 +247,11 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
         <div className="demo-stage">
           <div className="log" data-ui aria-live="polite" ref={logRef} style={{ scrollMarginTop: 12 }}>
             <div className="log-head">
+              <span className="dots" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </span>
               <span className="label">{flowLabel ? `Your run · ${flowLabel} · exam ${exam ? "on" : "off"}` : "Your run · the owner's logbook"}</span>
               <span className="timer" aria-label={`Elapsed ${Math.round(elapsed)} seconds`}>
                 {fmt(elapsed)}
@@ -311,7 +325,7 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
         </div>
       </div>
 
-      <div className="grid sign-band" aria-labelledby="sign-h">
+      <section className="sign-band" aria-labelledby="sign-h">
         <h3 id="sign-h">Tried it? Sign the logbook</h3>
         <div className="sign-wrap">
           {signed ? (
@@ -339,7 +353,7 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
             hackathon.
           </p>
         </div>
-      </div>
+      </section>
     </>
   );
 }

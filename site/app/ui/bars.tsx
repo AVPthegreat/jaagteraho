@@ -48,14 +48,14 @@ export function Bars() {
           </span>
         ))}
       </div>
-      <ul className="bars-legend frame">
+      <ul className="bars-legend">
         {groups.map((g) => (
           <li key={g.kind} className={g.kind}>
             <b>{g.value}</b> {g.note}
           </li>
         ))}
       </ul>
-      <p className="bars-key small frame">
+      <p className="bars-key small">
         Each bar is one error from JR-Bench, as tall as the alert it got: woke the owner, messaged the owner, or kept quiet. Hover or focus a bar for
         the case.
       </p>
