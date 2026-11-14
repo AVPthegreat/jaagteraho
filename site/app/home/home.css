@@ -633,16 +633,126 @@
   color: var(--ok);
 }
 
-/* ------- See it work ------- */
-.clips {
+/* ------- See it work: one playlist ------- */
+.pl {
   display: grid;
-  gap: 20px;
+  gap: 16px;
 }
 @media (min-width: 980px) {
-  .clips {
-    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
-    gap: 28px;
+  .pl {
+    grid-template-columns: minmax(0, 0.62fr) minmax(0, 1.7fr);
+    gap: 24px;
     align-items: start;
+  }
+}
+.pl-steps {
+  display: grid;
+  gap: 6px;
+}
+.pl-steps button {
+  position: relative;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 0 12px;
+  text-align: left;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(14, 19, 30, 0.5);
+  color: var(--soft);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.25s, background 0.25s, box-shadow 0.25s, color 0.25s;
+}
+.pl-steps button:hover {
+  border-color: var(--line-2);
+  color: var(--text);
+}
+.ps-n {
+  grid-row: span 2;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  font-family: var(--font-m);
+  font-size: 0.78rem;
+  color: var(--lantern-2);
+  transition: background 0.25s, color 0.25s;
+}
+.ps-t {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.ps-c {
+  display: none;
+  font-size: 0.84rem;
+  color: var(--faint);
+  margin-top: 2px;
+}
+.ps-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+}
+.ps-fill i {
+  display: block;
+  height: 100%;
+  background: var(--lantern);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+.pl-steps button[aria-current="step"] {
+  color: var(--text);
+  border-color: rgba(122, 167, 255, 0.65);
+  background: linear-gradient(180deg, rgba(60, 100, 200, 0.24), rgba(14, 19, 30, 0.6));
+  box-shadow: 0 0 0 1px rgba(122, 167, 255, 0.25), 0 16px 40px -20px rgba(80, 130, 255, 0.7);
+}
+.pl-steps button[aria-current="step"] .ps-n {
+  background: var(--lantern);
+  color: var(--lantern-ink);
+  border-color: var(--lantern);
+}
+.pl-steps button[aria-current="step"] .ps-c {
+  display: block;
+}
+@media (max-width: 979px) {
+  /* Phones and tablets: a horizontal strip of steps above the player (it scrolls, the page does not). */
+  .pl-steps {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    margin-inline: calc(-1 * var(--gutter));
+    padding-inline: var(--gutter);
+    padding-bottom: 2px;
+  }
+  .pl-steps::-webkit-scrollbar {
+    display: none;
+  }
+  .pl-steps li {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+  .pl-steps button {
+    width: auto;
+    grid-template-columns: 26px auto;
+    padding: 8px 12px;
+    white-space: nowrap;
+  }
+  .ps-n {
+    width: 24px;
+    height: 24px;
+    grid-row: auto;
+  }
+  .pl-steps button[aria-current="step"] .ps-c {
+    display: none;
   }
 }
 .clip-frame {
@@ -650,12 +760,12 @@
   border-radius: 18px;
   border: 1px solid var(--line-2);
   background: var(--surface);
-  padding: 38px 10px 10px;
+  padding: 34px 10px 10px;
   box-shadow: 0 40px 120px -60px rgba(70, 120, 255, 0.6);
 }
 .clip-dots {
   position: absolute;
-  top: 14px;
+  top: 13px;
   left: 16px;
   display: flex;
   gap: 6px;
@@ -668,7 +778,7 @@
 }
 .clip-tag {
   position: absolute;
-  top: 9px;
+  top: 8px;
   right: 14px;
   font-family: var(--font-m);
   font-size: 0.68rem;
@@ -681,7 +791,12 @@
   aspect-ratio: 16 / 9;
   border-radius: 10px;
   overflow: hidden;
-  background: radial-gradient(500px 300px at 50% 0%, rgba(122, 167, 255, 0.12), transparent 70%), #080c16;
+  background: #080c16;
+}
+.clip-screen.is-tall {
+  aspect-ratio: 9 / 16;
+  max-height: 70svh;
+  margin-inline: auto;
 }
 .clip-video {
   width: 100%;
@@ -689,49 +804,97 @@
   object-fit: contain;
   display: block;
 }
-.clip-cap {
-  margin-top: 14px;
-  color: var(--soft);
-  min-height: 3.2em;
-}
-.clip-list {
-  display: grid;
+.pl-sound-cta {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(179, 204, 255, 0.5);
+  background: rgba(6, 12, 30, 0.82);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.88rem;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
 }
-.clip-list button {
-  width: 100%;
+.pl-sound-cta:hover {
+  border-color: var(--lantern-2);
+}
+.pl-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.pl-btn {
+  flex: none;
+  width: 40px;
+  height: 40px;
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
-  gap: 2px 12px;
-  text-align: left;
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  background: rgba(14, 19, 30, 0.5);
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  background: rgba(14, 19, 30, 0.8);
   color: var(--text);
   cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
 }
-.clip-list button:hover {
-  border-color: var(--line-2);
+.pl-btn:hover {
+  border-color: var(--lantern);
 }
-.clip-list button[aria-pressed="true"] {
-  border-color: rgba(122, 167, 255, 0.55);
-  background: rgba(60, 100, 200, 0.16);
+.pl-btn[aria-pressed="true"] {
+  color: var(--lantern-2);
 }
-.cl-n {
-  grid-row: span 2;
+.pl-seek {
+  flex: 1;
+  display: flex;
+  gap: 4px;
+  height: 28px;
+  align-items: center;
+  cursor: pointer;
+  touch-action: none;
+  border-radius: 6px;
+}
+.pl-seg {
+  flex-basis: 0;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(214, 224, 255, 0.12);
+  overflow: hidden;
+  pointer-events: none;
+  transition: height 0.2s;
+}
+.pl-seg.on {
+  height: 8px;
+}
+.pl-seg i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--lantern), var(--lantern-2));
+  transform-origin: left;
+  transform: scaleX(0);
+}
+.pl-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 0.9rem;
+  color: var(--soft);
+}
+.pl-meta b {
+  color: var(--text);
+}
+.pl-time {
   font-family: var(--font-m);
-  font-size: 0.8rem;
-  color: var(--lantern);
-  padding-top: 2px;
-}
-.cl-t {
-  font-weight: 600;
-}
-.cl-c {
-  font-size: 0.86rem;
+  font-size: 0.82rem;
   color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* ------- The shield ------- */
@@ -995,10 +1158,10 @@
 .section-head .lead {
   margin-top: 18px;
 }
-@media (max-width: 640px) {
-  .clip-screen:has(.clip-video.tall) {
-    aspect-ratio: 9 / 16;
-    max-height: 78svh;
-    margin-inline: auto;
+
+@media (min-width: 980px) {
+  /* On short screens, keep the player and its bar inside one screen with the steps beside it. */
+  .pl-main {
+    width: min(100%, calc((100svh - 330px) * 1.78 + 20px));
   }
 }
