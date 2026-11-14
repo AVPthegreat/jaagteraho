@@ -99,7 +99,7 @@ export function AlertCard() {
             <b>Fix:</b> ready · all checks passed · proved by a test · AI-written
           </p>
           <p>
-            <b>Your rule:</b> heal on its own if nobody acknowledges in 10 min
+            <b>Your rule:</b> heal on its own if nobody acknowledges in 3 min
           </p>
           <span className="tg-time">02:14</span>
         </div>

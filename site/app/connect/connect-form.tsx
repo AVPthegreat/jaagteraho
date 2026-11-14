@@ -124,7 +124,7 @@ export function ConnectForm({ initialName = "" }: { initialName?: string }) {
           <p className="soft">
             <b>Your heal rule:</b>{" "}
             {result.heal === "auto-after"
-              ? "heal on its own if a wake-up is not acknowledged in 10 minutes. Send /heal on Telegram for your server-only address: only errors sent with it can heal on their own. Until write access to your repository is set up, a heal arrives as a ready-to-apply diff and the calls go on."
+              ? "heal on its own if a wake-up is not acknowledged in 3 minutes. Send /heal on Telegram for your server-only address: only errors sent with it can heal on their own. Until write access to your repository is set up, a heal arrives as a ready-to-apply diff and the calls go on."
               : "you approve every fix."}{" "}
             Change it any time with <code>/heal</code>.
           </p>
@@ -153,7 +153,7 @@ export function ConnectForm({ initialName = "" }: { initialName?: string }) {
         <label htmlFor="heal-auto" className="check">
           <input id="heal-auto" name="heal" type="radio" value="auto-after" />
           <span>
-            <b>Heal on its own after 10 minutes.</b> <span className="soft">Only fully checked fixes, never in login, payments, exams, config or CI, at most 2 a night,
+            <b>Heal on its own after 3 minutes.</b> <span className="soft">Only fully checked fixes, never in login, payments, exams, config or CI, at most 2 a night,
             merged only behind your required checks, rolled back and you are woken again if the errors don&apos;t drop. Needs your server-only
             secret on errors and write access to your repository; without it you get the diff.</span>
           </span>
