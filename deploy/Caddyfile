@@ -1,0 +1,8 @@
+# HTTPS for the watcher's public address. Caddy gets the certificate by itself.
+# JR_API_DOMAIN can be a real domain, or <server-ip>.sslip.io when there is none.
+{$JR_API_DOMAIN} {
+	encode gzip
+	reverse_proxy watcher:8787 {
+		flush_interval -1
+	}
+}

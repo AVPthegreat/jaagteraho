@@ -1,0 +1,61 @@
+# One Vultr Compute instance runs everything except the website (Vercel).
+# The demo portal builds are internal only: visitors reach them through the watcher.
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      JR_API_DOMAIN: ${JR_API_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [watcher]
+
+  watcher:
+    build: ../watcher
+    restart: unless-stopped
+    env_file: ../watcher/.env
+    environment:
+      JR_TWIN_BROKEN_URL: http://twin-broken:8000
+      JR_TWIN_FIXED_URL: http://twin-fixed:8000
+      # A read-only copy of the demo portal's code, used only to prove fixes with a regression test.
+      JR_SANDBOX_SOURCE: /sandbox
+    volumes:
+      - watcher_data:/data
+      - ../sandbox:/sandbox:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  twin-broken:
+    build: { context: ../sandbox, args: { BUILD: broken } }
+    restart: unless-stopped
+    environment:
+      SENTRY_DSN: ${SANDBOX_DSN}
+      ALLOWED_HOSTS: twin-broken,localhost
+      JR_RELEASE: broken-1
+
+  twin-fixed:
+    build: { context: ../sandbox, args: { BUILD: fixed } }
+    restart: unless-stopped
+    environment:
+      SENTRY_DSN: ${SANDBOX_DSN}
+      ALLOWED_HOSTS: twin-fixed,localhost
+      JR_RELEASE: fixed-1
+
+  # Copies the database every 6 hours with SQLite's online backup.
+  backup:
+    image: keinos/sqlite3:3.46.1
+    restart: unless-stopped
+    user: root
+    volumes:
+      - watcher_data:/data:ro
+      - ./backups:/backups
+    entrypoint: ["sh", "-c", "while true; do sqlite3 /data/jaagteraho.db \".backup /backups/jaagteraho-$$(date +%Y%m%d-%H%M).db\"; sleep 21600; done"]
+
+volumes:
+  caddy_data:
+  watcher_data:
