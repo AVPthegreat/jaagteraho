@@ -70,3 +70,34 @@ export const BENCH_ALL = {
 export const benchInr = () => Math.round(BENCH_ALL.cost_usd * BENCH_ALL.inr_per_usd);
 export const benchInrPerBug = () => (Math.round(((BENCH_ALL.cost_usd * BENCH_ALL.inr_per_usd) / BENCH_ALL.bugs) * 10) / 10).toFixed(1);
 export const benchFixPct = () => Math.round((BENCH_ALL.fix_works / BENCH_ALL.bugs) * 100);
+
+/*
+  JaagteRaho on a private copy of the real Faurus backend (14-15 Nov 2026): 294 planted bugs in 43 copied
+  pure-logic modules, driven by direct calls (not production traffic; Faurus itself was never changed).
+  Source: jr-research/FAURUS_BENCH.md; per-bug rows: public/evidence/faurus-bench.csv.
+*/
+export const FAURUS_BENCH = {
+  accounts: "11,000+",
+  bugs: 294,
+  files: 43,
+  lines: "4,264",
+  modules_hit: 27,
+  reached: 289,
+  fix_works: 282,
+  fix_pct: 96,
+  strict: 261,
+  right_file: 293,
+  critical: 182,
+  critical_woke: 182,
+  critical_fix_works: 175,
+  shown: 167,
+  shown_wrong: 8,
+  auto_heal: 25,
+  auto_heal_wrong: 2,
+  held_back_working: 123,
+  median_decision_s: 1.8,
+  median_fix_s: 10.0,
+  cost_usd: 5.69,
+  cost_per_bug_usd: 0.019,
+  csv: "/evidence/faurus-bench.csv",
+};
