@@ -378,6 +378,7 @@ For private repositories. Permissions: Contents read and Metadata read, nothing 
 ### 4.18 Better diagnosis input
 
 - **Imported files:** besides up to 3 files from the stack trace, code adds up to 2 files that the failing functions import and actually use (Python `from … import`, `import …`; JavaScript `import … from` and `require`), skipping installed packages and files over 600 lines. They are marked as not in the stack trace. Measured on/off with `JR_RELATED_FILES=0`.
+- **Lookups beyond the stack trace:** when the repository's code can be read (the GitHub tarball at the release, or the local folder), the diagnosis gets a code-picked map (where the failing code's callees are defined, where the error's text appears) and three read-only tools: `find_definition`, `search_code`, `read_lines`. At most 3 rounds and 8 lookups; prompt caching keeps a round near $0.005. Files it reads join the files the fix gate checks edits against. Off with `JR_DIAGNOSIS_LOOKUPS=0`. Measured in `watcher/eval/NOTES-lookups.md`.
 - **Last change:** for GitHub repositories, the commit that went live just before the incident began (the release, if it is a commit hash; otherwise the newest commit on the default branch before the first error, within 3 days), its author, message and files, and which of them are in the stack trace. Shown on the alert ("Began 20 min after commit abc1234 … which changed quiz/views.py") and given to the diagnosis as a clue, fenced as data.
 - **Tracebacks:** the paste parser also reads IPython/Jupyter tracebacks and pytest `INTERNALERROR>` output.
 

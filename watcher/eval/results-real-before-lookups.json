@@ -1,0 +1,732 @@
+[
+  {
+    "repo": "pallets/werkzeug",
+    "issue": "https://github.com/pallets/werkzeug/issues/2708",
+    "fix": "https://github.com/pallets/werkzeug/pull/2709",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "werkzeug/urls.py"
+    ],
+    "fixed_files": [
+      "src/werkzeug/urls.py"
+    ],
+    "named": "werkzeug/urls.py:983",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "sure",
+    "cause_plain": "Pages that redirect or build a URL crashed when the address was handed over as raw bytes without saying which text encoding to use. The code tried to turn the bytes into text using an empty encoding setting.",
+    "real_cause": "iri_to_uri() decoded a bytes argument with charset before the code that defaults charset to 'utf-8' had run, so bytes.decode() received None.",
+    "seconds": 6,
+    "cost_usd": 0.0172
+  },
+  {
+    "repo": "pallets/werkzeug",
+    "issue": "https://github.com/pallets/werkzeug/issues/2955",
+    "fix": "https://github.com/pallets/werkzeug/pull/2956",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "werkzeug/http.py",
+      "werkzeug/datastructures/auth.py"
+    ],
+    "fixed_files": [
+      "src/werkzeug/http.py"
+    ],
+    "named": "werkzeug/http.py:371",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "text to replace is not unique in werkzeug/http.py"
+    ],
+    "confidence": "sure",
+    "cause_plain": "A request with a malformed Authorization header, such as one with a parameter that has a value but no name (e.g. \"Digest =abc, x=y\"), crashed the server with an error instead of being treated as bad input.",
+    "real_cause": "parse_dict_header() indexed key[-1] without checking for an empty key, so a parameter like '=foo' with no name raised IndexError.",
+    "seconds": 5,
+    "cost_usd": 0.0248
+  },
+  {
+    "repo": "pallets/click",
+    "issue": "https://github.com/pallets/click/issues/3487",
+    "fix": "https://github.com/pallets/click/pull/3493",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "src/click/utils.py"
+    ],
+    "fixed_files": [
+      "src/click/utils.py"
+    ],
+    "named": "src/click/utils.py:333",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "A command tried to print text to an output that only accepts raw bytes (for example a file opened in binary mode). Python refused, so the command crashed instead of printing.",
+    "real_cause": "echo() set out = out or \"\" before appending the newline, which turned an empty bytes/bytearray message into a str and then wrote that str to the binary stream.",
+    "seconds": 13,
+    "cost_usd": 0.0254
+  },
+  {
+    "repo": "pallets/click",
+    "issue": "https://github.com/pallets/click/issues/2415",
+    "fix": "https://github.com/pallets/click/pull/2555",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "click/utils.py",
+      "click/globals.py"
+    ],
+    "fixed_files": [
+      "src/click/_compat.py",
+      "src/click/_termui_impl.py",
+      "src/click/utils.py"
+    ],
+    "named": "click/utils.py:313",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "The program tried to print a message, but there was no console to print to (for example when run as a windowed app or under pythonw), so the print crashed instead of doing nothing.",
+    "real_cause": "When no console streams exist (e.g. pythonw/PyInstaller windowed apps) _default_text_stdout() returns None and echo() wrote to it without a None check.",
+    "seconds": 5,
+    "cost_usd": 0.0177
+  },
+  {
+    "repo": "pydantic/pydantic",
+    "issue": "https://github.com/pydantic/pydantic/issues/13870",
+    "fix": "https://github.com/pydantic/pydantic/pull/13874",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "pydantic/_internal/_docs_extraction.py",
+      "pydantic/_internal/_fields.py",
+      "pydantic/_internal/_model_construction.py",
+      "pydantic/errors.py",
+      "pydantic/_internal/_config.py"
+    ],
+    "fixed_files": [
+      "pydantic/_internal/_docs_extraction.py"
+    ],
+    "named": "pydantic/_internal/_docs_extraction.py:100",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Creating a data model whose class is named `Config` crashed at startup with a confusing 'is a built-in class' error, because Python could not find that class's source code while pydantic looked for attribute docstrings.",
+    "real_cause": "extract_docstrings_from_cls() caught only OSError from inspect.getsourcelines(), but for classes rebuilt by cloudpickle inspect raises TypeError ('is a built-in class').",
+    "seconds": 7,
+    "cost_usd": 0.0573
+  },
+  {
+    "repo": "pallets/jinja",
+    "issue": "https://github.com/pallets/jinja/issues/1697",
+    "fix": "https://github.com/pallets/jinja/pull/1698",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "jinja2/loaders.py",
+      "jinja2/environment.py",
+      "jinja2/exceptions.py",
+      "jinja2/__init__.py"
+    ],
+    "fixed_files": [
+      "src/jinja2/loaders.py"
+    ],
+    "named": "jinja2/loaders.py:31",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": false,
+    "gate_reasons": [
+      "text to replace is not unique in jinja2/loaders.py"
+    ],
+    "confidence": "likely",
+    "cause_plain": "Loading any template from a folder crashed with an internal error, so every page that renders a template failed. The template-name safety check looked up a separator value in a place that doesn't provide it.",
+    "real_cause": "loaders.py used os.path.sep, which some path modules (posixpath on certain builds) do not define; the fix switches to os.sep.",
+    "seconds": 13,
+    "cost_usd": 0.0437
+  },
+  {
+    "repo": "celery/celery",
+    "issue": "https://github.com/celery/celery/issues/9489",
+    "fix": "https://github.com/celery/celery/pull/10295",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "celery/worker/control.py"
+    ],
+    "fixed_files": [
+      "celery/worker/control.py"
+    ],
+    "named": "celery/worker/control.py:371",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "When someone asks the workers to send a heartbeat right now, a worker that has events turned off crashes on that command instead of replying. The worker has no event sender in that case, and the code assumed it always had one.",
+    "real_cause": "The heartbeat (and enable/disable events) remote control commands used state.consumer.event_dispatcher without checking that it is None when events are disabled.",
+    "seconds": 6,
+    "cost_usd": 0.0167
+  },
+  {
+    "repo": "pypa/pip",
+    "issue": "https://github.com/pypa/pip/issues/6385",
+    "fix": "https://github.com/pypa/pip/pull/14135",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "pip/_vendor/packaging/markers.py",
+      "pip/_internal/req/constructors.py",
+      "pip/_internal/req/req_file.py",
+      "pip/_vendor/packaging/_parser.py",
+      "pip/_vendor/packaging/requirements.py"
+    ],
+    "fixed_files": [
+      "src/pip/_internal/req/constructors.py"
+    ],
+    "named": "pip/_internal/req/constructors.py:226",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "likely",
+    "cause_plain": "pip install crashed with a raw traceback because a requirement line has two semicolons in its environment marker (python_version >= '2.7'; python_version < '3.5'). That is not valid, and pip showed an internal parser error instead of a clear message.",
+    "real_cause": "parse_req_from_line() built Marker(markers_as_string) without catching InvalidMarker, so a malformed marker in a requirements file crashed pip with a raw traceback.",
+    "seconds": 9,
+    "cost_usd": 0.0568
+  },
+  {
+    "repo": "celery/celery",
+    "issue": "https://github.com/celery/celery/issues/10858",
+    "fix": "https://github.com/celery/celery/pull/10861",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "celery/concurrency/asynpool.py"
+    ],
+    "fixed_files": [
+      "celery/concurrency/asynpool.py"
+    ],
+    "named": "celery/concurrency/asynpool.py:1484",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "While the worker pool was shutting down, the cleanup code tried to read leftover tasks from a child process's pipe. That pipe was already closed by the other side, so the read failed with 'Ran out of input' and the shutdown crashed.",
+    "real_cause": "AsynPool._help_stuff_finish() kept draining the inqueue of children that had already exited (or died mid-message), so recv() raised EOFError at shutdown.",
+    "seconds": 5,
+    "cost_usd": 0.0146
+  },
+  {
+    "repo": "scrapy/scrapy",
+    "issue": "https://github.com/scrapy/scrapy/issues/6456",
+    "fix": "https://github.com/scrapy/scrapy/pull/7897",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "scrapy/http/response/text.py",
+      "scrapy/core/spidermw.py",
+      "scrapy/http/__init__.py",
+      "scrapy/utils/python.py"
+    ],
+    "fixed_files": [
+      "scrapy/http/response/text.py"
+    ],
+    "named": "scrapy/http/response/text.py:89",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "The scraper downloaded a JSON page that was not saved as UTF-8 (it contains a Windows-1252 curly apostrophe), and the JSON reader assumed UTF-8 and crashed on it.",
+    "real_cause": "TextResponse.json() passed the raw body bytes to json.loads(), which only auto-detects UTF-8/16/32, so a body in another encoding (cp1252) raised UnicodeDecodeError instead of using the response encoding.",
+    "seconds": 6,
+    "cost_usd": 0.044
+  },
+  {
+    "repo": "celery/celery",
+    "issue": "https://github.com/celery/celery/issues/10312",
+    "fix": "https://github.com/celery/celery/pull/10313",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "celery/backends/redis.py",
+      "celery/app/base.py",
+      "celery/apps/worker.py",
+      "celery/exceptions.py",
+      "celery/bin/celery.py"
+    ],
+    "fixed_files": [
+      "celery/backends/redis.py"
+    ],
+    "named": "celery/backends/redis.py:399",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "The worker refuses to start because the result backend is set to a plain redis:// address while SSL settings are also present. The error message shown was blank, so nobody could tell what was wrong.",
+    "real_cause": "RedisBackend._params_from_url() raised the scheme-mismatch ValueError whenever SSL params were in connparams, including those supplied by redis_backend_use_ssl, instead of only for SSL params in the URL query.",
+    "seconds": 7,
+    "cost_usd": 0.0525
+  },
+  {
+    "repo": "Textualize/rich",
+    "issue": "https://github.com/Textualize/rich/issues/2197",
+    "fix": "https://github.com/Textualize/rich/pull/2212",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "rich/__init__.py"
+    ],
+    "fixed_files": [
+      "rich/__init__.py"
+    ],
+    "named": "rich/__init__.py:16",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "The app crashed on startup while loading the Rich library, because the folder the program was started from had been deleted. Python could not look up the current folder, so nothing worked.",
+    "real_cause": "rich/__init__.py called os.getcwd() at import time without handling FileNotFoundError, so importing rich from a deleted working directory failed.",
+    "seconds": 5,
+    "cost_usd": 0.015
+  },
+  {
+    "repo": "Textualize/rich",
+    "issue": "https://github.com/Textualize/rich/issues/3053",
+    "fix": "https://github.com/Textualize/rich/pull/3064",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "rich/markdown.py",
+      "rich/console.py",
+      "rich/protocol.py"
+    ],
+    "fixed_files": [
+      "rich/markdown.py"
+    ],
+    "named": "rich/markdown.py:262",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Printing a Markdown table that has a header but no body rows (for example only a header and separator line) crashes with an empty AssertionError instead of showing the table.",
+    "real_cause": "TableElement.__rich_console__ asserted that the markdown table had a header and a body, which fails for tables with no body rows.",
+    "seconds": 6,
+    "cost_usd": 0.0347
+  },
+  {
+    "repo": "scrapy/scrapy",
+    "issue": "https://github.com/scrapy/scrapy/issues/4780",
+    "fix": "https://github.com/scrapy/scrapy/pull/8042",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "scrapy/settings/__init__.py",
+      "scrapy/utils/project.py",
+      "scrapy/cmdline.py",
+      "scrapy/utils/conf.py",
+      "scrapy/__init__.py"
+    ],
+    "fixed_files": [
+      "scrapy/utils/conf.py",
+      "scrapy/utils/project.py"
+    ],
+    "named": "scrapy/utils/project.py:126",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Running a scrapy command failed at startup because the project's settings module ('tutorial') could not be found. Python could not locate the project folder, so nothing ran and users saw a raw crash with no hint.",
+    "real_cause": "get_project_settings() skipped init_env() when SCRAPY_SETTINGS_MODULE was already set, so the project directory was never added to sys.path and the settings module could not be imported.",
+    "seconds": 8,
+    "cost_usd": 0.0393
+  },
+  {
+    "repo": "psf/black",
+    "issue": "https://github.com/psf/black/issues/4781",
+    "fix": "https://github.com/psf/black/pull/4854",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "src/black/linegen.py",
+      "src/black/nodes.py",
+      "src/black/__init__.py",
+      "black/mode.py",
+      "src/black/mode.py"
+    ],
+    "fixed_files": [
+      "src/black/linegen.py"
+    ],
+    "named": "src/black/linegen.py:465",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Black crashed while formatting a Python file. It hit a function parameter with a type hint whose structure it did not expect, and stopped with an internal assertion error instead of formatting it.",
+    "real_cause": "LineGenerator.visit_tname asserted that a tname node has exactly three children, which is false for an annotated parameter inside a '# fmt: skip' one-liner under the preview feature.",
+    "seconds": 11,
+    "cost_usd": 0.0712
+  },
+  {
+    "repo": "aio-libs/aiohttp",
+    "issue": "https://github.com/aio-libs/aiohttp/issues/13758",
+    "fix": "https://github.com/aio-libs/aiohttp/pull/13760",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "aiohttp/multipart.py",
+      "aiohttp/hdrs.py"
+    ],
+    "fixed_files": [
+      "aiohttp/multipart.py"
+    ],
+    "named": "aiohttp/multipart.py:388",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Uploading a multipart form with a base64-encoded part can crash the server with an internal assertion error. The code asks for a chunk smaller than the minimum needed to spot the part boundary, so the upload fails instead of being read.",
+    "real_cause": "BodyPartReader.read_chunk() tested 'if self._length:' so a Content-Length of 0 was treated as unknown length and the part was read from the stream, tripping the chunk-size assertion.",
+    "seconds": 8,
+    "cost_usd": 0.0266
+  },
+  {
+    "repo": "psf/black",
+    "issue": "https://github.com/psf/black/issues/4077",
+    "fix": "https://github.com/psf/black/pull/4161",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "src/black/__init__.py",
+      "black/files.py",
+      "src/black/files.py"
+    ],
+    "fixed_files": [
+      "src/black/__init__.py",
+      "src/black/files.py"
+    ],
+    "named": "src/black/__init__.py:703",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Running Black on a file that is a symlink pointing outside the project folder crashed with a raw Python error instead of a clear message. Black computed the file's location relative to the project root without allowing for symlinks that lead elsewhere.",
+    "real_cause": "get_sources() called path.absolute().relative_to(root) directly, which raises ValueError for a file reached through a symlink that points outside the project root.",
+    "seconds": 10,
+    "cost_usd": 0.0486
+  },
+  {
+    "repo": "marshmallow-code/marshmallow",
+    "issue": "https://github.com/marshmallow-code/marshmallow/issues/1357",
+    "fix": "https://github.com/marshmallow-code/marshmallow/pull/1359",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "marshmallow/fields.py",
+      "marshmallow/schema.py",
+      "marshmallow/__init__.py",
+      "marshmallow/exceptions.py"
+    ],
+    "fixed_files": [
+      "src/marshmallow/fields.py"
+    ],
+    "named": "marshmallow/fields.py:1117",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Building a schema crashes when it has a list of date/time values (e.g. List(DateTime())). The date field looks for schema settings, but inside a list its parent is the list field, which has none, so the schema cannot be created.",
+    "real_cause": "DateTime._bind_to_schema() read schema.opts from its parent, but when used as an inner field of List/Tuple the parent is a field without opts; the fix uses self.root.opts.",
+    "seconds": 6,
+    "cost_usd": 0.0393
+  },
+  {
+    "repo": "pytest-dev/pytest",
+    "issue": "https://github.com/pytest-dev/pytest/issues/13478",
+    "fix": "https://github.com/pytest-dev/pytest/pull/13573",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "_pytest/terminal.py",
+      "_pytest/logging.py",
+      "_pytest/main.py"
+    ],
+    "fixed_files": [
+      "src/_pytest/terminal.py"
+    ],
+    "named": "_pytest/terminal.py:737",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "When pytest runs with the progress style set to 'times', the progress line adds up how long each reported item took. Reports from collection (such as collection errors or skips) have no duration, so the sum crashes and the whole test run aborts with an internal error.",
+    "real_cause": "_get_progress_information_message() summed r.duration over all not-yet-reported reports, but with console_output_style=times a skipped module leaves a CollectReport, which has no duration.",
+    "seconds": 7,
+    "cost_usd": 0.0341
+  },
+  {
+    "repo": "pytest-dev/pytest",
+    "issue": "https://github.com/pytest-dev/pytest/issues/13734",
+    "fix": "https://github.com/pytest-dev/pytest/pull/14025",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "_pytest/_code/code.py",
+      "_pytest/nodes.py",
+      "_pytest/python.py",
+      "_pytest/_code/__init__.py",
+      "_pytest/outcomes.py"
+    ],
+    "fixed_files": [
+      "src/_pytest/_code/code.py"
+    ],
+    "named": "_pytest/_code/code.py:1196",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "When a test failed with an exception group, pytest's failure report crashed with an internal IndexError instead of showing the failure, because the list of visible traceback frames was empty.",
+    "real_cause": "FormattedExcinfo.repr_excinfo() indexed traceback[0] for an exception group even when every traceback entry had been hidden, so the cut traceback was empty and raised IndexError.",
+    "seconds": 6,
+    "cost_usd": 0.0496
+  },
+  {
+    "repo": "pallets/flask",
+    "issue": "https://github.com/pallets/flask/issues/5258",
+    "fix": "https://github.com/pallets/flask/pull/5264",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "flask/helpers.py",
+      "flask/globals.py"
+    ],
+    "fixed_files": [
+      "src/flask/app.py"
+    ],
+    "named": "flask/helpers.py:222",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Some page code builds a link and passes a value named \"self\" (for example url_for('page', self=...)). Flask cannot accept a URL value with that name, so building the link crashes and the page fails with a 500 error.",
+    "real_cause": "Flask.url_for() declared self as an ordinary parameter, so a URL value named 'self' passed via **values collided with it; the fix makes self positional-only.",
+    "seconds": 11,
+    "cost_usd": 0.0233
+  },
+  {
+    "repo": "psf/requests",
+    "issue": "https://github.com/psf/requests/issues/6643",
+    "fix": "https://github.com/psf/requests/pull/6644",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "requests/adapters.py",
+      "requests/sessions.py",
+      "requests/api.py",
+      "requests/exceptions.py",
+      "requests/cookies.py"
+    ],
+    "fixed_files": [
+      "src/requests/adapters.py"
+    ],
+    "named": "requests/adapters.py:532",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "A request to a malformed web address (something like \"//v:h\") crashed with a raw low-level error instead of a clear \"invalid URL\" message. The address passed the first check but was rejected when the request was actually sent.",
+    "real_cause": "HTTPAdapter.request_url() passed a path starting with '//' through unchanged, and urllib3 then parsed '//v:h' as a network location and failed; the fix collapses the leading slashes.",
+    "seconds": 11,
+    "cost_usd": 0.0594
+  },
+  {
+    "repo": "pallets/jinja",
+    "issue": "https://github.com/pallets/jinja/issues/1701",
+    "fix": "https://github.com/pallets/jinja/pull/1702",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "jinja2/nativetypes.py",
+      "jinja2/environment.py",
+      "jinja2/debug.py"
+    ],
+    "fixed_files": [
+      "src/jinja2/runtime.py"
+    ],
+    "named": "jinja2/nativetypes.py:25",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "A page built from a template crashed because something that should be text was a number when the template pieces were joined together. I can't tell which template or value from the files I was given.",
+    "real_cause": "BlockReference.__call__/_async_call joined block output with the module-level str concat instead of environment.concat, so NativeEnvironment blocks returning non-strings failed.",
+    "seconds": 12,
+    "cost_usd": 0.0313
+  },
+  {
+    "repo": "psf/black",
+    "issue": "https://github.com/psf/black/issues/5214",
+    "difficulty": "root_elsewhere",
+    "error": "no repository files found from the traceback"
+  },
+  {
+    "repo": "psf/black",
+    "issue": "https://github.com/psf/black/issues/4062",
+    "fix": "https://github.com/psf/black/pull/4086",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/black/__init__.py",
+      "src/black/parsing.py",
+      "black/output.py",
+      "src/black/output.py"
+    ],
+    "fixed_files": [
+      "src/black/linegen.py"
+    ],
+    "named": "src/black/__init__.py:1444",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "Black reformatted a user's code into something that is no longer valid Python, so its own safety check refused to output it. The failure is in how Black rewrites a specific piece of code, and the files shown do not contain that rewrite logic.",
+    "real_cause": "left_hand_split() only checked for a missing opening bracket, not for empty tail leaves, so at line length 1 it produced a split that broke the code and failed the equivalence check.",
+    "seconds": 6,
+    "cost_usd": 0.0421
+  },
+  {
+    "repo": "encode/httpx",
+    "issue": "https://github.com/encode/httpx/issues/309",
+    "fix": "https://github.com/encode/httpx/pull/310",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "httpx/dispatch/http11.py",
+      "httpx/concurrency/asyncio.py",
+      "httpx/dispatch/connection.py",
+      "httpx/config.py"
+    ],
+    "fixed_files": [
+      "httpx/middleware.py"
+    ],
+    "named": "httpx/dispatch/http11.py:108",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "A request with a body failed when the app sent fewer bytes than the Content-Length header it had promised. The user saw an error instead of a response, because the request was never fully sent.",
+    "real_cause": "RedirectMiddleware.redirect_headers() kept Content-Length/Transfer-Encoding when a redirect switched the method to GET and dropped the body, so h11 saw too little data for the declared length.",
+    "seconds": 7,
+    "cost_usd": 0.044
+  },
+  {
+    "repo": "marshmallow-code/marshmallow",
+    "issue": "https://github.com/marshmallow-code/marshmallow/issues/2868",
+    "fix": "https://github.com/marshmallow-code/marshmallow/pull/2894",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "marshmallow/schema.py",
+      "marshmallow/__init__.py",
+      "marshmallow/constants.py"
+    ],
+    "fixed_files": [
+      "src/marshmallow/fields.py"
+    ],
+    "named": "marshmallow/schema.py:938",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "likely",
+    "cause_plain": "A request sent an empty (null) value for a field called 'sentinel', and the app's input check rejected it with 'Field may not be null'. The data was refused rather than the app being broken.",
+    "real_cause": "fields.Constant set load_default/dump_default after Field.__init__ had already computed allow_none from a missing default, so a None constant was rejected as null on load.",
+    "seconds": 4,
+    "cost_usd": 0.02
+  },
+  {
+    "repo": "fastapi/fastapi",
+    "issue": "https://github.com/fastapi/fastapi/issues/9424",
+    "fix": "https://github.com/fastapi/fastapi/pull/9425",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "fastapi/routing.py",
+      "fastapi/__init__.py",
+      "fastapi/datastructures.py"
+    ],
+    "fixed_files": [
+      "fastapi/dependencies/utils.py"
+    ],
+    "named": "fastapi/routing.py:476",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "The app crashed at startup when it registered an endpoint that returns 'No Content' (HTTP 204). A 204 reply must be empty, but the endpoint's return type annotation was treated as a response body, so FastAPI refused to register it.",
+    "real_cause": "get_typed_annotation() turned the string annotation 'None' (from postponed annotations) into NoneType rather than None, so the route was treated as having a response body and the 204 assertion failed.",
+    "seconds": 14,
+    "cost_usd": 0.0377
+  },
+  {
+    "repo": "python-attrs/attrs",
+    "issue": "https://github.com/python-attrs/attrs/issues/1284",
+    "fix": "https://github.com/python-attrs/attrs/pull/1319",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "attr/_make.py",
+      "attr/_next_gen.py",
+      "attr/_compat.py",
+      "attr/exceptions.py"
+    ],
+    "fixed_files": [
+      "src/attr/_make.py"
+    ],
+    "named": "attr/_make.py:2224",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "Defining a class with attrs failed at import time because the code attrs generates for the class's __init__ was not valid Python. I can't tell from the files shown which field or option produced the bad code.",
+    "real_cause": "_attrs_to_init_script() built the __attrs_pre_init__ call from kw_only argument strings that still included '=default', generating invalid code like a=attr_dict['a'].default=a=....",
+    "seconds": 12,
+    "cost_usd": 0.0517
+  },
+  {
+    "repo": "celery/celery",
+    "issue": "https://github.com/celery/celery/issues/6164",
+    "fix": "https://github.com/celery/celery/pull/10406",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "celery/backends/base.py",
+      "celery/backends/redis.py",
+      "celery/backends/asynchronous.py",
+      "celery/__init__.py",
+      "celery/exceptions.py"
+    ],
+    "fixed_files": [
+      "celery/backends/base.py"
+    ],
+    "named": "celery/backends/redis.py:197",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "A background cleanup that runs when a task result object is thrown away crashed with a blank TypeError. Nothing in the user's own request failed. The cleanup tried to unsubscribe from the result channel and hit an error while building the Redis key for the task.",
+    "real_cause": "BaseKeyValueStoreBackend._get_key_for() passed the task id straight to key_t(), so a uuid.UUID task id made the bytes join raise TypeError.",
+    "seconds": 9,
+    "cost_usd": 0.0558
+  }
+]
