@@ -6,6 +6,7 @@
 //
 // Usage: npm run bench -- --validate      (free: checks every case is sound, no model calls)
 //        npm run bench [-- --only examhall]  (full run, about $0.02 per bug case; stops at $1.50)
+//        npm run bench -- --cases <file> --apps <dir> --stop-at 2 --out <prefix>   (another app tree, budget, output)
 
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -21,6 +22,7 @@ import { runGate } from "../src/pipeline/gate.js";
 import { proveFix } from "../src/pipeline/verify.js";
 import { LocalSource } from "../src/source/source.js";
 import { parseTraceback } from "../src/web/paste.js";
+import { autoHealVerdict, parseBenchArgs } from "./bench-lib.js";
 
 const envFile = new URL("../.env", import.meta.url);
 if (existsSync(envFile)) process.loadEnvFile(envFile);
@@ -37,23 +39,26 @@ type Case = {
   clean_inject?: Edit[];
   trigger?: string;
   test?: string;
+  strict_test?: string; // optional: a stricter hidden test (e.g. "every call returns exactly what the clean code returns")
   traceback?: string;
 };
 type Bench = { apps: Record<string, { critical: Array<{ name: string; match: string }>; exam_open?: boolean; language?: "node" }>; cases: Case[] };
 
 const BENCH = resolve(new URL("../../bench", import.meta.url).pathname);
 const args = process.argv.slice(2);
-const only = args.includes("--only") ? args[args.indexOf("--only") + 1] : null;
-const validateOnly = args.includes("--validate");
-const casesFile = args.includes("--cases") ? resolve(args[args.indexOf("--cases") + 1]) : join(BENCH, "cases.json");
-const STOP_AT_USD = 1.5;
+const opts = parseBenchArgs(args);
+const only = opts.only;
+const validateOnly = opts.validateOnly;
+const casesFile = opts.casesFile ?? join(BENCH, "cases.json");
+const APPS = opts.appsDir ?? join(BENCH, "apps");
+const STOP_AT_USD = opts.stopAt;
 const PY = process.env.JR_BENCH_PYTHON ?? "python3";
 const tmpDirs: string[] = [];
 
 function copyApp(app: string, edits: Edit[] = []): string {
   const dir = mkdtempSync(join(tmpdir(), `jrbench-${app}-`));
   tmpDirs.push(dir);
-  cpSync(join(BENCH, "apps", app), dir, { recursive: true });
+  cpSync(join(APPS, app), dir, { recursive: true });
   for (const e of edits) {
     const path = join(dir, e.file);
     const text = readFileSync(path, "utf8");
@@ -199,8 +204,12 @@ async function main() {
           const patched = copyApp(c.app, c.inject ?? []);
           for (const [p, text] of Object.entries(gate.patched)) writeFileSync(join(patched, p), text);
           row.fix_works = hiddenTest(patched, c.test!);
+          if (c.strict_test) row.fix_exact = hiddenTest(patched, c.strict_test);
           const proof = await proveFix(broken, gate.patched, out.result.regression_test);
           row.own_test = proof.verdict;
+          const heal = autoHealVerdict(decision.action, gate, out.result.edits, c.route, proof.verdict);
+          row.would_auto_heal = heal.heal;
+          row.heal_blocker = heal.blocker;
         } else {
           row.fix_works = false;
           row.own_test = "skipped";
@@ -224,11 +233,11 @@ async function main() {
   const shown = bugs.filter((r) => r.gate === "recommended" || r.gate === "caution" || r.gate === "shown");
   const cost = ai.guard.total() - startSpend;
   const median = (xs: number[]) => (xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] : 0);
-  const appSizes = Object.keys(bench.apps).map((a) => `${a} (${spawnSync("find", [join(BENCH, "apps", a), "-name", "*.py"], { encoding: "utf8" }).stdout.trim().split("\n").length} files)`).join(", ");
+  const appSizes = Object.keys(bench.apps).map((a) => `${a} (${spawnSync("find", [join(APPS, a), "-name", "*.py"], { encoding: "utf8" }).stdout.trim().split("\n").length} files)`).join(", ");
   const md = [
     "# JR-Bench results",
     "",
-    `Run on ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC. ${bugs.length} planted bugs and ${noise.length} noise errors across 6 sample apps: ${appSizes}.`,
+    `Run on ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC. ${bugs.length} planted bugs and ${noise.length} noise errors across ${Object.keys(bench.apps).length} app(s): ${appSizes}.`,
     "Every bug is planted into clean code as if a commit introduced it, then the app is made to crash for real. JaagteRaho sees only the traceback and the app's files, never the hidden test.",
     "",
     "| What | Result |",
@@ -251,8 +260,10 @@ async function main() {
   ].join("\n");
   // Extra case files (e.g. the playground's) never overwrite the published results.
   const tag = (process.env.JR_RELATED_FILES === "0" ? "-no-related" : "") + (args.includes("--cases") ? "-extra" : "");
-  writeFileSync(join(BENCH, `RESULTS${tag}.md`), `${md}\n`);
-  writeFileSync(join(BENCH, `results${tag}.json`), JSON.stringify(results, null, 2));
+  const outMd = opts.out ? `${opts.out}.md` : join(BENCH, `RESULTS${tag}.md`);
+  const outJson = opts.out ? `${opts.out}.json` : join(BENCH, `results${tag}.json`);
+  writeFileSync(outMd, `${md}\n`);
+  writeFileSync(outJson, JSON.stringify(results, null, 2));
   console.log(`\n${md.split("\n").slice(5, 18).join("\n")}`);
 }
 
