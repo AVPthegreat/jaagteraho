@@ -163,7 +163,8 @@ export default async function Evidence() {
       <h2>Evidence</h2>
       <div className="prose muted">
         <p>
-          The first table is counted live by the watchman itself. The benchmark tables below come from scripts in the repository, run against
+          This page backs up every number on the home page. The first table is counted live by the watchman itself, from people using the{" "}
+          <a href="/#demo">live demo</a>. The benchmark tables below come from scripts in the repository, run against
           real bugs and planted ones, and say exactly what was measured. Model vote shares are not probabilities. Faurus&apos;s own failure
           counts stay private.
         </p>
