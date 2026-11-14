@@ -412,3 +412,318 @@
     transform: none;
   }
 }
+
+/* ---- v2: the visitor plays ---- */
+.pg-step-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 28px 0 12px;
+  font-family: var(--font-d);
+  font-weight: 500;
+  font-size: clamp(1.2rem, 1.05rem + 0.6vw, 1.5rem);
+}
+.pg-step-h span {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--lantern);
+  color: var(--lantern-ink);
+  font-family: var(--font-s);
+  font-size: 0.9rem;
+  font-weight: 700;
+  flex: none;
+}
+.pg-reconnect {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(245, 181, 68, 0.4);
+  border-radius: 10px;
+  color: var(--amber-2);
+  font-size: var(--step-sm);
+}
+.pg-bugs {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
+.pg-bug {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.pg-bug:hover,
+.pg-bug.on {
+  border-color: var(--lantern);
+}
+.pg-bug.on {
+  background: var(--surface-2);
+}
+.pg-bug input,
+.pg-switch input,
+.pg-heal input {
+  accent-color: var(--lantern);
+  margin-top: 4px;
+  flex: none;
+}
+.pg-bug:has(input:focus-visible),
+.pg-switch:has(input:focus-visible) {
+  outline: 2px solid var(--lantern);
+  outline-offset: 2px;
+}
+.pg-bug b,
+.pg-switch b {
+  display: block;
+  font-size: var(--step-sm);
+  line-height: 1.35;
+}
+.pg-bug small,
+.pg-switch small {
+  display: block;
+  color: var(--soft);
+  font-size: var(--step-xs);
+  line-height: 1.45;
+  margin-top: 2px;
+}
+.pg-switches {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.pg-switch {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.pg-heal {
+  margin: 0;
+  padding: 10px 14px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  display: grid;
+  gap: 6px;
+  font-size: var(--step-sm);
+}
+.pg-heal legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+.pg-heal label {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.pg-plant-row {
+  margin: 16px 0 0;
+}
+.pg-work {
+  margin-top: 8px;
+  scroll-margin-top: 96px;
+}
+.pg-now {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-2);
+  border-left: 3px solid var(--lantern);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.pg-now p {
+  margin: 0;
+  font-size: var(--step-lead);
+  line-height: 1.45;
+  flex: 1 1 320px;
+}
+.pg-now-tag {
+  font-size: var(--step-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lantern-2);
+}
+.pg-work .pg-grid {
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-lg);
+  background: var(--bg-2);
+  overflow: hidden;
+}
+.pg-use {
+  min-width: 0;
+  border-right: 1px solid var(--line);
+}
+.pg-use-body {
+  padding: 14px 16px 16px;
+}
+.pg-use-btn {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0 12px;
+}
+.pg-use-btn code {
+  font-family: var(--font-m);
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+.pg-ok {
+  color: var(--ok);
+}
+.pg-bad {
+  color: var(--wake);
+}
+.pg-resp {
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: var(--bg);
+  min-width: 0;
+}
+.pg-resp.ok {
+  border-color: rgba(95, 214, 160, 0.45);
+}
+.pg-resp.bad {
+  border-color: rgba(255, 122, 107, 0.45);
+}
+.pg-resp-head {
+  margin: 0 0 6px;
+  font-size: var(--step-sm);
+  color: var(--soft);
+}
+.pg-status {
+  font-family: var(--font-m);
+  font-weight: 600;
+  margin-right: 6px;
+}
+.pg-resp.ok .pg-status {
+  color: var(--ok);
+}
+.pg-resp.bad .pg-status {
+  color: var(--wake);
+}
+.pg-resp pre {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  font-family: var(--font-m);
+  font-size: 0.74rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.pg-resp .mono {
+  font-family: var(--font-m);
+  word-break: break-word;
+}
+.pg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 4px 0 12px;
+}
+.pg-files summary,
+.pg-resp summary {
+  cursor: pointer;
+  font-size: var(--step-sm);
+  color: var(--soft);
+}
+.pg-files .pg-tree {
+  margin-top: 8px;
+}
+.pg-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.pg-timeline li {
+  min-width: 0;
+  border-left: 2px solid var(--lantern);
+  background: var(--surface);
+  border-radius: 0 10px 10px 0;
+  padding: 8px 12px;
+  overflow-wrap: anywhere;
+}
+.pg-timeline summary {
+  display: flex;
+  gap: 10px;
+  cursor: pointer;
+  font-size: var(--step-sm);
+  line-height: 1.45;
+  list-style: none;
+}
+.pg-timeline summary::-webkit-details-marker {
+  display: none;
+}
+.pg-timeline summary:focus-visible {
+  outline: 2px solid var(--lantern);
+  outline-offset: 2px;
+}
+.pg-tl-t {
+  flex: none;
+  width: 3.6em;
+  font-family: var(--font-m);
+  font-size: 0.72rem;
+  color: var(--faint);
+  padding-top: 2px;
+}
+.pg-tl-text b {
+  margin-right: 4px;
+}
+.pg-timeline details > :not(summary) {
+  margin: 8px 0 0 calc(3.6em + 10px);
+}
+.pg-timeline .pg-log {
+  min-height: 0;
+  max-height: 240px;
+}
+.pg-tl-wait {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--soft);
+  font-size: var(--step-sm);
+}
+.pg-card {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.pg-error {
+  padding: 40px 0;
+}
+@media (max-width: 860px) {
+  .pg-use {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .pg-timeline details > :not(summary) {
+    margin-left: 0;
+  }
+}

@@ -1,353 +1,527 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Diff } from "../ui/alert-card";
 import { WATCHER } from "../watcher";
-import { appTitle, loadSession, money, type AppInfo, type PlayEvent, type Scorecard } from "./play";
+import { appTitle, loadSession, money, type AppInfo, type BugCase, type PlayEvent, type Scorecard } from "./play";
 
 /*
-  The Live playground: pick a live app, it opens, JaagteRaho connects by itself, and a real planted bug
-  plays out step by step. The visitor never has to press anything else.
+  The Live playground. The visitor plays: picks an app and the bug to plant (or "Surprise me"), sets the
+  time of day and their heal rule, then uses the app before and after the fix, approves it or lets it heal,
+  and can undo it. Everything runs for real, in our isolated runner, on the visitor's own copy of the app.
 */
 
-type Snapshot = { app: string; running: boolean; events: PlayEvent[]; last: Scorecard | null; next_at: string | null; every_seconds: number; live: boolean };
-type Mark = "pass" | "fail" | "skip" | "wait";
+type Run = { run_id: number; app: string; case_id: string; events: PlayEvent[]; state: "running" | "broken" | "fixed"; approvable: boolean; heal: "ask" | "auto"; scorecard: Scorecard | null };
+type UseResult = { fixed: boolean; answered: boolean; response: unknown; error: string | null; traceback: string | null };
+type Conn = "connecting" | "live" | "reconnecting";
 
-const ACTION: Record<string, { label: string; cls: string; say: string }> = {
-  wake: { label: "WAKE", cls: "wake", say: "Wake the owner now" },
-  notify: { label: "NOTIFY", cls: "notify", say: "Message the owner" },
-  log: { label: "LOG", cls: "quiet", say: "Log it quietly" },
-  ignore: { label: "IGNORE", cls: "quiet", say: "Ignore it" },
-};
-
-const MARK_TEXT: Record<Mark, string> = { pass: "passed", fail: "failed", skip: "not run", wait: "waiting" };
-
-function CheckRow({ name, mark, note }: { name: string; mark: Mark; note?: string | null }) {
-  return (
-    <li className={`pg-check ${mark}`}>
-      <span className="pg-check-dot" aria-hidden="true">
-        {mark === "pass" ? "✓" : mark === "fail" ? "✗" : mark === "skip" ? "–" : "·"}
-      </span>
-      <span className="pg-check-name">{name}</span>
-      <span className="pg-check-state">{MARK_TEXT[mark]}</span>
-      {note ? <span className="pg-check-note">{note}</span> : null}
-    </li>
-  );
+/** Adds one live step to the visitor's run and moves its state along. */
+function applyStep(r: Run, ev: PlayEvent): Run {
+  const next: Run = { ...r, events: [...r.events, ev] };
+  if (ev.step === "ready") next.approvable = Boolean(ev.data.approvable);
+  if (ev.step === "done") {
+    next.scorecard = ev.data.scorecard as Scorecard;
+    if (next.state === "running") next.state = "broken";
+  }
+  if (ev.step === "failed" || ev.step === "undone") next.state = "broken";
+  if (ev.step === "hidden_test" && r.state !== "running") next.state = "fixed";
+  return next;
 }
 
-function clock(s: number) {
-  const v = Math.max(0, Math.ceil(s));
-  return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, "0")}`;
+const ACTION: Record<string, { label: string; cls: string; say: string }> = {
+  wake: { label: "WAKE", cls: "wake", say: "wake the owner now" },
+  notify: { label: "NOTIFY", cls: "notify", say: "send the owner a message" },
+  log: { label: "LOG", cls: "quiet", say: "log it quietly" },
+  ignore: { label: "IGNORE", cls: "quiet", say: "ignore it" },
+};
+
+async function post<T>(path: string, body: unknown): Promise<{ ok: boolean; data: T & { error?: string } }> {
+  try {
+    const r = await fetch(`${WATCHER}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(60_000) });
+    const data = (await r.json().catch(() => ({}))) as T & { error?: string };
+    return { ok: r.ok, data };
+  } catch {
+    return { ok: false, data: { error: "The live server did not answer. It may be restarting: try again in a few seconds." } as T & { error?: string } };
+  }
+}
+
+/** One plain sentence for what just happened (the narrator). */
+function narrate(ev: PlayEvent | undefined, app: string, bug: BugCase | undefined): string {
+  if (!ev) return "Starting…";
+  const d = ev.data;
+  const name = appTitle(app);
+  switch (ev.step) {
+    case "plant":
+      return `A bug was planted in a fresh copy of ${name}'s code. Starting the app…`;
+    case "crash":
+      return `${name} just crashed for a real request${bug ? ` (${bug.action.toLowerCase()})` : ""}. Nobody told JaagteRaho.`;
+    case "connected":
+      return "JaagteRaho caught the error report on its own and is deciding what it deserves.";
+    case "decision": {
+      const a = ACTION[String(d.action)];
+      return `It decided to ${a?.say ?? String(d.action)}, by a written rule: ${String(d.rule_text)}.`;
+    }
+    case "cause":
+      return d.unavailable ? String(d.unavailable) : `It found the cause: ${String(d.cause_plain)}`;
+    case "gate":
+      return d.level === "recommended" ? "It wrote a small fix; the code rules and an AI reviewer checked it." : `It wrote a fix, but its checks held it back (${String(d.level)}).`;
+    case "own_test":
+      return d.verdict === "proved"
+        ? "Its own test proved the fix: it fails on the broken code and passes with the fix."
+        : d.verdict === "not_proved"
+          ? "Its own test could not prove the fix."
+          : "Its own test was not run for this fix.";
+    case "ready":
+      if (!d.approvable) return String(d.reason ?? "This fix cannot be applied.");
+      return d.heal === "auto" ? "The fix is ready, and your rule lets it heal on its own…" : "The fix is ready. Approve it to put it into your copy of the app.";
+    case "note":
+      return String(d.text);
+    case "applied":
+      return d.by === "healed" ? "It healed on its own, as your rule allows. Our hidden test is checking it…" : "You approved the fix. It is in your copy now. Our hidden test is checking it…";
+    case "hidden_test":
+      return d.result === "passed"
+        ? "Our hidden test, which JaagteRaho never saw, passed. Use the app again: it works now."
+        : d.result === "failed"
+          ? "Our hidden test failed: this fix does not really work. Undo it."
+          : "Our hidden test could not run this time.";
+    case "done":
+      return "The scorecard below has the numbers. Use the app, or approve or undo the fix.";
+    case "undone":
+      return "You undid the fix. The bug is back: use the app to see it crash again.";
+    case "used_crash":
+      return "The app crashed for your request, exactly as your users would see it.";
+    case "used_ok":
+      return "The app answered your request. The bug is gone.";
+    case "failed":
+      return String(d.note ?? "This run could not finish.");
+    default:
+      return "";
+  }
+}
+
+const STEP_LABEL: Partial<Record<PlayEvent["step"], string>> = {
+  plant: "Bug planted",
+  crash: "App crashed",
+  connected: "Error caught",
+  decision: "Decision",
+  cause: "Cause found",
+  gate: "Fix written and checked",
+  own_test: "Its own test",
+  ready: "Fix ready",
+  note: "Note",
+  applied: "Fix applied",
+  hidden_test: "Our hidden test",
+  undone: "Fix undone",
+  failed: "Run stopped",
+};
+
+function StepDetail({ ev }: { ev: PlayEvent }) {
+  const d = ev.data;
+  if (ev.step === "crash")
+    return (
+      <pre className="pg-log">
+        {String(d.route ?? "")} → 500{"\n"}
+        {String(d.traceback)}
+      </pre>
+    );
+  if (ev.step === "decision")
+    return (
+      <p className="small">
+        <span className={`stamp ${ACTION[String(d.action)]?.cls ?? "quiet"}`}>{ACTION[String(d.action)]?.label ?? String(d.action)}</span> Rule {String(d.rule)}: {String(d.rule_text)}.{" "}
+        Exam or peak time: {d.exam_window ? "on" : "off"}. {d.critical ? `Critical flow: ${String(d.critical)}.` : "Not a critical flow."} {d.sandbox_note ? String(d.sandbox_note) : ""}
+      </p>
+    );
+  if (ev.step === "cause" && !d.unavailable)
+    return (
+      <p className="mono small">
+        {String(d.file)}:{String(d.line)} · {String(d.confidence)} · {String(d.cause_technical ?? "")}
+      </p>
+    );
+  if (ev.step === "gate") {
+    const why = (d.code_rule_reasons as string[] | undefined) ?? [];
+    const reasons = (d.reasons as string[] | undefined) ?? [];
+    return (
+      <>
+        {d.diff ? <Diff text={String(d.diff)} /> : <p className="small soft">No edit proposed.</p>}
+        <p className="small">
+          Code rules: {String(d.code_rules)}
+          {why.length ? ` (${why.join("; ")})` : ""}. AI reviewer: {d.reviewer ? `rated ${(d.reviewer as { fix_quality: string }).fix_quality} of 3` : "not asked"}. Gate:{" "}
+          {String(d.level)}
+          {reasons.length ? ` (${reasons.join("; ")})` : ""}.
+        </p>
+      </>
+    );
+  }
+  if ((ev.step === "own_test" || ev.step === "hidden_test") && d.note) return <p className="small">{String(d.note)}</p>;
+  return <p className="small soft">Nothing more to show for this step.</p>;
 }
 
 export function Playground() {
   const [apps, setApps] = useState<AppInfo[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [appsDown, setAppsDown] = useState(false);
   const [app, setApp] = useState<string | null>(null);
+  const [bug, setBug] = useState<string>("surprise");
+  const [exam, setExam] = useState(false);
+  const [heal, setHeal] = useState<"ask" | "auto">("ask");
   const [session, setSession] = useState<string | null>(null);
-  const [events, setEvents] = useState<PlayEvent[]>([]);
-  const [last, setLast] = useState<Scorecard | null>(null);
-  const [nextAt, setNextAt] = useState<number | null>(null);
-  const [connected, setConnected] = useState(false);
+  const [run, setRun] = useState<Run | null>(null);
+  const [conn, setConn] = useState<Conn>("connecting");
   const [note, setNote] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
-  const openRef = useRef<HTMLDivElement | null>(null);
+  const [busy, setBusy] = useState<null | "plant" | "use" | "approve" | "undo">(null);
+  const [used, setUsed] = useState<UseResult | null>(null);
+  const [last, setLast] = useState<Scorecard | null>(null);
+  const workRef = useRef<HTMLDivElement | null>(null);
+  const early = useRef<PlayEvent[]>([]);
 
+  // The list of apps, retried with backoff while the live server restarts.
   useEffect(() => {
     setSession(loadSession());
     const fromUrl = new URLSearchParams(window.location.search).get("app");
     if (fromUrl && /^[a-z]{2,20}$/.test(fromUrl)) setApp(fromUrl);
-    fetch(`${WATCHER}/public/playground/apps`, { signal: AbortSignal.timeout(8000) })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((d: { apps: AppInfo[] }) => setApps(d.apps))
-      .catch(() => setLoadError("The playground is not answering right now. Try again in a minute."));
-  }, []);
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 500);
-    return () => clearInterval(t);
-  }, []);
-
-  // Attach to the chosen app: one "open" call (starts a run at once if none is in flight), the live feed,
-  // and a heartbeat so the server keeps planting a bug every minute while this tab watches.
-  useEffect(() => {
-    if (!app || !session) return;
     let alive = true;
-    setEvents([]);
-    setLast(null);
-    setConnected(false);
-    setNote(null);
-    const watch = (open: boolean) =>
-      fetch(`${WATCHER}/public/playground/watch`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ session, app, open }),
-      })
-        .then(async (r) => {
+    let wait = 1000;
+    const load = () =>
+      fetch(`${WATCHER}/public/playground/apps`, { signal: AbortSignal.timeout(8000) })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+        .then((d: { apps: AppInfo[] }) => {
           if (!alive) return;
-          if (!r.ok) {
-            const body = (await r.json().catch(() => ({}))) as { error?: string };
-            setNote(body.error ?? "The playground could not attach to this app.");
-          }
+          setApps(d.apps);
+          setAppsDown(false);
         })
-        .catch(() => alive && setNote("The playground is not answering right now."));
-    const es = new EventSource(`${WATCHER}/public/playground/feed/${app}`);
-    es.addEventListener("open", () => alive && setConnected(true));
-    es.addEventListener("error", () => alive && setConnected(false));
-    es.addEventListener("snapshot", (m) => {
-      const s = JSON.parse((m as MessageEvent).data) as Snapshot;
-      setEvents(s.events);
-      setLast(s.last);
-      setNextAt(s.next_at ? Date.parse(s.next_at) : null);
-      setConnected(true);
-      // Ask for a run only once the feed is listening, so the first step is never missed.
-      void watch(true);
-    });
-    es.addEventListener("ping", (m) => {
-      const d = JSON.parse((m as MessageEvent).data) as { next_at?: string | null };
-      if (d.next_at) setNextAt(Date.parse(d.next_at));
-    });
-    es.addEventListener("step", (m) => {
-      const ev = JSON.parse((m as MessageEvent).data) as PlayEvent;
-      if (ev.step === "plant" || ev.step === "replay") {
-        setEvents([ev]);
-        setNextAt(null);
-        return;
-      }
-      setEvents((xs) => [...xs, ev]);
-      if (ev.step === "done") {
-        const card = ev.data.scorecard as Scorecard;
-        setLast(card);
-        const inS = Number(ev.data.next_in_seconds);
-        if (!ev.replay_of && Number.isFinite(inS)) setNextAt(Date.now() + Math.max(0, inS) * 1000);
-      }
-    });
-    const beat = setInterval(() => void watch(false), 45_000);
+        .catch(() => {
+          if (!alive) return;
+          setAppsDown(true);
+          setTimeout(load, wait);
+          wait = Math.min(wait * 2, 30_000);
+        });
+    void load();
     return () => {
       alive = false;
-      clearInterval(beat);
-      es.close();
     };
-  }, [app, session]);
+  }, []);
 
-  const pick = (name: string) => {
+  // The visitor's own feed. EventSource gives up when a reconnect fails, so we reconnect ourselves with
+  // backoff and keep everything on screen; the snapshot on reconnect resumes the run where it was.
+  useEffect(() => {
+    if (!session) return;
+    let alive = true;
+    let es: EventSource | null = null;
+    let wait = 1000;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const retry = () => {
+      if (!alive) return;
+      setConn("reconnecting");
+      timer = setTimeout(connect, wait);
+      wait = Math.min(wait * 2, 30_000);
+    };
+    // The session id is a credential: it is POSTed for a one-time ticket, and only the ticket goes in the URL.
+    const connect = async () => {
+      if (!alive) return;
+      const t = await post<{ ticket: string }>("/public/playground/mine", { session });
+      if (!alive) return;
+      if (!t.ok || !t.data.ticket) return retry();
+      es = new EventSource(`${WATCHER}/public/playground/mine/${encodeURIComponent(t.data.ticket)}`);
+      es.addEventListener("snapshot", (m) => {
+        wait = 1000;
+        setConn("live");
+        const s = JSON.parse((m as MessageEvent).data) as { run: Run | null };
+        if (s.run) setRun(s.run);
+      });
+      es.addEventListener("step", (m) => {
+        const ev = JSON.parse((m as MessageEvent).data) as PlayEvent;
+        setRun((r) => {
+          if (!r || r.run_id !== ev.run_id) {
+            // The first steps of a new run can arrive before the "plant" request has answered: keep them.
+            early.current = [...early.current, ev].slice(-40);
+            return r;
+          }
+          return applyStep(r, ev);
+        });
+      });
+      es.addEventListener("error", () => {
+        if (!alive || !es) return;
+        // A ticket works once, so the browser's own retry cannot reuse it: always reconnect with a new one.
+        es.close();
+        retry();
+      });
+    };
+    void connect();
+    return () => {
+      alive = false;
+      es?.close();
+      if (timer) clearTimeout(timer);
+    };
+  }, [session]);
+
+  const info = apps?.find((a) => a.name === app) ?? null;
+  const cases = info?.cases ?? [];
+
+  useEffect(() => {
+    if (!app) return;
+    let alive = true;
+    fetch(`${WATCHER}/public/playground/latest?n=20`, { signal: AbortSignal.timeout(6000) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { runs: Scorecard[] } | null) => alive && setLast(d?.runs.find((x) => x.app === app) ?? null))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [app]);
+
+  const pickApp = (name: string) => {
     setApp(name);
+    setBug("surprise");
+    setNote(null);
     const url = new URL(window.location.href);
     url.searchParams.set("app", name);
     window.history.replaceState(null, "", url);
-    requestAnimationFrame(() => openRef.current?.focus());
   };
 
-  const by = useMemo(() => {
-    const m: Partial<Record<PlayEvent["step"], PlayEvent>> = {};
-    for (const e of events) m[e.step] = e;
-    return m;
-  }, [events]);
+  const plant = useCallback(async () => {
+    if (!session || !app) return;
+    setBusy("plant");
+    setNote(null);
+    setUsed(null);
+    early.current = [];
+    const r = await post<{ run_id: number }>("/public/playground/run", { session, app, case: bug, exam, heal });
+    setBusy(null);
+    if (!r.ok) return setNote(r.data.error ?? "The bug could not be planted. Try again.");
+    const id = r.data.run_id;
+    const start: Run = { run_id: id, app, case_id: bug, events: [], state: "running", approvable: false, heal, scorecard: null };
+    setRun(early.current.filter((e) => e.run_id === id).reduce(applyStep, start));
+    early.current = [];
+    requestAnimationFrame(() => workRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }, [session, app, bug, exam, heal]);
 
-  const info = apps?.find((a) => a.name === app) ?? null;
-  const crash = by.crash?.data;
-  const decision = by.decision?.data;
-  const cause = by.cause?.data;
-  const gate = by.gate?.data;
-  const own = by.own_test?.data;
-  const hidden = by.hidden_test?.data;
-  const done = by.done?.data.scorecard as Scorecard | undefined;
-  const replay = events.find((e) => e.step === "replay") ?? null;
-  const running = events.length > 0 && !by.done && !by.failed;
-  const where = (crash?.where as string | undefined) ?? null;
-  const fixFile = (cause?.file as string | undefined) ?? null;
-  const t = (e?: PlayEvent) => (e ? `${e.t.toFixed(1)} s` : "");
+  const act = async (kind: "use" | "approve" | "undo") => {
+    if (!session || !run) return;
+    setBusy(kind);
+    setNote(null);
+    const r = await post<UseResult>(`/public/playground/${kind}`, { session, run_id: run.run_id });
+    setBusy(null);
+    if (!r.ok) return setNote(r.data.error ?? "That did not work. Try again.");
+    if (kind === "use") setUsed(r.data);
+  };
 
-  const reviewer = gate?.reviewer as { fix_quality: string } | null | undefined;
-  const marks: Array<{ name: string; mark: Mark; note?: string | null }> = [
-    { name: "Code rules", mark: !gate ? "wait" : gate.code_rules === "passed" ? "pass" : "fail", note: gate && gate.code_rules !== "passed" ? ((gate.code_rule_reasons as string[]) ?? [])[0] : null },
-    {
-      name: "AI reviewer",
-      mark: !gate ? "wait" : reviewer ? (Number(reviewer.fix_quality) >= 2 ? "pass" : "fail") : "skip",
-      note: reviewer ? `rated ${reviewer.fix_quality} of 3` : gate ? "not asked: the code rules stopped it first" : null,
-    },
-    {
-      name: "Its own regression test",
-      mark: !own ? "wait" : own.verdict === "proved" ? "pass" : own.verdict === "not_proved" ? "fail" : "skip",
-      note: own ? String(own.note ?? "") : null,
-    },
-    {
-      name: "Our hidden test",
-      mark: !hidden ? (own?.verdict === "skipped" && !gate?.diff ? "skip" : "wait") : hidden.result === "passed" ? "pass" : hidden.result === "failed" ? "fail" : "skip",
-      note: hidden ? (hidden.note ? String(hidden.note) : "Written by us before the run. JaagteRaho never sees it.") : null,
-    },
-  ];
-
-  const nextIn = nextAt ? (nextAt - now) / 1000 : null;
+  // The real case once the server picked one for "Surprise me".
+  const runCaseId = (run?.events.find((e) => e.step === "plant")?.data.case_id as string | undefined) ?? run?.case_id;
+  const bugInfo = run ? apps?.find((a) => a.name === run.app)?.cases.find((c) => c.id === runCaseId) : undefined;
+  const sentence = run ? narrate(run.events.at(-1), run.app, bugInfo) : "";
+  const timeline = useMemo(() => (run?.events ?? []).filter((e) => STEP_LABEL[e.step]), [run]);
+  const card = run?.scorecard ?? null;
+  const working = run?.state === "running";
+  const ready = run?.state === "broken" && run.approvable && !!card;
 
   return (
     <div className="pg">
+      {conn === "reconnecting" || appsDown ? (
+        <p className="pg-reconnect">
+          <span className="pg-pulse" aria-hidden="true" /> Reconnecting to the live server… Everything here stays as it was.
+        </p>
+      ) : null}
+
+      <h2 className="pg-step-h">
+        <span aria-hidden="true">1</span> Pick a live app
+      </h2>
       <ul className="pg-apps" aria-label="Live apps">
-        {apps === null && !loadError
+        {apps === null
           ? Array.from({ length: 7 }, (_, i) => <li key={i} className="pg-app skeleton" aria-hidden="true" />)
-          : (apps ?? []).map((a) => (
+          : apps.map((a) => (
               <li key={a.name}>
-                <button type="button" className="pg-app" aria-pressed={a.name === app} onClick={() => pick(a.name)}>
+                <button type="button" className="pg-app" aria-pressed={a.name === app} onClick={() => pickApp(a.name)}>
                   <span className="pg-app-top">
                     <b>{a.title}</b>
                     <span className="pg-stack">{a.stack}</span>
                   </span>
                   <span className="pg-app-line">{a.tagline}</span>
                   <span className="pg-app-meta">
-                    {a.files} files · {a.bugs} {a.bugs === 1 ? "bug" : "bugs"} to plant
-                    {a.running ? <span className="pg-live-dot"> · live run</span> : null}
+                    {a.files} files · {a.cases.length} bugs to choose from
                   </span>
                 </button>
               </li>
             ))}
       </ul>
-      {loadError ? (
-        <p className="pg-note" role="alert">
-          {loadError}
-        </p>
-      ) : null}
 
-      {app ? (
-        <div className="pg-open" ref={openRef} tabIndex={-1} aria-label={`${appTitle(app)}, live`}>
-          <div className="pg-bar">
-            <span className="pg-bar-dots" aria-hidden="true">
-              <i />
-              <i />
-              <i />
-            </span>
-            <b>{appTitle(app)}</b>
-            <span className="pg-bar-url">{info?.stack ?? ""} · running on our server</span>
-            <span className={`pg-conn ${connected ? "on" : ""}`} role="status">
-              <i aria-hidden="true" /> {connected ? "Connected to JaagteRaho · live" : "Connecting…"}
-            </span>
+      {info ? (
+        <section className="pg-choose" aria-labelledby="pg-choose-h">
+          <h2 className="pg-step-h" id="pg-choose-h">
+            <span aria-hidden="true">2</span> Pick the bug to plant in {info.title}
+          </h2>
+          <fieldset className="pg-bugs">
+            <legend className="sr-only">Bug to plant</legend>
+            <label className={`pg-bug ${bug === "surprise" ? "on" : ""}`}>
+              <input type="radio" name="bug" value="surprise" checked={bug === "surprise"} onChange={() => setBug("surprise")} />
+              <span>
+                <b>Surprise me</b>
+                <small>We pick one of the {cases.length} bugs at random.</small>
+              </span>
+            </label>
+            {cases.map((c) => (
+              <label key={c.id} className={`pg-bug ${bug === c.id ? "on" : ""}`}>
+                <input type="radio" name="bug" value={c.id} checked={bug === c.id} onChange={() => setBug(c.id)} />
+                <span>
+                  <b>{c.title}</b>
+                  <small>{c.symptom}</small>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+
+          <div className="pg-switches">
+            <label className="pg-switch">
+              <input type="checkbox" checked={exam} onChange={(e) => setExam(e.target.checked)} />
+              <span>
+                <b>It&apos;s exam time / peak hour</b>
+                <small>
+                  {info.critical.length
+                    ? `A failure in a critical flow (${info.critical.join(", ")}) then wakes the owner instead of sending a message.`
+                    : "This app has no critical flow marked, so the decision will not change."}
+                </small>
+              </span>
+            </label>
+            <fieldset className="pg-heal">
+              <legend>Your heal rule</legend>
+              <label>
+                <input type="radio" name="heal" checked={heal === "ask"} onChange={() => setHeal("ask")} /> Ask me first
+              </label>
+              <label>
+                <input type="radio" name="heal" checked={heal === "auto"} onChange={() => setHeal("auto")} /> Heal on its own (only a fix its own test proved)
+              </label>
+            </fieldset>
           </div>
-
-          {replay ? (
-            <p className="pg-replay" role="status">
-              {String(replay.data.note)}
-            </p>
-          ) : null}
+          <p className="pg-plant-row">
+            <button type="button" className="btn btn-lg" onClick={plant} disabled={!session || busy === "plant" || working}>
+              {working ? "JaagteRaho is on your last bug…" : busy === "plant" ? "Planting…" : "Plant this bug"} <span className="arrow" aria-hidden="true">→</span>
+            </button>
+          </p>
           {note ? (
             <p className="pg-note" role="alert">
               {note}
             </p>
           ) : null}
+        </section>
+      ) : (
+        <p className="pg-pick soft">Pick an app to see its bugs.</p>
+      )}
 
+      {run ? (
+        <div className="pg-work" ref={workRef}>
+          <h2 className="pg-step-h">
+            <span aria-hidden="true">3</span> Play: use the app, approve the fix, undo it
+          </h2>
+          <div className="pg-now">
+            <span className="pg-now-tag">What&apos;s happening now</span>
+            <p>{sentence}</p>
+          </div>
+          {/* Screen readers hear each new sentence; this copy is visually hidden. */}
+          <p className="sr-only" aria-live="polite">
+            {sentence}
+          </p>
           <div className="pg-grid">
-            <section className="pg-app-pane" aria-label="The app">
-              <h3 className="pg-h">Files</h3>
-              <ul className="pg-tree">
-                {(info?.tree ?? []).map((f) => {
-                  const crashHere = where?.startsWith(`${f}:`);
-                  const fixHere = fixFile !== null && (f === fixFile || f.endsWith(`/${fixFile}`));
-                  return (
-                    <li key={f} className={crashHere ? "crash" : fixHere ? "fix" : ""}>
-                      {f}
-                      {crashHere ? <em> crashed here</em> : fixHere ? <em> fix goes here</em> : null}
-                    </li>
-                  );
-                })}
-              </ul>
-              <h3 className="pg-h">Server log</h3>
-              <pre className="pg-log" aria-live="polite">
-                {by.plant ? `[${t(by.plant)}] a new bug was planted in a fresh copy of the code\n` : ""}
-                {crash ? `[${t(by.crash)}] ${crash.route ?? ""} → 500\n${String(crash.traceback)}` : running || by.plant ? "" : "Waiting for the next bug…"}
-              </pre>
-            </section>
-
-            <section className="pg-jr" aria-label="JaagteRaho" aria-live="polite">
-              <ol className="pg-steps">
-                <li className={by.connected ? "done" : "wait"}>
-                  <span className="pg-step-t">{t(by.connected)}</span>
-                  <b>Error caught</b>
-                  {crash ? (
-                    <p className="mono">
-                      {String(crash.exception_type)}: {String(crash.message)}
-                      {where ? <> · {where}</> : null}
+            <section className="pg-use" aria-label="Use the app">
+              <div className="pg-bar">
+                <b>{appTitle(run.app)}</b>
+                <span className={`pg-conn ${conn === "live" ? "on" : ""}`}>
+                  <i aria-hidden="true" /> {conn === "live" ? "Connected to JaagteRaho · live" : "Reconnecting…"}
+                </span>
+              </div>
+              <div className="pg-use-body">
+                <p className="small soft">
+                  Your own copy of the app, running in our isolated sandbox.{" "}
+                  {run.state === "fixed" ? <b className="pg-ok">The fix is in.</b> : run.state === "broken" ? <b className="pg-bad">The bug is in.</b> : "Starting…"}
+                </p>
+                <button type="button" className="btn pg-use-btn" onClick={() => act("use")} disabled={busy !== null || working}>
+                  {busy === "use" ? "Sending…" : (bugInfo?.action ?? "Use the app")}
+                  {bugInfo?.route ? <code>{bugInfo.route}</code> : null}
+                </button>
+                {used ? (
+                  <div className={`pg-resp ${used.answered ? "ok" : "bad"}`}>
+                    <p className="pg-resp-head">
+                      <span className="pg-status">{used.answered ? "Answered" : "500 · crashed"}</span> {used.fixed ? "with the fix" : "with the bug"}
                     </p>
-                  ) : (
-                    <p className="soft">Listening for errors.</p>
-                  )}
-                </li>
-                <li className={decision ? "done" : "wait"}>
-                  <span className="pg-step-t">{t(by.decision)}</span>
-                  <b>Decision</b>
-                  {decision ? (
-                    <p>
-                      <span className={`stamp ${ACTION[String(decision.action)]?.cls ?? "quiet"}`}>{ACTION[String(decision.action)]?.label ?? String(decision.action)}</span>{" "}
-                      {ACTION[String(decision.action)]?.say}: rule {String(decision.rule)}, {String(decision.rule_text)}.
-                      {decision.sandbox_note ? <span className="soft small"> {String(decision.sandbox_note)}</span> : null}
-                    </p>
-                  ) : null}
-                </li>
-                <li className={cause ? "done" : "wait"}>
-                  <span className="pg-step-t">{t(by.cause)}</span>
-                  <b>Cause</b>
-                  {cause ? (
-                    cause.unavailable ? (
-                      <p className="soft">{String(cause.unavailable)}</p>
+                    {used.answered ? (
+                      <pre>{used.response ? JSON.stringify(used.response, null, 2) : "It ran without an error."}</pre>
                     ) : (
                       <>
-                        <p>{String(cause.cause_plain)}</p>
-                        <p className="mono small">
-                          {String(cause.file)}:{String(cause.line)} · {String(cause.confidence)}
-                        </p>
+                        <p className="mono small">{used.error}</p>
+                        {used.traceback ? (
+                          <details>
+                            <summary>Traceback</summary>
+                            <pre className="pg-log">{used.traceback}</pre>
+                          </details>
+                        ) : null}
                       </>
-                    )
+                    )}
+                  </div>
+                ) : (
+                  <p className="small soft">{working ? "When the crash is caught, try it yourself." : "Press it to send the request yourself."}</p>
+                )}
+                <div className="pg-actions">
+                  {ready ? (
+                    <button type="button" className="btn" onClick={() => act("approve")} disabled={busy !== null}>
+                      {busy === "approve" ? "Applying…" : run.heal === "auto" ? "Approve it myself" : "Approve fix"}
+                    </button>
                   ) : null}
-                </li>
-                <li className={gate ? "done" : "wait"}>
-                  <span className="pg-step-t">{t(by.gate)}</span>
-                  <b>Fix</b>
-                  {gate?.diff ? <Diff text={String(gate.diff)} /> : gate ? <p className="soft">No edit proposed.</p> : null}
-                  {gate ? (
-                    <p className="small">
-                      Gate: <b>{String(gate.level)}</b>
-                      {(gate.reasons as string[]).length ? ` (${(gate.reasons as string[]).join("; ")})` : ""}
-                    </p>
+                  {run.state === "fixed" ? (
+                    <button type="button" className="btn btn-ghost" onClick={() => act("undo")} disabled={busy !== null}>
+                      {busy === "undo" ? "Undoing…" : "Undo fix"}
+                    </button>
                   ) : null}
-                </li>
-              </ol>
-              <h3 className="pg-h">Checks</h3>
-              <ul className="pg-checks">
-                {marks.map((m) => (
-                  <CheckRow key={m.name} {...m} />
+                </div>
+                {info && info.name === run.app ? (
+                  <details className="pg-files">
+                    <summary>The app&apos;s files ({info.files})</summary>
+                    <ul className="pg-tree">
+                      {info.tree.map((f) => (
+                        <li key={f}>{f}</li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
+              </div>
+            </section>
+
+            <section className="pg-jr" aria-label="What JaagteRaho did">
+              <h3 className="pg-h">What JaagteRaho did · open a step for details</h3>
+              <ol className="pg-timeline">
+                {timeline.map((e, i) => (
+                  <li key={`${e.step}-${i}`}>
+                    <details>
+                      <summary>
+                        <span className="pg-tl-t">{e.t.toFixed(1)} s</span>
+                        <span className="pg-tl-text">
+                          <b>{STEP_LABEL[e.step]}</b> {narrate(e, run.app, bugInfo)}
+                        </span>
+                      </summary>
+                      <StepDetail ev={e} />
+                    </details>
+                  </li>
                 ))}
-              </ul>
+                {working ? (
+                  <li className="pg-tl-wait">
+                    <span className="pg-pulse" aria-hidden="true" /> Working…
+                  </li>
+                ) : null}
+              </ol>
             </section>
           </div>
-
-          <div className="pg-score" aria-live="polite">
-            {done ? <Score card={done} replayed={!!replay} /> : last && !running ? <Score card={last} replayed={false} label="Last run" /> : null}
-            <p className="pg-next">
-              {running ? (
-                <>
-                  <span className="pg-pulse" aria-hidden="true" /> Working on it live
-                </>
-              ) : nextIn !== null ? (
-                nextIn > 0 ? (
-                  <>Next bug in {clock(nextIn)}</>
-                ) : (
-                  <>Planting the next bug…</>
-                )
-              ) : (
-                <>A new bug is planted every minute while you watch.</>
-              )}
-            </p>
-          </div>
+          {card ? <Score card={card} /> : null}
         </div>
-      ) : (
-        <p className="pg-pick soft">Pick an app. It opens here and JaagteRaho connects to it by itself.</p>
-      )}
+      ) : last ? (
+        <div className="pg-work">
+          <p className="small soft">The last real run on {appTitle(last.app)}:</p>
+          <Score card={last} />
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function Score({ card, replayed, label }: { card: Scorecard; replayed: boolean; label?: string }) {
+function Score({ card }: { card: Scorecard }) {
   return (
     <div className="pg-card">
       <p className="pg-card-head">
-        {label ?? (replayed ? "Replayed result" : "Result")} · {appTitle(card.app)} · {card.error}
+        Scorecard · {appTitle(card.app)} · {card.error}
       </p>
       <dl className="pg-nums">
         <div>
@@ -368,12 +542,13 @@ function Score({ card, replayed, label }: { card: Scorecard; replayed: boolean; 
         </div>
         <div>
           <dt>Hidden test</dt>
-          <dd className={card.hidden_test === "passed" ? "ok" : card.hidden_test === "failed" ? "bad" : ""}>{card.hidden_test.replace("_", " ")}</dd>
+          <dd className={card.hidden_test === "passed" ? "ok" : card.hidden_test === "failed" ? "bad" : ""}>{card.hidden_test === "not_run" ? "not run yet" : card.hidden_test}</dd>
         </div>
       </dl>
       <p className="small soft">
         What we planted: {card.planted.story} ({card.planted.files.join(", ")}).
         {card.case_source === "benchmark" ? " One of the published JR-Bench cases." : " A playground case, not counted in the published JR-Bench numbers."}
+        {card.applied_by ? (card.applied_by === "healed" ? " It healed on its own under your rule." : " Applied after you approved it.") : ""}
       </p>
     </div>
   );

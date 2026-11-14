@@ -7,7 +7,7 @@ import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import type { Playground } from "../playground/runner.js";
 import { playgroundBus, type PlaygroundEvent } from "../playground/events.js";
-import { liveFeeds, Window } from "./limits.js";
+import { liveFeeds, netKey, Window } from "./limits.js";
 import { clientIp } from "./public.js";
 
 const SESSION = /^[A-Za-z0-9_-]{8,64}$/;
@@ -27,6 +27,7 @@ export function playgroundRoutes(pg: Playground, allowedOrigins: string[]) {
       apps: pg.apps.map((a) => ({
         ...a,
         bugs: cases.filter((x) => x.app === a.name).length,
+        cases: pg.caseList(a.name),
         watching: pg.watching(a.name),
         running: pg.isRunning(a.name),
       })),
@@ -55,6 +56,129 @@ export function playgroundRoutes(pg: Playground, allowedOrigins: string[]) {
     // (open false) only keep the visitor counted; the ticker then plants a bug every minute.
     const started = body.open === true ? pg.startNow(body.app, Date.now(), true) : null;
     return c.json({ ok: true, started, ...pg.snapshot(body.app) });
+  });
+
+  // ---- a visitor's own run: plant the bug they picked, use the app, approve or undo the fix ----------
+
+  const ownLimits = (c: Parameters<typeof clientIp>[0], kind: string, session: string, perSession: number, perIp: number) =>
+    limits.allowAll([[`${kind}ip:${clientIp(c)}`, perIp, 3_600_000], [`${kind}:${session}`, perSession, 60_000], [`${kind}:global`, perIp * 50, 3_600_000]]);
+  const readBody = async (c: { req: { json: () => Promise<unknown> } }) => ((await c.req.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
+  const NOT_YOURS = { error: "This run is not yours, or it has expired. Plant a new bug." };
+
+  app.post("/public/playground/run", async (c) => {
+    const body = await readBody(c);
+    const session = typeof body.session === "string" ? body.session : "";
+    if (!SESSION.test(session) || !pg.hasApp(body.app) || typeof body.case !== "string") return c.json({ error: "Choose one of the live apps and one of its bugs." }, 400);
+    if (body.heal !== undefined && body.heal !== "ask" && body.heal !== "auto") return c.json({ error: "Choose a heal rule." }, 400);
+    // Each run spends from the playground's daily budget, so one address (and one network) gets only a few an hour.
+    const ip = clientIp(c);
+    if (!limits.allowAll([[`runip:${ip}`, 5, 3_600_000], [`runnet:${netKey(ip)}`, 15, 3_600_000], [`run:${session}`, 4, 60_000], ["run:global", 600, 3_600_000]]))
+      return c.json({ error: "You have planted a lot of bugs from here this hour. Try again later, or watch the last real runs." }, 429);
+    const r = pg.startOwn({ session, caseId: body.case, exam: body.exam === true, heal: body.heal === "auto" ? "auto" : "ask" }, body.app);
+    if ("error" in r) {
+      const said: Record<string, [string, 400 | 409 | 503]> = {
+        app: ["Choose one of the live apps.", 400],
+        case: ["Choose one of this app's bugs.", 400],
+        busy: ["Your last bug is still being handled. Watch it finish first.", 409],
+        full: ["Three bugs are being handled right now. Try again in a few seconds.", 503],
+        cap: ["Today's live budget for the playground is used up. The replays of real runs keep playing.", 503],
+      };
+      const [msg, code] = said[r.error];
+      return c.json({ error: msg, reason: r.error }, code);
+    }
+    return c.json({ ok: true, ...r });
+  });
+
+  const ownAction = (kind: "use" | "approve" | "undo", perSession: number, perIp: number) =>
+    app.post(`/public/playground/${kind}`, async (c) => {
+      const body = await readBody(c);
+      const session = typeof body.session === "string" ? body.session : "";
+      if (!SESSION.test(session) || !Number.isInteger(body.run_id)) return c.json({ error: "bad request" }, 400);
+      if (!ownLimits(c, kind, session, perSession, perIp)) return c.json({ error: "Easy there. Try again in a minute." }, 429);
+      const o = pg.ownRun(session, body.run_id as number);
+      if (!o) return c.json(NOT_YOURS, 403);
+      if (o.state === "running") return c.json({ error: "JaagteRaho is still working on this bug." }, 409);
+      if (kind === "use") {
+        try {
+          const used = await pg.use(o);
+          if (used === "busy") return c.json({ error: "The app is busy with another request. Try again in a moment." }, 429);
+          return c.json({ ok: true, ...used });
+        } catch (e) {
+          console.error("playground use:", String(e));
+          return c.json({ error: "The app could not be reached just now. Try again." }, 502);
+        }
+      }
+      if (kind === "approve") {
+        if (!o.approvable) return c.json({ error: "This fix cannot be applied." }, 409);
+        return (await pg.applyFix(o, "approved")) === "applied" ? c.json({ ok: true }) : c.json({ error: "The fix is already applied." }, 409);
+      }
+      return pg.undo(o) ? c.json({ ok: true }) : c.json({ error: "There is no applied fix to undo." }, 409);
+    });
+  ownAction("use", 20, 300);
+  ownAction("approve", 10, 120);
+  ownAction("undo", 10, 120);
+
+  // The session id is the visitor's credential, so it never goes in a URL: the page POSTs it for a one-time
+  // ticket (60 s, single use) and opens the live feed with the ticket.
+  app.post("/public/playground/mine", async (c) => {
+    const body = await readBody(c);
+    const session = typeof body.session === "string" ? body.session : "";
+    if (!SESSION.test(session)) return c.json({ error: "bad session" }, 400);
+    if (!ownLimits(c, "ticket", session, 30, 600)) return c.json({ error: "Easy there. Try again in a minute." }, 429);
+    return c.json({ ticket: pg.feedTicket(session) });
+  });
+
+  // The visitor's own runs: a snapshot of the current one first (so a reconnecting page resumes), then every step.
+  app.get("/public/playground/mine/:ticket", (c) => {
+    const session = pg.redeemTicket(c.req.param("ticket"));
+    if (!session) return c.json({ error: "This live view has expired. Reconnecting." }, 401);
+    const ip = clientIp(c);
+    if (!feeds.take(ip)) return c.json({ error: "Too many live views are open. Close a tab and try again." }, 429);
+    let released = false;
+    const release = () => {
+      if (!released) feeds.release(ip);
+      released = true;
+    };
+    return streamSSE(
+      c,
+      async (stream) => {
+        const queue: PlaygroundEvent[] = [];
+        let wake: (() => void) | null = null;
+        const onEvent = (ev: PlaygroundEvent) => {
+          queue.push(ev);
+          wake?.();
+        };
+        playgroundBus.on(`session:${session}`, onEvent);
+        stream.onAbort(() => {
+          playgroundBus.off(`session:${session}`, onEvent);
+          release();
+          wake?.();
+        });
+        await stream.writeSSE({ event: "snapshot", data: JSON.stringify({ run: pg.ownSnapshot(session) }) });
+        const until = Date.now() + 30 * 60_000;
+        while (!stream.aborted && Date.now() < until) {
+          if (queue.length === 0) {
+            await new Promise<void>((r) => {
+              wake = r;
+              setTimeout(r, 15_000);
+            });
+            wake = null;
+          }
+          if (queue.length === 0) {
+            await stream.writeSSE({ event: "ping", data: "{}" });
+            continue;
+          }
+          const ev = queue.shift()!;
+          await stream.writeSSE({ event: "step", data: JSON.stringify(ev) });
+        }
+        playgroundBus.off(`session:${session}`, onEvent);
+        release();
+      },
+      async (err) => {
+        console.error("playground mine:", err);
+        release();
+      },
+    );
   });
 
   // Live feed of one app: a snapshot first (the run so far, the last result, the next bug's time), then every step.

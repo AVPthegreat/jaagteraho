@@ -107,8 +107,9 @@ export const removeDir = (d: string) => rm(d, { recursive: true, force: true });
 export const isNodeApp = (dir: string) => existsSync(join(dir, "package.json"));
 
 /** The error report as the app prints it: a Python traceback, or a Node.js error and its stack. */
-export function crashReport(dir: string, stderr: string): string {
-  if (!isNodeApp(dir)) {
+/** node: the app's language (from the app's details, never from a path the watcher may not have). */
+export function crashReport(node: boolean, stderr: string): string {
+  if (!node) {
     const at = stderr.lastIndexOf("Traceback (most recent call last):");
     return at >= 0 ? stderr.slice(at).trim() : "";
   }

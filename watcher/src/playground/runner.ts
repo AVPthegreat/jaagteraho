@@ -71,6 +71,7 @@ export type Scorecard = {
   total_seconds: number;
   cost_usd: number;
   finished_at: string;
+  applied_by?: "approved" | "healed"; // a visitor's own run: how the fix went in
 };
 
 /** The model-facing steps. Production uses the real pipeline; tests pass fakes (no network, no spend). */
@@ -98,6 +99,32 @@ export type PlaygroundOptions = {
   tickMs?: number;
 };
 
+/** What a visitor chose for their own run: the bug, the time of day, and the heal rule. */
+export type OwnChoice = { session: string; caseId: string; exam: boolean; heal: "ask" | "auto" };
+
+/** A visitor's own run, kept in memory so only that visitor can use the app, approve, heal or undo it. */
+type Own = {
+  runId: number;
+  session: string;
+  app: string;
+  c: BenchCase;
+  heal: "ask" | "auto";
+  exam: boolean;
+  runFrom: Base;
+  state: "running" | "broken" | "fixed";
+  patched: Record<string, string> | null;
+  approvable: boolean;
+  proved: boolean;
+  busy: boolean;
+  card: Scorecard | null;
+  events: PlaygroundEvent[];
+  emit: (step: PlaygroundStep, data: Record<string, unknown>) => void;
+  until: number;
+};
+
+const OWN_TTL_MS = 30 * 60_000;
+/** "Use the app" jobs running at once across all visitors (the runner also has its own small queue). */
+export const USE_AT_ONCE = 2;
 const WATCH_TTL_MS = 90_000;
 const OPEN_GAP_MS = 15_000;
 const EVENTS_PER_RUN = 40;
@@ -122,6 +149,12 @@ export class Playground {
   private watchers = new Map<string, Map<string, number>>(); // app -> session -> last seen
   private openFeeds = new Map<string, number>(); // app -> open live feeds
   private nextCase = new Map<string, number>();
+  private own = new Map<number, Own>();
+  private usesInFlight = 0;
+  /** One-time tickets for the visitor's live feed, so the session id never travels in a URL. */
+  private tickets = new Map<string, { session: string; until: number }>();
+  private titles: Record<string, { title: string; symptom: string; action: string }> = {};
+  private ownBySession = new Map<string, number>();
   private timer: NodeJS.Timeout | null = null;
   private stopped = false;
 
@@ -142,6 +175,11 @@ export class Playground {
     this.dir = opts.dir ?? benchDir();
     this.bench = loadBench(this.dir);
     this.apps = describeApps(this.bench, this.dir).filter((a) => a.bugs > 0);
+    try {
+      this.titles = JSON.parse(readFileSync(join(this.dir, "playground-titles.json"), "utf8"));
+    } catch {
+      this.titles = {};
+    }
     this.steps = opts.steps ?? realSteps;
     this.canSpendOpt = opts.canSpend;
     this.everyMs = opts.everyMs ?? envInt("JR_PLAYGROUND_EVERY_SEC", 60, 20, 3600) * 1000;
@@ -251,6 +289,7 @@ export class Playground {
 
   async tick(now = Date.now()) {
     if (this.stopped) return;
+    this.sweepOwn(now);
     let watched = false;
     for (const a of this.apps) {
       if (this.watching(a.name, now) === 0) continue;
@@ -338,18 +377,19 @@ export class Playground {
     return (this.db.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS t FROM spend WHERE project_id = ? AND at >= ?").get(projectId, since) as { t: number }).t;
   }
 
-  private async runLive(app: string): Promise<Scorecard | null> {
-    const c = this.pickCase(app);
+  private async runLive(app: string, mine?: Own): Promise<Scorecard | null> {
+    const c = mine?.c ?? this.pickCase(app);
     const startedAt = new Date().toISOString();
-    const runId = Number(this.db.prepare("INSERT INTO playground_runs (app, case_id, started_at, status) VALUES (?, ?, ?, 'running')").run(app, c.id, startedAt).lastInsertRowid);
+    const runId = mine?.runId ?? Number(this.db.prepare("INSERT INTO playground_runs (app, case_id, started_at, status) VALUES (?, ?, ?, 'running')").run(app, c.id, startedAt).lastInsertRowid);
     const t0 = Date.now();
-    const events: PlaygroundEvent[] = [];
-    this.current.set(app, events);
+    const events: PlaygroundEvent[] = mine?.events ?? [];
+    if (!mine) this.current.set(app, events);
     const emit = (step: PlaygroundStep, data: Record<string, unknown>) => {
       const ev: PlaygroundEvent = { step, app, run_id: runId, at: new Date().toISOString(), t: Math.round((Date.now() - t0) / 100) / 10, data };
       if (events.length < EVENTS_PER_RUN) events.push(ev);
-      playgroundBus.send(ev);
+      playgroundBus.send(ev, mine?.session);
     };
+    if (mine) mine.emit = emit;
     const projectId = this.projectFor(app);
     const dirs: string[] = [];
     try {
@@ -359,10 +399,11 @@ export class Playground {
         const broken = await copyApp(this.dir, app, c.inject ?? []);
         dirs.push(broken);
         const runFrom: Base = { kind: "bench", app, edits: c.inject ?? [], dir: this.dir };
+        if (mine) mine.runFrom = runFrom;
         const ran = await runJob({ kind: "trigger", base: runFrom, code: c.trigger! });
         if (ran.kind !== "trigger") throw new Error("unexpected runner answer");
         // The runner's paths, mapped onto the readable copy, so frames point at files the diagnosis can read.
-        const tb = crashReport(broken, ran.stderr.replaceAll(`${ran.dir}${sep}`, `${broken}${sep}`));
+        const tb = crashReport(isNodeApp(broken), ran.stderr.replaceAll(`${ran.dir}${sep}`, `${broken}${sep}`));
         const parsed = tb ? parseTraceback(tb) : null;
         if (ran.status === 0 || !parsed) throw new Error("the planted bug did not crash the app");
         const top = [...parsed.frames].reverse().find((f) => f.in_app && (f.abs_path ?? "").startsWith(broken + sep)) ?? null;
@@ -373,7 +414,9 @@ export class Playground {
         emit("crash", { traceback: shownTb.slice(-4000), exception_type: parsed.exception_type, message: parsed.message.slice(0, 300), route: c.route, where });
 
         const appCfg = this.bench.apps[app];
-        setSettings(this.db, projectId, { critical: appCfg.critical, exam_until: appCfg.exam_open ? new Date(Date.now() + 3_600_000).toISOString() : null });
+        // A visitor's own run uses the time of day they chose (an exam or peak hour is the critical window).
+        const examOn = mine ? mine.exam : appCfg.exam_open === true;
+        setSettings(this.db, projectId, { critical: appCfg.critical, exam_until: examOn ? new Date(Date.now() + 3_600_000).toISOString() : null });
         const ev: CleanEvent = {
           event_id: randomBytes(16).toString("hex"),
           timestamp: new Date().toISOString(),
@@ -401,6 +444,8 @@ export class Playground {
           engine: decision.engine,
           severity_word: decision.votes.severity ? severityWord(decision.votes.severity.value) : null,
           sandbox_note: decision.action === "wake" ? "On a real app this rings the owner. The playground never calls or messages anyone." : null,
+          exam_window: examOn,
+          critical: decision.facts.critical,
         });
 
         const { files } = await gatherFiles(this.db, new LocalSource(broken), projectId, parsed.frames, null);
@@ -417,6 +462,7 @@ export class Playground {
         let hidden: Scorecard["hidden_test"] = "not_run";
         let tProved: number | null = null;
         if ("error" in out) {
+          if (mine) emit("ready", { approvable: false, heal: mine.heal, reason: "The diagnosis could not finish, so there is no fix to apply." });
           // The reason stays in our log; viewers get a plain sentence, never a raw SDK message.
           console.error(`playground ${app} diagnosis:`, out.error);
           emit("cause", { unavailable: "The diagnosis could not finish this time." });
@@ -456,7 +502,21 @@ export class Playground {
             emit("own_test", { verdict: proof.verdict, before: proof.before ?? null, after: proof.after ?? null, note: proof.note });
             // Our hidden test (the model never saw it) on the patched copy, unless the fix reaches outside the program.
             const outside = this.reachesOutside(broken, gate.patched, d);
-            if (outside) {
+            if (mine) {
+              // The visitor decides: the hidden test runs when the fix is applied (approved or healed).
+              mine.patched = outside ? null : gate.patched;
+              mine.approvable = !outside && gateLevel === "recommended";
+              mine.proved = proof.verdict === "proved";
+              emit("ready", {
+                approvable: mine.approvable,
+                heal: mine.heal,
+                reason: outside
+                  ? "The fix reaches outside the program, so it is never applied."
+                  : gateLevel !== "recommended"
+                    ? `The gate did not recommend this fix (${gateLevel}${gate.reasons.length ? `: ${gate.reasons[0]}` : ""}), so it cannot be applied.`
+                    : null,
+              });
+            } else if (outside) {
               emit("hidden_test", { result: "not_run", note: `Not run: the fix adds code that reaches outside the program (${outside.slice(0, 60)}).` });
             } else {
               const ans = await runJob({ kind: "hidden", base: runFrom, patched: gate.patched, test: c.test! });
@@ -466,6 +526,7 @@ export class Playground {
             }
           } else {
             emit("own_test", { verdict: "skipped", note: "No edit to test." });
+            if (mine) emit("ready", { approvable: false, heal: mine.heal, reason: "There is no fix to apply." });
           }
         }
         const cost = Math.round(this.spentBy(projectId, startedAt) * 10000) / 10000;
@@ -497,11 +558,21 @@ export class Playground {
         this.db
           .prepare("UPDATE playground_runs SET status = 'done', finished_at = ?, scorecard = ?, events = ?, cost_usd = ? WHERE id = ?")
           .run(card.finished_at, JSON.stringify(card), JSON.stringify(events), cost, runId);
+        if (mine) {
+          mine.card = card;
+          mine.state = "broken";
+          // "Heal on its own": only a recommended fix that its own test proved, as with real heal rules.
+          if (mine.heal === "auto") {
+            if (mine.approvable && mine.proved) await this.applyFix(mine, "healed");
+            else if (mine.approvable) emit("note", { text: "Not healed on its own: its own test did not prove the fix. You can still approve it." });
+          }
+        }
         return card;
       });
     } catch (e) {
       console.error(`playground ${app}:`, e);
-      emit("failed", { note: "This run could not finish. The next bug is planted on schedule." });
+      emit("failed", { note: mine ? "This run could not finish. Plant another bug to try again." : "This run could not finish. The next bug is planted on schedule." });
+      if (mine) mine.state = "broken";
       this.db.prepare("UPDATE playground_runs SET status = 'failed', finished_at = ?, events = ?, cost_usd = ? WHERE id = ?").run(
         new Date().toISOString(),
         JSON.stringify(events),
@@ -510,8 +581,163 @@ export class Playground {
       );
       return null;
     } finally {
-      this.current.delete(app);
+      if (!mine) this.current.delete(app);
       for (const d of dirs) await removeDir(d).catch(() => undefined);
+    }
+  }
+
+  // ---- a visitor's own run -----------------------------------------------------------------------
+
+  /** The bugs a visitor can pick for an app (only these ids are ever accepted). */
+  casesFor(app: string) {
+    return this.bench.cases.filter((c) => c.app === app && c.kind === "bug");
+  }
+
+  /** What the visitor sees of each bug: a plain title, the symptom and the action that hits it (bench/playground-titles.json). */
+  caseList(app: string) {
+    return this.casesFor(app).map((c) => {
+      const t = this.titles[c.id];
+      return { id: c.id, title: t?.title ?? c.story, symptom: t?.symptom ?? c.story, action: t?.action ?? `Call ${c.route ?? "the app"}`, route: c.route, source: c.source ?? "benchmark" };
+    });
+  }
+
+  /**
+   * Plants the bug the visitor picked (or a random one) in their own copy of the app. Only listed apps and
+   * cases are accepted; one own run at a time per visitor; the playground's caps and concurrency apply.
+   */
+  startOwn(choice: OwnChoice, app: string, now = Date.now()): { run_id: number } | { error: "app" | "case" | "busy" | "full" | "cap" } {
+    if (!this.hasApp(app)) return { error: "app" };
+    const cases = this.casesFor(app);
+    const c = choice.caseId === "surprise" ? cases[randomInt(0, cases.length)] : cases.find((x) => x.id === choice.caseId);
+    if (!c) return { error: "case" };
+    const previous = this.ownBySession.get(choice.session);
+    if (previous !== undefined && this.own.get(previous)?.state === "running") return { error: "busy" };
+    if (this.stopped || this.inflight.size + this.replaying.size >= this.maxConcurrent) return { error: "full" };
+    this.liveStarts = this.liveStarts.filter((t) => now - t < 3_600_000);
+    if (!this.canSpend() || this.liveStarts.length >= this.runsPerHour) return { error: "cap" };
+    this.liveStarts.push(now);
+    this.lastAny = now;
+    const runId = Number(this.db.prepare("INSERT INTO playground_runs (app, case_id, started_at, status) VALUES (?, ?, ?, 'running')").run(app, c.id, new Date().toISOString()).lastInsertRowid);
+    const mine: Own = {
+      runId, session: choice.session, app, c, heal: choice.heal, exam: choice.exam,
+      runFrom: { kind: "bench", app, edits: c.inject ?? [], dir: this.dir },
+      state: "running", patched: null, approvable: false, proved: false, busy: false, card: null, events: [],
+      emit: () => undefined, until: now + OWN_TTL_MS,
+    };
+    if (previous !== undefined) this.own.delete(previous);
+    this.own.set(runId, mine);
+    this.ownBySession.set(choice.session, runId);
+    const key = `own:${choice.session}`;
+    const p = this.runLive(app, mine).finally(() => this.inflight.delete(key));
+    this.inflight.set(key, p);
+    return { run_id: runId };
+  }
+
+  /** A ticket (60 s, single use) that opens the visitor's live feed. */
+  feedTicket(session: string, now = Date.now()): string {
+    for (const [t, v] of this.tickets) if (now > v.until) this.tickets.delete(t);
+    if (this.tickets.size > 10_000) this.tickets.clear();
+    const t = randomBytes(18).toString("base64url");
+    this.tickets.set(t, { session, until: now + 60_000 });
+    return t;
+  }
+
+  redeemTicket(ticket: string, now = Date.now()): string | null {
+    const v = this.tickets.get(ticket);
+    this.tickets.delete(ticket);
+    return v && now <= v.until ? v.session : null;
+  }
+
+  /** The visitor's run, only for that visitor. */
+  ownRun(session: string, runId: number, now = Date.now()): Own | null {
+    const o = this.own.get(runId);
+    if (!o || o.session !== session) return null;
+    if (now > o.until) {
+      this.own.delete(runId);
+      return null;
+    }
+    return o;
+  }
+
+  /** What a returning visitor (or a reconnecting page) needs to pick up where they were. */
+  ownSnapshot(session: string) {
+    const id = this.ownBySession.get(session);
+    const o = id === undefined ? null : this.ownRun(session, id);
+    return o ? { run_id: o.runId, app: o.app, case_id: o.c.id, state: o.state, approvable: o.approvable, heal: o.heal, events: o.events, scorecard: o.card } : null;
+  }
+
+  /** Applies the fix to the visitor's copy, then our hidden test judges it. */
+  async applyFix(o: Own, by: "approved" | "healed"): Promise<"applied" | "no"> {
+    if (o.busy || o.state !== "broken" || !o.approvable || !o.patched) return "no";
+    o.busy = true;
+    try {
+      o.emit("applied", { by });
+      let hidden: Scorecard["hidden_test"] = "not_run";
+      try {
+        const ans = await runJob({ kind: "hidden", base: o.runFrom, patched: o.patched, test: o.c.test! });
+        const r = ans.kind === "hidden" ? ans.outcome : "error";
+        hidden = r === "passed" ? "passed" : r === "failed" ? "failed" : "not_run";
+      } catch (e) {
+        console.error("playground hidden test:", String(e));
+      }
+      o.state = "fixed";
+      o.emit("hidden_test", { result: hidden, note: hidden === "not_run" ? "Our hidden test could not run this time." : null });
+      if (o.card) {
+        o.card = { ...o.card, hidden_test: hidden, applied_by: by };
+        this.db.prepare("UPDATE playground_runs SET scorecard = ?, events = ? WHERE id = ?").run(JSON.stringify(o.card), JSON.stringify(o.events), o.runId);
+        o.emit("done", { scorecard: o.card });
+      }
+      return "applied";
+    } finally {
+      o.busy = false;
+    }
+  }
+
+  undo(o: Own): boolean {
+    if (o.busy || o.state !== "fixed") return false;
+    o.state = "broken";
+    o.emit("undone", {});
+    return true;
+  }
+
+  /** "Use the app": the real request on the visitor's copy, broken or with the fix applied. */
+  async use(o: Own): Promise<"busy" | { fixed: boolean; answered: boolean; response: unknown; error: string | null; traceback: string | null }> {
+    // One request in flight per run (it also holds approve and undo), and at most USE_AT_ONCE across all visitors.
+    if (o.busy || this.usesInFlight >= USE_AT_ONCE) return "busy";
+    o.busy = true;
+    this.usesInFlight++;
+    try {
+      return await this.useNow(o);
+    } finally {
+      o.busy = false;
+      this.usesInFlight--;
+    }
+  }
+
+  private async useNow(o: Own): Promise<{ fixed: boolean; answered: boolean; response: unknown; error: string | null; traceback: string | null }> {
+    const fixed = o.state === "fixed" && !!o.patched;
+    const r = await runJob({ kind: "trigger", base: o.runFrom, code: o.c.trigger!, patched: fixed ? o.patched! : {}, respond: true });
+    if (r.kind !== "trigger") throw new Error("unexpected runner answer");
+    const ok = r.status === 0;
+    let response: unknown = null;
+    try {
+      response = r.response ? JSON.parse(r.response) : null;
+    } catch {
+      response = null;
+    }
+    const strip = (t: string) => t.replaceAll(`${r.dir}${sep}`, "");
+    const node = this.apps.find((a) => a.name === o.app)?.stack === "Node.js";
+    const tb = ok ? null : strip(crashReport(node, r.stderr) || "").slice(-3000) || null;
+    const last = tb ? tb.trim().split("\n").pop() ?? null : null;
+    o.emit(ok ? "used_ok" : "used_crash", { fixed });
+    return { fixed, answered: ok, response, error: ok ? null : (last ?? "The app crashed."), traceback: tb };
+  }
+
+  /** Forgets visitors' runs that have expired. */
+  sweepOwn(now = Date.now()) {
+    for (const [id, o] of this.own) if (now > o.until && o.state !== "running") {
+      this.own.delete(id);
+      if (this.ownBySession.get(o.session) === id) this.ownBySession.delete(o.session);
     }
   }
 

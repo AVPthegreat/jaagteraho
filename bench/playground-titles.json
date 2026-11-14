@@ -1,0 +1,352 @@
+{
+  "campuskart-empty-page": {
+    "title": "Listings page crashes with an empty page number",
+    "symptom": "Opening the listings with an empty page number in the link crashes instead of showing the first page.",
+    "action": "Open listings with an empty page"
+  },
+  "campuskart-offer-typo": {
+    "title": "Making an offer on a listing crashes",
+    "symptom": "Making any offer on a listing crashes because the app looks up the listing by a field name that no longer exists.",
+    "action": "Make an offer on a listing"
+  },
+  "campuskart-order-total": {
+    "title": "Placing an order crashes on the total",
+    "symptom": "Placing an order crashes when the quantity comes as text, while the app works out the order total.",
+    "action": "Order 2 of a listing"
+  },
+  "pg-campuskart-category-items-blank": {
+    "title": "Adding a category with a blank item count crashes",
+    "symptom": "Adding a category crashes when the item count is left blank, even though it is meant to be optional.",
+    "action": "Add a category with blank items"
+  },
+  "pg-campuskart-coupon-expiry-tz": {
+    "title": "Adding a coupon crashes on the expiry check",
+    "symptom": "Adding any coupon crashes while the app checks whether it has already expired.",
+    "action": "Add a coupon"
+  },
+  "pg-campuskart-listing-tags-none": {
+    "title": "Posting a listing crashes",
+    "symptom": "Posting any new listing crashes when the app tries to tag it as new.",
+    "action": "Post a listing"
+  },
+  "pg-campuskart-notfound-base": {
+    "title": "Wishlisting a missing listing crashes",
+    "symptom": "Adding a listing that does not exist to a wishlist crashes instead of saying it was not found.",
+    "action": "Wishlist a listing that is gone"
+  },
+  "pg-campuskart-payout-fee-float": {
+    "title": "Paying out a seller crashes on the platform fee",
+    "symptom": "Every seller payout crashes while the app takes the 2% platform fee, because of a mix-up in the money maths.",
+    "action": "Pay out a seller"
+  },
+  "pg-campuskart-pickup-time-format": {
+    "title": "Setting a pickup crashes without a time",
+    "symptom": "Setting a pickup crashes because the app now wants a date and time while the app sends only the date.",
+    "action": "Set a pickup for a date"
+  },
+  "pg-campuskart-star-label-off-by-one": {
+    "title": "Leaving a 5-star review crashes",
+    "symptom": "Leaving a 5-star review crashes because the star label list is counted from the wrong end.",
+    "action": "Leave a 5-star review"
+  },
+  "clinicq-bill-describe": {
+    "title": "Creating a bill crashes when showing the discount",
+    "symptom": "Creating a bill crashes because the bill text tries to show a discount field that does not exist.",
+    "action": "Create a bill with 10% off"
+  },
+  "clinicq-is-past-datetime": {
+    "title": "Checking past visits crashes",
+    "symptom": "Listing visits that are already past crashes once any visit exists, because dates are compared the wrong way.",
+    "action": "Check for past visits"
+  },
+  "clinicq-store-keyerror": {
+    "title": "Booking for an unknown patient crashes",
+    "symptom": "Booking an appointment for a patient who does not exist crashes instead of saying the patient was not found.",
+    "action": "Book for a patient who does not exist"
+  },
+  "pg-clinicq-bill-discount-float": {
+    "title": "Creating a discounted bill crashes",
+    "symptom": "Creating a bill with a discount crashes because of a mix-up in the money maths.",
+    "action": "Create a bill with 10% off"
+  },
+  "pg-clinicq-fee-per-slot-empty": {
+    "title": "Doctors summary crashes with no doctors",
+    "symptom": "Opening the doctors summary crashes when no doctors are added yet, because it divides by zero slots.",
+    "action": "Open the doctors summary"
+  },
+  "pg-clinicq-max-age-undefined": {
+    "title": "Registering a patient crashes on the age check",
+    "symptom": "Registering any patient crashes because the new upper age limit was never defined.",
+    "action": "Register a patient"
+  },
+  "pg-clinicq-next-token-empty": {
+    "title": "Appointments summary crashes on a day with none",
+    "symptom": "Opening the appointments summary crashes when there are no appointments yet.",
+    "action": "Open the appointments summary"
+  },
+  "pg-clinicq-page-size-key": {
+    "title": "Medicines list fails to open",
+    "symptom": "Opening the medicines list crashes for everyone because it asks for a setting under the wrong name.",
+    "action": "Open the medicines list"
+  },
+  "pg-clinicq-report-tags-none": {
+    "title": "Creating a lab report without tags crashes",
+    "symptom": "Creating a lab report crashes when the request sends no extra tags.",
+    "action": "Create a lab report without tags"
+  },
+  "pg-clinicq-store-all-dict": {
+    "title": "Patients list crashes once a patient exists",
+    "symptom": "Opening the patients list crashes once any patient is registered, because the list holds ids, not patients.",
+    "action": "Open the patients list"
+  },
+  "examhall-answered-len": {
+    "title": "Starting an exam attempt crashes",
+    "symptom": "Starting an exam attempt crashes because the app expects a list of answers but gets a count.",
+    "action": "Start an exam attempt"
+  },
+  "examhall-fee-gst": {
+    "title": "Paying the exam fee crashes",
+    "symptom": "Every exam fee payment crashes while GST is added, because the GST setting is now text.",
+    "action": "Pay the exam fee"
+  },
+  "examhall-submission-average": {
+    "title": "Submissions summary crashes before any submission",
+    "symptom": "Opening the submissions summary crashes before the first submission, because it divides by zero.",
+    "action": "Open the submissions summary"
+  },
+  "pg-examhall-batch-share-zero": {
+    "title": "Adding a batch to a new college crashes",
+    "symptom": "Adding a batch to a college with no students yet crashes, because its share divides by zero.",
+    "action": "Add a batch to a new college"
+  },
+  "pg-examhall-exam-ist-date": {
+    "title": "Creating an exam crashes when showing its time",
+    "symptom": "Creating an exam crashes when the app tries to show its start in India time.",
+    "action": "Create an exam"
+  },
+  "pg-examhall-notice-sort-attr": {
+    "title": "Notice board crashes once a notice is posted",
+    "symptom": "Opening the notice board crashes once any notice exists, because it sorts by a date field that does not exist.",
+    "action": "Open the notice board"
+  },
+  "pg-examhall-proctor-event-map": {
+    "title": "Logging a camera-off event crashes",
+    "symptom": "Logging a proctoring event like the camera turning off crashes because that event has no label.",
+    "action": "Report the camera turning off"
+  },
+  "pg-examhall-store-sorted": {
+    "title": "Halls list crashes once two halls exist",
+    "symptom": "Opening the list of exam halls crashes as soon as there are two halls, because they cannot be sorted.",
+    "action": "Open the halls list"
+  },
+  "pg-examhall-student-first-name": {
+    "title": "Registering a student crashes",
+    "symptom": "Registering a student crashes because the app wants a first and last name while the form sends one name.",
+    "action": "Register a student"
+  },
+  "pg-examhall-validate-returns-none": {
+    "title": "Adding a college crashes",
+    "symptom": "Adding any college crashes because the checked college is lost before it is saved.",
+    "action": "Add a college"
+  },
+  "fleetwise-config-rename": {
+    "title": "Trips list fails to open",
+    "symptom": "Opening the list of trips crashes for everyone because a renamed setting can no longer be found.",
+    "action": "Open the trips list"
+  },
+  "fleetwise-empty-string": {
+    "title": "Logging a trip with a blank date crashes",
+    "symptom": "Logging a trip with the date left blank crashes instead of asking the user to fill in the date.",
+    "action": "Log a trip with a blank date"
+  },
+  "fleetwise-overdue-datetime": {
+    "title": "Checking expired bus passes crashes",
+    "symptom": "Listing expired bus passes crashes once any pass exists, because pass dates are compared the wrong way.",
+    "action": "Check for expired bus passes"
+  },
+  "pg-fleetwise-average-seats-empty": {
+    "title": "Buses summary crashes for a depot with no buses",
+    "symptom": "Opening the buses summary crashes for a new depot with no buses, because it divides by the bus count.",
+    "action": "Open the buses summary"
+  },
+  "pg-fleetwise-complaint-severity": {
+    "title": "Filing a complaint without a severity crashes",
+    "symptom": "Filing a complaint about a trip crashes because the student app does not send a severity.",
+    "action": "File a complaint about a trip"
+  },
+  "pg-fleetwise-licence-days-left": {
+    "title": "Adding a driver crashes on the licence check",
+    "symptom": "Adding any driver crashes while the app works out how many days are left on their licence.",
+    "action": "Add a driver"
+  },
+  "pg-fleetwise-previous-stop": {
+    "title": "Adding the first stop on a route crashes",
+    "symptom": "Adding the first stop of a route crashes because the app looks for a stop before it that does not exist.",
+    "action": "Add the first stop on a route"
+  },
+  "pg-fleetwise-route-km-renamed": {
+    "title": "Adding a route crashes on the distance",
+    "symptom": "Adding a route crashes because the app reads the distance under a new name that the form never sends.",
+    "action": "Add a route"
+  },
+  "pg-fleetwise-trip-capacity-typo": {
+    "title": "Logging any trip crashes on the seat check",
+    "symptom": "Every new trip crashes because the overload check reads a bus field that does not exist.",
+    "action": "Log a trip with 30 riders"
+  },
+  "pg-fleetwise-validate-not-called": {
+    "title": "Adding a bus crashes",
+    "symptom": "Adding any bus crashes because the bus is never checked and saved properly.",
+    "action": "Add a bus"
+  },
+  "ledgerly-date-format": {
+    "title": "Adding a customer crashes on a normal date",
+    "symptom": "Adding a customer crashes because dates are now read as day-month-year while the app sends year-month-day.",
+    "action": "Add a customer"
+  },
+  "ledgerly-empty-average": {
+    "title": "Payment summary crashes when there are no payments",
+    "symptom": "Opening the payments summary crashes when no payments have been recorded yet.",
+    "action": "Open the payments summary"
+  },
+  "ledgerly-gst-float": {
+    "title": "Invoice total with GST cannot be worked out",
+    "symptom": "Working out an invoice's total with GST crashes for every invoice, because of a mix-up in the money maths.",
+    "action": "Work out the invoice total with GST"
+  },
+  "pg-ledgerly-credit-commas": {
+    "title": "Adding a customer crashes when the limit is a number",
+    "symptom": "Adding a customer crashes when the credit limit is sent as a plain number, as the mobile app does.",
+    "action": "Add a customer with limit 5000"
+  },
+  "pg-ledgerly-expense-category": {
+    "title": "Adding an expense without a category crashes",
+    "symptom": "Adding an expense crashes when no category is given, even though the category is meant to be optional.",
+    "action": "Add an expense without a category"
+  },
+  "pg-ledgerly-future-expense-tz": {
+    "title": "Adding any expense crashes on the date check",
+    "symptom": "Every new expense crashes while the app checks whether its date is in the future.",
+    "action": "Add an expense"
+  },
+  "pg-ledgerly-gst-rate-string": {
+    "title": "Creating an invoice crashes when GST is sent as text",
+    "symptom": "Creating an invoice crashes when the billing form sends the GST rate as text, like '18'.",
+    "action": "Create an invoice with GST as text"
+  },
+  "pg-ledgerly-missing-fields-concat": {
+    "title": "Any form with a missing field crashes",
+    "symptom": "Leaving out a required field on a form crashes the app instead of saying which field is missing.",
+    "action": "Add a customer with only a name"
+  },
+  "pg-ledgerly-since-not-parsed": {
+    "title": "Adding a customer crashes after it is saved",
+    "symptom": "Adding a customer crashes when the app shows the new customer, because the start date was never read as a date.",
+    "action": "Add a customer"
+  },
+  "pg-ledgerly-top-customer-empty": {
+    "title": "Customers summary crashes for a shop with no customers",
+    "symptom": "Opening the customers summary crashes for a new shop that has no customers yet.",
+    "action": "Open the customers summary"
+  },
+  "messmenu-missing-plates": {
+    "title": "Booking a meal without a plate count crashes",
+    "symptom": "Booking a meal without saying how many plates now crashes the booking instead of asking for the plate count.",
+    "action": "Book a meal without plates"
+  },
+  "pg-messmenu-booking-date-format": {
+    "title": "Booking a meal crashes on a normal date",
+    "symptom": "Every meal booking crashes because the app now expects day-month-year dates while the app sends year-month-day.",
+    "action": "Book a meal for 2026-11-14"
+  },
+  "pg-messmenu-booking-latest-empty": {
+    "title": "Bookings summary crashes before the first booking",
+    "symptom": "Opening the bookings summary crashes while nobody has booked a meal yet.",
+    "action": "Open the bookings summary"
+  },
+  "pg-messmenu-fail-message": {
+    "title": "Any form mistake crashes instead of showing an error",
+    "symptom": "When a form is missing fields, the app crashes instead of telling the user what is missing.",
+    "action": "Add a meal with only a title"
+  },
+  "pg-messmenu-meal-first-tag": {
+    "title": "Adding a meal with no tags crashes",
+    "symptom": "Adding a new meal crashes because the menu line tries to show a tag that untagged meals do not have.",
+    "action": "Add a meal with no tags"
+  },
+  "pg-messmenu-meal-key-renamed": {
+    "title": "Booking a meal crashes because the meal is not found",
+    "symptom": "Every meal booking crashes because the app looks for the meal under a new name the booking form never sends.",
+    "action": "Book a meal"
+  },
+  "pg-messmenu-plates-left": {
+    "title": "Booking a meal crashes on the plates-left count",
+    "symptom": "Every meal booking crashes because the app tries to count down plates left on a meal that never tracks them.",
+    "action": "Book 2 plates of a meal"
+  },
+  "pg-messmenu-plates-per-meal": {
+    "title": "Meals summary crashes when the menu is empty",
+    "symptom": "Opening the meals summary crashes on a fresh menu with no meals, because it divides by the meal count.",
+    "action": "Open the meals summary"
+  },
+  "pg-messmenu-plates-string": {
+    "title": "Adding a meal crashes when plates come as text",
+    "symptom": "Adding a meal to the menu crashes when the form sends the number of plates as text, as the hostel form does.",
+    "action": "Add a meal with plates as text"
+  },
+  "pg-messmenu-service-charge-float": {
+    "title": "Meals summary crashes when adding the service charge",
+    "symptom": "Opening the meals summary crashes once any meal is on the menu, while adding the 5% service charge to the total.",
+    "action": "Open the meals summary"
+  },
+  "pg-tiffinbox-order-kitchen-name": {
+    "title": "Placing an order crashes on the kitchen name",
+    "symptom": "Every order crashes because the app reads the kitchen name from the menu, which only keeps the kitchen's id.",
+    "action": "Order 2 plates"
+  },
+  "pg-tiffinbox-parse-date-number": {
+    "title": "Adding a kitchen crashes on its opening date",
+    "symptom": "Adding a kitchen crashes when the app shows its opening date, because the date is now stored as a number.",
+    "action": "Add a kitchen"
+  },
+  "pg-tiffinbox-payout-amount-string": {
+    "title": "Paying a rider crashes",
+    "symptom": "Every rider payout crashes when the app shows it, because the amount is still text from the form.",
+    "action": "Pay a rider"
+  },
+  "pg-tiffinbox-rating-tofixed": {
+    "title": "Adding a kitchen crashes when the rating is text",
+    "symptom": "Adding a kitchen crashes when the web form sends the rating as text, like '4.5'.",
+    "action": "Add a kitchen rated '4.5'"
+  },
+  "pg-tiffinbox-store-all-iterator": {
+    "title": "Riders list crashes once a rider exists",
+    "symptom": "Opening the riders list crashes once any rider is added, because the list can no longer be cut into pages.",
+    "action": "Open the riders list"
+  },
+  "pg-tiffinbox-total-reduce-empty": {
+    "title": "Menus summary crashes for a new kitchen",
+    "symptom": "Opening the menus summary crashes when no dishes are on the menu yet.",
+    "action": "Open the menus summary"
+  },
+  "tiffinbox-config-rename": {
+    "title": "Riders list fails to open",
+    "symptom": "Opening the list of riders crashes for everyone because a renamed setting can no longer be found.",
+    "action": "Open the riders list"
+  },
+  "tiffinbox-empty-average": {
+    "title": "Payouts summary breaks when there are no payouts",
+    "symptom": "Opening the payouts summary fails when no payouts exist yet, because the average divides zero by zero.",
+    "action": "Open the payouts summary"
+  },
+  "tiffinbox-empty-string": {
+    "title": "Placing an order with a blank date crashes",
+    "symptom": "Placing an order with the date left blank crashes instead of asking the user to fill in the date.",
+    "action": "Order with a blank date"
+  },
+  "tiffinbox-menu-undefined": {
+    "title": "Adding a dish to the menu crashes",
+    "symptom": "Adding any dish to a kitchen's menu crashes because the menu text reads a price field under its old name.",
+    "action": "Add a dish to the menu"
+  }
+}

@@ -1,6 +1,9 @@
 /* Shapes and helpers shared by the Live playground page and the home page's live strip. */
 
+export type BugCase = { id: string; title: string; symptom: string; action: string; route: string | null; source: "benchmark" | "playground" };
+
 export type AppInfo = {
+  cases: BugCase[];
   name: string;
   title: string;
   tagline: string;
@@ -36,9 +39,27 @@ export type Scorecard = {
   total_seconds: number;
   cost_usd: number;
   finished_at: string;
+  applied_by?: "approved" | "healed";
 };
 
-export type Step = "plant" | "crash" | "connected" | "decision" | "cause" | "gate" | "own_test" | "hidden_test" | "done" | "failed" | "replay";
+export type Step =
+  | "plant"
+  | "crash"
+  | "connected"
+  | "decision"
+  | "cause"
+  | "gate"
+  | "own_test"
+  | "hidden_test"
+  | "done"
+  | "failed"
+  | "replay"
+  | "ready"
+  | "note"
+  | "applied"
+  | "undone"
+  | "used_ok"
+  | "used_crash";
 export type PlayEvent = {
   step: Step;
   app: string;
