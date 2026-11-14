@@ -176,7 +176,8 @@ export class Phone {
     const script: Record<string, string> = this.cfg.publicBase
       ? { Url: `${this.cfg.publicBase}/twilio/twiml/${this.signToken(rowId, nonce)}` }
       : { Twiml: callTwiml(callText(info, attempt, this.cfg.repeats), this.cfg.voice, ackUrl) };
-    const body = new URLSearchParams({ To: this.cfg.to, From: this.cfg.from, ...script, Timeout: "30" });
+    // No Timeout parameter: trial accounts refuse it too; Twilio rings for its default 60 s.
+    const body = new URLSearchParams({ To: this.cfg.to, From: this.cfg.from, ...script });
     try {
       const res = await this.fetchImpl(`${API}/Accounts/${encodeURIComponent(this.cfg.sid)}/Calls.json`, {
         method: "POST",
