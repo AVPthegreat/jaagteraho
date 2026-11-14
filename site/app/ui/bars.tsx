@@ -23,6 +23,7 @@ export function Bars() {
 
   return (
     <div className="chart" style={{ "--n": rows.length } as React.CSSProperties}>
+      <div className="plot">
       <ol className="bars" data-ui aria-label={`The ${rows.length} benchmark errors and what JaagteRaho did with each`}>
         {rows.map((r, i) => {
           const kind = r.decision === "wake" ? "wake" : r.decision === "notify" ? "notify" : "quiet";
@@ -48,6 +49,7 @@ export function Bars() {
           </span>
         ))}
       </div>
+      </div>
       <ul className="bars-legend frame">
         {groups.map((g) => (
           <li key={g.kind} className={g.kind}>
@@ -56,8 +58,8 @@ export function Bars() {
         ))}
       </ul>
       <p className="bars-key small frame">
-        Each bar is one error from JR-Bench, as tall as the alert it got: woke the owner, messaged the owner, or kept quiet. Hover or focus a bar for
-        the case.
+        Each bar is one error from JR-Bench, our test set of {rows.length} errors, as tall as the alert it got: woke you, messaged you, or kept quiet.
+        <span className="hover-hint"> Hover or focus a bar for the case.</span>
       </p>
     </div>
   );

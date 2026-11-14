@@ -148,24 +148,24 @@ export default function How() {
     <>
       <section className="page-head field-night" aria-labelledby="how-h">
         <div className="frame grid">
-          <h1 id="how-h" className="display" data-rv>
+          <h1 id="how-h" className="display">
             How it works
           </h1>
-          <p className="lead" data-rv style={{ "--d": 1 } as React.CSSProperties}>Connect once. Then your phone tells you when it matters.</p>
+          <p className="lead">Connect once. Then your phone tells you when it matters.</p>
         </div>
       </section>
 
       <section className="section">
         <div className="frame">
           <div className="prose" style={{ marginBottom: "clamp(88px, 10vw, 160px)" }}>
-            <p className="lead" data-rv>
+            <p className="lead">
               JaagteRaho is not a dashboard you keep open. You connect your app once, in about five minutes. After that it watches every error day and
               night, decides which ones deserve you, and tells you on Telegram what broke, why, and how to fix it.
             </p>
           </div>
 
           <div className="grid doc">
-            <h2 id="see-h" data-rv>
+            <h2 id="see-h">
               What you will see
             </h2>
             <div className="body">
@@ -193,7 +193,7 @@ export default function How() {
           </div>
 
           <div className="grid doc">
-            <h2 id="setup-h" data-rv>
+            <h2 id="setup-h">
               Set it up: about 5 minutes, once
             </h2>
             <div className="body">
@@ -241,7 +241,7 @@ export default function How() {
       <section className="section field-night" aria-labelledby="night-h">
         <div className="frame grid doc">
           <div className="night-side">
-            <h2 id="night-h" data-rv>
+            <h2 id="night-h">
               When your app breaks at 2 am
             </h2>
             <div className="sticky">
@@ -265,7 +265,7 @@ export default function How() {
       <section className="section">
         <div className="frame">
           <div className="grid doc">
-            <h2 id="labels-h" data-rv>
+            <h2 id="labels-h">
               The three fix labels
             </h2>
             <div className="body">
@@ -292,12 +292,12 @@ export default function How() {
           </div>
 
           <div className="grid doc">
-            <h2 id="cmd-h" data-rv>
+            <h2 id="cmd-h">
               Things you can tell the bot
             </h2>
             <div className="body">
               <div className="table-wrap" data-rv>
-                <table className="nums cmds" aria-labelledby="cmd-h">
+                <table className="nums cmds stack" aria-labelledby="cmd-h">
                   <thead>
                     <tr>
                       <th scope="col">Send</th>
@@ -320,18 +320,18 @@ export default function How() {
           </div>
 
           <div className="grid doc">
-            <h2 id="cost-h" data-rv>
+            <h2 id="cost-h">
               What it costs
             </h2>
             <div className="body prose">
-              <p className="lead" data-rv>
+              <p className="lead">
                 Every Telegram account gets $5 of free AI credit.
               </p>
-              <p data-rv>
+              <p>
                 Deciding about an error costs about $0.0001, so noise costs almost nothing. Finding the cause and checking a fix costs about 1.3 cents,
                 measured over our 20 test bugs, so $5 covers roughly 375 real problems.
               </p>
-              <p className="soft" data-rv>
+              <p className="soft">
                 When the credit runs out, alerts and decisions continue with a daily limit; only new diagnoses stop. While we are a prototype each account
                 has up to 3 apps, 5 diagnoses a day per app, and at most 3 fixes proposed per app per day.
               </p>
@@ -339,11 +339,11 @@ export default function How() {
           </div>
 
           <div className="grid doc">
-            <h2 id="heal-h" data-rv>
+            <h2 id="heal-h">
               Your heal rule
             </h2>
             <div className="body prose">
-              <p className="lead" data-rv>
+              <p className="lead">
                 You approve every fix, or let it heal on its own under rules you set. Pick one with <code>/heal</code> on Telegram or when you connect:
               </p>
               <ul data-rv>
@@ -361,7 +361,7 @@ export default function How() {
                   <b>Off</b>: fixes arrive as diffs only.
                 </li>
               </ul>
-              <p data-rv>Rules that hold whatever you pick:</p>
+              <p>Rules that hold whatever you pick:</p>
               <ul className="soft" data-rv>
                 <li>
                   Only <b>recommended</b> fixes heal on their own: all six code checks passed and every review vote agreed. A fix that adds an import, a
@@ -385,14 +385,14 @@ export default function How() {
                 </li>
                 <li>You get &ldquo;Healed while you were away&rdquo;: what broke, what changed, the proof, and one-tap Undo. Every step is in the logbook.</li>
               </ul>
-              <p className="soft" data-rv>
+              <p className="soft">
                 On the demo portal, healing switches your session to the portal&apos;s fixed build and sends the failing request again to prove it works.
               </p>
             </div>
           </div>
 
           <div className="grid doc">
-            <h2 id="never-h" data-rv>
+            <h2 id="never-h">
               What it never does
             </h2>
             <div className="body">
@@ -412,7 +412,7 @@ export default function How() {
 
       <section className="section field-surface" aria-labelledby="try-h">
         <div className="frame grid doc">
-          <h2 id="try-h" data-rv>
+          <h2 id="try-h">
             See it for yourself in a minute
           </h2>
           <div className="body">
@@ -445,7 +445,7 @@ export default function How() {
                 </p>
               </li>
             </ol>
-            <div className="actions" data-rv>
+            <div className="actions">
               <Link className="btn" href="/connect">
                 Connect your app <span className="arrow">→</span>
               </Link>

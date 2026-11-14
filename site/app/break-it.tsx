@@ -53,7 +53,8 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
   const [started, setStarted] = useState<number | null>(null);
   const [stopped, setStopped] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
-  const [note, setNote] = useState<string | null>(null);
+  // A note keeps the time it was written, so it does not tick on with the clock.
+  const [note, setNote] = useState<{ text: string; t: number } | null>(null);
   const [approving, setApproving] = useState(false);
   const [signed, setSigned] = useState(false);
   const [approvedFix, setApprovedFix] = useState<number | null>(null);
@@ -65,6 +66,8 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
   }, [heal]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
+  const runRef = useRef<HTMLOListElement | null>(null);
+  const say = useCallback((text: string) => setNote({ text, t: startedRef.current ? (Date.now() - startedRef.current) / 1000 : 0 }), []);
 
   useEffect(() => setSession(loadSession()), []);
 
@@ -109,7 +112,8 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
         setStarted(Date.now());
         setStopped(null);
         // On a phone the logbook is below the buttons: bring it into view so the run is seen.
-        if (window.innerWidth < 980) logRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (window.innerWidth < 980)
+          logRef.current?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
       }
       try {
         const res = await fetch(`${WATCHER}/public/break`, {
@@ -118,9 +122,11 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
           body: JSON.stringify({ session, flow: f, exam, country, heal }),
         });
         const body = (await res.json()) as { error?: string; build?: string; status?: number; result?: { ok?: boolean; error?: string } };
-        if (!res.ok) setNote(body.error ?? "Something went wrong.");
-        else if (body.build === "fixed") {
-          setNote(
+        if (!res.ok) {
+          say(body.error ?? "Something went wrong.");
+          setStopped(Date.now());
+        } else if (body.build === "fixed") {
+          say(
             body.status && body.status < 500
               ? body.result?.error
                 ? `It works now. Instead of a server error, the student sees: “${body.result.error}”`
@@ -130,12 +136,13 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
           setStopped(Date.now());
         }
       } catch {
-        setNote("Could not reach the watcher. Try again in a moment.");
+        say("Could not reach the watcher. Try again in a moment.");
+        setStopped(Date.now());
       } finally {
         setBusy(false);
       }
     },
-    [session, exam, country, heal],
+    [session, exam, country, heal, say],
   );
 
   // Undo a heal: this session goes back to the broken build, so the bug is there again.
@@ -146,7 +153,7 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ session, heal_id: healId }),
     }).catch(() => null);
-    if (!res?.ok) return setNote("Nothing to undo.");
+    if (!res?.ok) return say("Nothing to undo.");
     setApprovedFix(null);
     setHealedFix(null);
   };
@@ -160,7 +167,7 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
       body: JSON.stringify({ session, flow, fix_id: fixId }),
     }).catch(() => null);
     setApproving(false);
-    if (!res?.ok) return setNote("That fix cannot be approved.");
+    if (!res?.ok) return say("That fix cannot be approved.");
     setApprovedFix(fixId);
     await run(flow, true);
   };
@@ -187,6 +194,16 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
     }).catch(() => null);
     if (res?.ok) setSigned(true);
   };
+
+  // Follow the run: when the newest entry lands below the fold and the visitor was watching the log, bring it into view.
+  useEffect(() => {
+    const items = runRef.current?.children;
+    if (!items || items.length < 2) return;
+    const prev = items[items.length - 2].getBoundingClientRect();
+    if (prev.bottom < 0 || prev.bottom > window.innerHeight) return; // they have scrolled away; leave them be
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    items[items.length - 1].scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
+  }, [entries.length, note]);
 
   const elapsed = started ? ((stopped ?? now) - started) / 1000 : 0;
   const flowLabel = FLOWS.find((x) => x.id === flow)?.label;
@@ -243,13 +260,24 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
                 {fmt(elapsed)}
               </span>
             </div>
-            {entries.length === 0 && !note ? (
-              <div aria-label="Example of a run">
+            {entries.length === 0 ? (
+              <>
+                {note && (
+                  <ol>
+                    <li className="entry">
+                      <time>{fmt(note.t)}</time>
+                      <div className="body">
+                        <span className="title">{note.text}</span>
+                      </div>
+                    </li>
+                  </ol>
+                )}
+                <div aria-label="Example of a run">
                 <p className="empty">
                   Nothing broken yet. Press a button and this logbook fills in live, the way the owner would see it. Below, greyed out, is an earlier
                   run so you know what to expect:
                 </p>
-                <ol style={{ opacity: 0.72 }} aria-hidden="true">
+                <ol style={{ opacity: 0.5 }} aria-hidden="true">
                   <li className="entry">
                     <time>00:00</time>
                     <div className="body">
@@ -285,9 +313,10 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
                     </div>
                   </li>
                 </ol>
-              </div>
+                </div>
+              </>
             ) : (
-              <ol>
+              <ol ref={runRef}>
                 {entries.map(({ key, t, ev }) => (
                   <li key={key} className="entry">
                     <time>{fmt(t)}</time>
@@ -298,9 +327,9 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
                 ))}
                 {note && (
                   <li className="entry">
-                    <time>{fmt(elapsed)}</time>
+                    <time>{fmt(note.t)}</time>
                     <div className="body">
-                      <span className="title">{note}</span>
+                      <span className="title">{note.text}</span>
                     </div>
                   </li>
                 )}

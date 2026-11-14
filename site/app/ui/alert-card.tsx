@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Lantern } from "./lantern";
 
 /* The real fix for the demo portal's Submit bug (sandbox/fixed.patch). */
@@ -70,7 +70,20 @@ const REPLIES: Record<Key, { ask: string; answer: React.ReactNode }> = {
 /* What reaches the owner's phone: a Telegram alert whose buttons answer, as the bot's do. */
 export function AlertCard() {
   const [asked, setAsked] = useState<Key[]>([]);
-  const press = (k: Key) => setAsked((list) => (list.includes(k) ? list : [...list, k]));
+  // The answer to the last press, re-set on every press so asking again brings its answer back into view.
+  const [shown, setShown] = useState<{ k: Key; n: number } | null>(null);
+  const answers = useRef(new Map<Key, HTMLDivElement>());
+  const press = (k: Key) => {
+    setAsked((list) => (list.includes(k) ? list : [...list, k]));
+    setShown((s) => ({ k, n: (s?.n ?? 0) + 1 }));
+  };
+
+  // The card sits low on the first screen, so an answer can land below the fold and the press looks dead.
+  useEffect(() => {
+    if (!shown) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    answers.current.get(shown.k)?.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
+  }, [shown]);
 
   return (
     <div className="tg" data-ui>
@@ -114,7 +127,15 @@ export function AlertCard() {
           {asked.map((k) => (
             <div key={k} style={{ display: "contents" }}>
               <span className="tg-reply tg-in">{REPLIES[k].ask}</span>
-              <div className="tg-msg tg-in">{REPLIES[k].answer}</div>
+              <div
+                className="tg-msg tg-in"
+                ref={(el) => {
+                  if (el) answers.current.set(k, el);
+                  else answers.current.delete(k);
+                }}
+              >
+                {REPLIES[k].answer}
+              </div>
             </div>
           ))}
         </div>

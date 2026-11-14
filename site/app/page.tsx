@@ -18,8 +18,8 @@ const RULES: Array<[string, string, "wake" | "notify" | "quiet"]> = [
   ["Any other failure in a critical flow", "Message you", "notify"],
   ["Claude rates it an outage or data loss", "Wake you", "wake"],
   ["It blocks users from doing something", "Message you", "notify"],
-  ["A feature works worse but still works", "Message you, or keep it for the 08:00 summary if you are away", "notify"],
-  ["Minor or cosmetic", "Keep it for the 08:00 summary", "quiet"],
+  ["A feature works worse but still works", "Message you, or keep it for the 8 am summary if you are away", "notify"],
+  ["Minor or cosmetic", "Keep it for the 8 am summary", "quiet"],
   ["Clearly noise (a bot scanner, a missing favicon) and low severity", "Ignore it", "quiet"],
   ["5 or more different people hit it in one hour", "Never stay quiet: at least a message", "notify"],
   ["The AI could not answer", "Message you; never ignore it", "notify"],
@@ -92,43 +92,43 @@ export default async function Home() {
       <section className="stats field-navy" aria-labelledby="stats-h">
         <div className="frame grid stats-top">
           <div className="stats-figure">
-            <p className="display" data-rv>
+            <p className="display">
               {bench.alerted} of {bench.bugs}
             </p>
-            <h2 id="stats-h" data-rv style={{ "--d": 1 } as React.CSSProperties}>
+            <h2 id="stats-h">
               planted bugs reached the owner, each triggered for real
             </h2>
           </div>
           <ul className="stats-list">
-            <li data-rv style={{ "--d": 1 } as React.CSSProperties}>
+            <li data-rv>
               <b>{bench.shown_wrong} wrong</b>
               <span>among the {bench.shown} fixes shown to the owner, each judged by a hidden test JaagteRaho never saw</span>
             </li>
-            <li data-rv style={{ "--d": 2 } as React.CSSProperties}>
+            <li data-rv style={{ "--d": 1 } as React.CSSProperties}>
               <b>
                 {bench.noise_quiet} of {bench.noise} kept quiet
               </b>
               <span>harmless errors (bot scanners, a missing favicon): nobody woken for nothing</span>
             </li>
-            <li data-rv style={{ "--d": 3 } as React.CSSProperties}>
+            <li data-rv style={{ "--d": 2 } as React.CSSProperties}>
               <b>
                 {bench.exam_woke} of {bench.exam_cases} woke the owner
               </b>
               <span>bugs on a critical route during an exam; no AI answer can lower that rule</span>
             </li>
-            <li data-rv style={{ "--d": 4 } as React.CSSProperties}>
+            <li data-rv style={{ "--d": 3 } as React.CSSProperties}>
               <b>
                 {real.in_trace.right_file} of {real.in_trace.cases} right file
               </b>
               <span>real bugs from {real.projects} open-source projects, when the bug is in a file the error names</span>
             </li>
-            <li data-rv style={{ "--d": 5 } as React.CSSProperties}>
+            <li data-rv style={{ "--d": 4 } as React.CSSProperties}>
               <b>
                 {bench.median_decision_seconds} s · {bench.median_fix_seconds} s · ${bench.cost_per_error_usd.toFixed(3)}
               </b>
               <span>
                 median time to a decision and to a checked fix, and the AI cost per error. Measured on {benchDate}, mistakes included.{" "}
-                <a href="#proof">Every number →</a>
+                <a href="#proof">Every number&nbsp;→</a>
               </span>
             </li>
           </ul>
@@ -140,16 +140,16 @@ export default async function Home() {
       <section className="section" id="demo" aria-labelledby="demo-h">
         <div className="frame">
           <div className="grid demo-head">
-            <h2 id="demo-h" data-rv>
+            <h2 id="demo-h">
               Break our exam portal.
             </h2>
-            <p className="lead" data-rv style={{ "--d": 1 } as React.CSSProperties}>
+            <p className="lead">
               Watch the agent handle it.
             </p>
-            <div className="prose soft" data-rv style={{ "--d": 2 } as React.CSSProperties}>
+            <div className="prose soft">
               <p>
                 A real Django exam portal that we run so you can break it. Each button triggers one bug we planted on purpose. The crash reaches
-                JaagteRaho exactly as one from your app would, and the logbook beside the buttons shows what the owner gets, with a timer: the
+                JaagteRaho exactly as one from your app would, and the logbook shows what the owner gets, with a timer: the
                 decision, the wake-up call, the cause and a checked fix. No sign-up. Nothing is pre-recorded unless it is marked &ldquo;replayed&rdquo;.
               </p>
             </div>
@@ -191,45 +191,45 @@ export default async function Home() {
       <section className="section case" id="why" aria-labelledby="why-h">
         <div className="frame grid case-grid">
           <div className="case-head">
-            <h2 id="why-h" data-rv>
+            <h2 id="why-h">
               Why I built this: I am the person it wakes
             </h2>
             <ul className="case-facts" aria-label="Faurus, the real case">
-              <li data-rv style={{ "--d": 1 } as React.CSSProperties}>
+              <li data-rv>
                 <b>11,000</b>
-                <span>accounts on Faurus, a coding and exam platform that colleges use</span>
+                <span>accounts on Faurus, a coding and exam platform</span>
               </li>
-              <li data-rv style={{ "--d": 2 } as React.CSSProperties}>
+              <li data-rv style={{ "--d": 1 } as React.CSSProperties}>
                 <b>1</b>
                 <span>engineer running it: the founder</span>
               </li>
-              <li data-rv style={{ "--d": 3 } as React.CSSProperties}>
+              <li data-rv style={{ "--d": 2 } as React.CSSProperties}>
                 <b>2 am</b>
-                <span>a live exam breaks, and he hears about it the next morning</span>
+                <span>when a live exam breaks</span>
               </li>
             </ul>
           </div>
           <article className="case-story">
-            <p data-rv>
+            <p>
               I run <a href="https://faurus.app">Faurus</a>, a coding and exam platform that colleges use: about 11,000 accounts, one engineer. Its server
               errors went to a log file nobody read.
             </p>
-            <blockquote className="case-quote" data-rv>
+            <blockquote className="case-quote">
               <p>If something broke during a live exam at 2 am, I heard about it the next morning, from a student.</p>
             </blockquote>
-            <p className="lead" data-rv>
+            <p className="lead">
               <span className="mark">By then the exam was over</span>, and the students who could not submit had already lost their attempt.
             </p>
-            <p data-rv>
+            <p>
               Error trackers collect errors. They do not decide which one is worth waking a tired person for, find the cause, or write the fix. For one
               person running a live product, that is the whole job, and it happens at night.
             </p>
-            <p data-rv>
+            <p>
               Students, freelancers and solo founders now ship real products, often written with AI help, and nobody is on call for them after launch.
               JaagteRaho (Hindi for &ldquo;stay awake&rdquo;, the night watchman&apos;s call) is the one who stays up, so you only get up when you are
               really needed.
             </p>
-            <p className="signoff" data-rv>
+            <p className="signoff">
               <b>Anant Vardhan Pandey</b>
               <span className="small">founder of Faurus</span>
             </p>
@@ -251,23 +251,23 @@ export default async function Home() {
             </li>
             <li data-rv style={{ "--d": 2 } as React.CSSProperties}>
               <b>Heals</b>
-              <span>with a checked fix you approve, or on its own under rules you set</span>
+              <span>with a small fix that has passed every check first</span>
             </li>
           </ul>
 
           <div className="grid">
             <div className="cr">
-              <h2 id="how-h" data-rv>
+              <h2 id="how-h">
                 What the agent does with each error
               </h2>
 
               <div className="exchange">
-                <h3 data-rv>First, an error arrives.</h3>
-                <p data-rv>
+                <h3>First, an error arrives.</h3>
+                <p>
                   Your app sends its crash reports through the free, open-source Sentry SDK (one setting), or your host forwards its logs. Personal
                   data is masked before anything is stored, and the same crash 50 times becomes one problem with a count.
                 </p>
-                <pre className="call" data-rv>
+                <pre className="call">
                   <code>{TRACEBACK}</code>
                 </pre>
                 <div className="response panel-ui" data-ui data-rv>
@@ -281,12 +281,12 @@ export default async function Home() {
               </div>
 
               <div className="exchange">
-                <h3 data-rv>Then rules decide: wake, message or wait.</h3>
-                <p data-rv>
+                <h3>Then rules decide: wake, message or wait.</h3>
+                <p>
                   Claude Haiku answers fixed questions about the error five times: is it noise, how severe is it, is a user blocked. Then written
-                  rules, not the AI, pick what happens. The rules are below.
+                  rules, not the AI, pick what happens. The rules are below. On Telegram you can tell it an exam is running:
                 </p>
-                <pre className="call" data-rv>
+                <pre className="call">
                   <code>/exam 2h</code>
                 </pre>
                 <div className="response panel-ui" data-ui data-rv>
@@ -301,12 +301,12 @@ export default async function Home() {
               </div>
 
               <div className="exchange">
-                <h3 data-rv>Next, Claude explains the cause.</h3>
-                <p data-rv>
+                <h3>Next, Claude explains the cause.</h3>
+                <p>
                   Claude Sonnet reads the failing file, the files it calls and the last change you deployed. You get the cause in plain words, the
                   file and line, and the commit that probably caused it.
                 </p>
-                <pre className="call" data-rv>
+                <pre className="call">
                   <code>{`# portal/submissions.py, line 14
 language = data["language"]`}</code>
                 </pre>
@@ -318,14 +318,14 @@ language = data["language"]`}</code>
               </div>
 
               <div className="exchange final">
-                <h3 data-rv>Last, a checked fix: you approve it, or it heals.</h3>
-                <p data-rv>
-                  A small fix must pass 6 code checks (it applies cleanly, stays small, avoids login, payment and grading code, adds no packages or
+                <h3>Last, a checked fix: you approve it, or it heals.</h3>
+                <p>
+                  A small fix must pass six code checks (it applies cleanly, stays small, avoids login, payment and grading code, adds no packages or
                   links, is still valid code) and a second Claude review. Then your rule decides: you approve it, or, if you sleep through the
                   wake-up, it goes in on its own as a pull request that merges only after your required checks pass. If the errors don&apos;t drop
-                  after your deploy, it is undone and you are woken again.
+                  after your deploy, it is undone and you are woken again. On Telegram, one line sets that rule:
                 </p>
-                <pre className="call" data-rv>
+                <pre className="call">
                   <code>/heal auto 10m</code>
                 </pre>
                 <div className="response panel-ui" data-ui data-rv>
@@ -353,22 +353,22 @@ language = data["language"]`}</code>
 
           <div className="grid rules">
             <div className="rules-head">
-              <h2 id="rules-h" data-rv>
+              <h2 id="rules-h">
                 The rules, in plain words
               </h2>
-              <p className="soft" data-rv style={{ "--d": 1 } as React.CSSProperties}>
+              <p className="soft">
                 Checked from top to bottom; the first one that matches wins. You mark which pages are critical, and <code>/exam 2h</code> on
                 Telegram tells it an exam is running. No AI answer can lower the first three rules. Source code:{" "}
                 <a href={DECIDE}>watcher/src/pipeline/decide.ts</a>.
               </p>
-              <p data-rv style={{ "--d": 2 } as React.CSSProperties}>
+              <p>
                 <Link className="textlink" href="/how">
-                  Every step in detail: setup, what reaches your phone, the bot&apos;s commands and the cost →
+                  Every step in detail: setup, what reaches your phone, the bot&apos;s commands and the cost&nbsp;→
                 </Link>
               </p>
             </div>
             <div className="table-wrap" data-rv>
-              <table className="nums" aria-labelledby="rules-h">
+              <table className="nums stack" aria-labelledby="rules-h">
                 <thead>
                   <tr>
                     <th scope="col">If</th>
@@ -392,10 +392,10 @@ language = data["language"]`}</code>
       {/* Proof */}
       <section className="section field-surface" id="proof" aria-labelledby="proof-h">
         <div className="frame grid proof">
-          <h2 id="proof-h" data-rv>
+          <h2 id="proof-h">
             Measured, not claimed
           </h2>
-          <div className="prose" data-rv style={{ "--d": 1 } as React.CSSProperties}>
+          <div className="prose">
             <p>
               Every number on this page comes from a script in the <a href={REPO}>repository</a>, measured on {benchDate}. We count the mistakes, not
               only the hits. The sample apps are small and generated, and the real-bug set is 30 cases; these numbers claim nothing beyond those
@@ -413,7 +413,7 @@ language = data["language"]`}</code>
             )}
             <p>
               <Link className="textlink" href="/evidence">
-                See every number and how it was measured →
+                See every number and how it was measured&nbsp;→
               </Link>
             </p>
           </div>
@@ -433,13 +433,13 @@ language = data["language"]`}</code>
       <section className="section" id="safety" aria-labelledby="safety-h">
         <div className="frame grid safety">
           <div className="safety-head">
-            <h2 id="safety-h" data-rv>
+            <h2 id="safety-h">
               Safety
             </h2>
-            <p className="lead" data-rv style={{ "--d": 1 } as React.CSSProperties}>
+            <p className="lead">
               You approve every fix, or it heals under rules you set.
             </p>
-            <p className="soft" data-rv style={{ "--d": 2 } as React.CSSProperties}>
+            <p className="soft">
               Details: <Link href="/privacy">what it keeps</Link> and <Link href="/how">how each step works</Link>.
             </p>
           </div>
@@ -499,10 +499,10 @@ language = data["language"]`}</code>
       <section className="section field-surface" id="connect" aria-labelledby="connect-h">
         <div className="frame">
           <div className="grid ways-head">
-            <h2 id="connect-h" data-rv>
+            <h2 id="connect-h">
               Connect your app in 2 minutes
             </h2>
-            <div className="actions" data-rv style={{ "--d": 1 } as React.CSSProperties}>
+            <div className="actions">
               <Link className="btn" href="/connect">
                 Connect your app <span className="arrow">→</span>
               </Link>
@@ -534,8 +534,8 @@ language = data["language"]`}</code>
             </li>
             <li data-rv style={{ "--d": 2 } as React.CSSProperties}>
               <h3>Or no code at all</h3>
-              <pre>
-                <code>log drain → your logs address</code>
+              <pre className="plain">
+                <span>Log drain → your logs address</span>
               </pre>
               <span>Paste the address into your host (Vercel, Heroku, Render). It picks out Python and Node.js errors and drops every other line.</span>
             </li>

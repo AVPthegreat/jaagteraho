@@ -37,28 +37,28 @@ export default function Privacy() {
     <>
       <section className="page-head field-night" aria-labelledby="privacy-h">
         <div className="frame grid">
-          <h1 id="privacy-h" className="display" data-rv>
+          <h1 id="privacy-h" className="display">
             What it keeps
           </h1>
-          <p className="lead" data-rv style={{ "--d": 1 } as React.CSSProperties}>The data note for JaagteRaho: what is stored, who processes it, and what is dropped.</p>
+          <p className="lead">The data note for JaagteRaho: what is stored, who processes it, and what is dropped.</p>
         </div>
       </section>
       <section className="section">
-        <div className="frame">
+        <div className="frame docs-tight">
           {NOTES.map(([title, body]) => (
             <div className="grid doc" key={title}>
-              <h2 data-rv>{title}</h2>
+              <h2>{title}</h2>
               <div className="body">
-                <p data-rv>
+                <p>
                   {body}
                 </p>
               </div>
             </div>
           ))}
           <div className="grid doc">
-            <h2 data-rv>Deleting your data</h2>
+            <h2>Deleting your data</h2>
             <div className="body">
-              <p data-rv>
+              <p>
                 This is a hackathon prototype, not a certified service. Ask for anything about you to be deleted and we will do it.
               </p>
             </div>

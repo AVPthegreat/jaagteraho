@@ -69,11 +69,11 @@ function Benchmarks() {
     <>
       {b && (
         <div className="grid doc">
-          <h2 id="bench-h" data-rv>
+          <h2 id="bench-h">
             JR-Bench: planted bugs in 7 sample apps
           </h2>
           <div className="body">
-            <p className="soft" data-rv>
+            <p className="soft">
               Seven generated apps of different sizes (21 to 101 files; six in Python, one in Node.js). Each bug is planted as if a commit introduced
               it and triggered for real. JaagteRaho decides, explains and proposes a fix; a hidden test it never sees judges whether the fix works. Four
               noise errors (a dropped connection, a missing favicon, a bot scanner, a planned restart) check that it stays quiet.
@@ -105,11 +105,11 @@ function Benchmarks() {
       )}
       {real && (
         <div className="grid doc">
-          <h2 id="real-h" data-rv>
+          <h2 id="real-h">
             On 30 real bugs from open-source projects
           </h2>
           <div className="body">
-            <p className="soft" data-rv>
+            <p className="soft">
               Tracebacks that people posted on GitHub for {real.projects} well-known Python projects (requests, Flask, pip, pytest, Celery and
               others), scored against the lines the real, merged fix changed. JaagteRaho reads the code as it was before the fix and never sees the real
               fix.
@@ -164,21 +164,21 @@ export default async function Evidence() {
     <>
       <section className="page-head field-night" aria-labelledby="evidence-h">
         <div className="frame grid">
-          <h1 id="evidence-h" className="display" data-rv>
+          <h1 id="evidence-h" className="display">
             Evidence
           </h1>
-          <p className="lead" data-rv style={{ "--d": 1 } as React.CSSProperties}>Measured, not claimed. This page backs up every number on the home page.</p>
+          <p className="lead">Measured, not claimed. This page backs up every number on the home page.</p>
         </div>
       </section>
 
       <section className="stats short field-navy" aria-labelledby="glance-h">
         <div className="frame grid stats-top">
           <div className="stats-figure">
-            <h2 id="glance-h" data-rv>
+            <h2 id="glance-h">
               JR-Bench at a glance
             </h2>
           </div>
-          <p className="stats-note" data-rv style={{ "--d": 1 } as React.CSSProperties}>
+          <p className="stats-note">
             20 planted bugs and 4 harmless errors in 7 sample apps, each triggered for real. Every bar below is one of them.
           </p>
         </div>
@@ -188,17 +188,17 @@ export default async function Evidence() {
       <section className="section">
         <div className="frame">
           <div className="grid doc">
-            <h2 id="live-h" data-rv>
+            <h2 id="live-h">
               Counted live, from the demo
             </h2>
             <div className="body">
-              <p className="soft" data-rv>
+              <p className="soft">
                 The first table is counted live by the watchman itself, from people using the <a href="/#demo">live demo</a>. The benchmark tables below
                 come from scripts in the repository, run against real bugs and planted ones, and say exactly what was measured. Model vote shares are not
                 probabilities. Faurus&apos;s own failure counts stay private.
               </p>
               {!ev ? (
-                <p className="lead" data-rv>
+                <p className="lead">
                   The watcher is not reachable right now, so the live counts can&apos;t be shown. The benchmarks below come from the repository and
                   don&apos;t need it.
                 </p>
