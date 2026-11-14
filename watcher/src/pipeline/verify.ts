@@ -129,7 +129,8 @@ export function riskyFixLines(original: string, patched: string): string[] {
   return patched
     .split("\n")
     .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith("#") && !before.has(l) && RISKY_IN_FIX.test(l));
+    // Double-underscore names (__class__, __globals__, __subclasses__...) reach the same places by another road.
+    .filter((l) => l && !l.startsWith("#") && !before.has(l) && (RISKY_IN_FIX.test(l) || /__(?!name__)\w+__/.test(l)));
 }
 
 const said = (o: "passed" | "failed" | "error") => (o === "error" ? "could not run" : o);

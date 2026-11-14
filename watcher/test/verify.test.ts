@@ -87,7 +87,7 @@ describe("fix proof", () => {
   });
 
   it("does not run a fix that adds code reaching outside the program", () => {
-    for (const line of ['    import os; os.system("x")', '    __import__("socket")', "    open('/etc/passwd').read()"]) {
+    for (const line of ['    import os; os.system("x")', '    __import__("socket")', "    open('/etc/passwd').read()", "    x = ().__class__.__base__.__subclasses__()"]) {
       const bad = original.replace('    language = data["language"]', `    language = data.get("language", "python")\n${line}`);
       const r = proveFix(SANDBOX, { "portal/submissions.py": bad }, { file: "t.py", code: TEST });
       assert.equal(r.verdict, "skipped", line);
