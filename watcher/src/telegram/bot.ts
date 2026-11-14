@@ -10,7 +10,7 @@ import { describePolicy, parseHealArgs, policyOf, ingestSecretFor, savePolicy, s
 import { esc, type Telegram, type TgCallback, type TgMessage, type TgUpdate } from "./api.js";
 import { renderWhy } from "./card.js";
 import { buildDigest, istNow } from "./digest.js";
-import { appsOwnedBy, APPS_PER_OWNER, cleanName, createOutsideApp, creditOf, FREE_CREDIT_USD, isPublicRepo, NEW_APPS_PER_DAY, outsideAppsToday } from "../projects.js";
+import { appsOwnedBy, APPS_PER_OWNER, cleanName, CONNECT_RESERVE, createOutsideAppIfRoom, creditOf, FREE_CREDIT_USD, isPublicRepo, NEW_APPS_PER_DAY, outsideAppsToday } from "../projects.js";
 import { parseRepo } from "../web/paste.js";
 
 type OwnerRow = { project_id: number; chat_id: number; user_id: number; away: number; paused: number; name: string; kind: string };
@@ -135,9 +135,10 @@ export class Bot {
     const repo = rest[1] ? parseRepo(rest[1]) : null;
     if (rest[1] && !repo) return reply("That doesn't look like a GitHub repository. Try github.com/you/app, or leave it out.");
     if (appsOwnedBy(this.db, m.from!.id) >= APPS_PER_OWNER) return reply(`You already have ${APPS_PER_OWNER} apps connected, the free limit.`);
-    if (outsideAppsToday(this.db) >= NEW_APPS_PER_DAY) return reply("Today's free spots are taken. Try again tomorrow.");
+    if (outsideAppsToday(this.db) >= NEW_APPS_PER_DAY - CONNECT_RESERVE) return reply("Today's free spots are taken. Try again tomorrow.");
     if (repo && !(await isPublicRepo(repo))) return reply(`I couldn't read ${esc(repo)}. If it's private, connect without it for now (/new ${esc(name)}) and install our GitHub app later.`);
-    const app = createOutsideApp(this.db, name, repo);
+    const app = createOutsideAppIfRoom(this.db, "telegram", name, repo);
+    if (!app) return reply("Today's free spots are taken. Try again tomorrow.");
     this.db.prepare("INSERT INTO owners (project_id, chat_id, user_id, linked_at) VALUES (?, ?, ?, ?)").run(app.id, m.chat.id, m.from!.id, new Date().toISOString());
     this.db.prepare("UPDATE link_codes SET expires_at = ? WHERE code = ?").run(new Date(0).toISOString(), app.link_code);
     return reply(

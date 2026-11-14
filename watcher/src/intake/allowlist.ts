@@ -78,10 +78,11 @@ function cleanFrame(f: unknown): CleanFrame | null {
   };
 }
 
-function toIso(ts: unknown, fallback: Date): string {
-  if (typeof ts === "number" && Number.isFinite(ts)) return new Date(ts * 1000).toISOString();
-  if (typeof ts === "string" && !Number.isNaN(Date.parse(ts))) return new Date(ts).toISOString();
-  return fallback.toISOString();
+/** A finite time inside JavaScript's date range, or the fallback (1e20 seconds would throw in toISOString). */
+export function toIso(ts: unknown, fallback: Date): string {
+  const ms = typeof ts === "number" ? ts * 1000 : typeof ts === "string" ? Date.parse(ts) : NaN;
+  const d = new Date(Number.isFinite(ms) ? ms : NaN);
+  return Number.isFinite(d.getTime()) ? d.toISOString() : fallback.toISOString();
 }
 
 export function allowlistEvent(raw: unknown, now = new Date()): CleanEvent | null {

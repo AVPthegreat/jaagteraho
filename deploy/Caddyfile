@@ -1,6 +1,10 @@
 # HTTPS for the watcher's public address. Caddy gets the certificate by itself.
 # JR_API_DOMAIN can be a real domain, or <server-ip>.sslip.io when there is none.
 {$JR_API_DOMAIN} {
+	# The watcher limits bodies itself (256 KB, 1 MB for log drains); this stops anything larger at the edge.
+	request_body {
+		max_size 2MB
+	}
 	encode gzip
 	reverse_proxy watcher:8787 {
 		flush_interval -1

@@ -9,6 +9,9 @@ import { bus, type FeedEvent } from "../bus.js";
 import type { DB } from "../db/db.js";
 import type { Voice } from "../voice/voice.js";
 import { Healer } from "../pipeline/heal.js";
+import { Slots, Window } from "./limits.js";
+
+export { Window } from "./limits.js";
 
 const FLOWS = { submit: "/api/submit", exam: "/api/exam/start", pay: "/api/pay" } as const;
 type Flow = keyof typeof FLOWS;
@@ -24,7 +27,6 @@ export type PublicOptions = {
   healer?: Healer | null;
 };
 
-/** The caller's address as Caddy reports it (first X-Forwarded-For entry). Used only for limits, never stored. */
 /**
  * The visitor's address as our own proxy (Caddy) saw it: the LAST X-Forwarded-For entry. Earlier
  * entries come from the client and can be forged, so they are never trusted.
@@ -33,21 +35,14 @@ export function clientIp(c: { req: { header: (name: string) => string | undefine
   return (c.req.header("x-forwarded-for") ?? "").split(",").pop()!.trim() || "direct";
 }
 
-export class Window {
-  private hits = new Map<string, number[]>();
-  allow(key: string, max: number, ms: number): boolean {
-    const now = Date.now();
-    const list = (this.hits.get(key) ?? []).filter((t) => now - t < ms);
-    if (list.length >= max) return false;
-    list.push(now);
-    this.hits.set(key, list);
-    return true;
-  }
-}
+/** Open live feeds: a few per network address, a few hundred in total. */
+export const FEEDS_PER_IP = 20; // a room of judges behind one address still fits
+export const FEEDS_MAX = 300;
 
 export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins, healer }: PublicOptions) {
   const app = new Hono();
   const limits = new Window();
+  const feeds = new Slots(FEEDS_PER_IP, FEEDS_MAX);
   app.use("/public/*", cors({ origin: allowedOrigins, allowMethods: ["GET", "POST"], allowHeaders: ["Content-Type"], maxAge: 600 }));
 
   const touchVisitor = (session: string, country: string | null) =>
@@ -81,9 +76,9 @@ export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins,
     const session = typeof body.session === "string" ? body.session : "";
     const flow = body.flow as Flow;
     if (!SESSION.test(session) || !(typeof flow === "string" && Object.hasOwn(FLOWS, flow))) return c.json({ error: "Choose a flow to break." }, 400);
-    if (!limits.allow(`s:${session}`, 6, 60_000)) return c.json({ error: "Easy there. Try again in a minute." }, 429);
-    // Fresh sessions are free to make, so the network address is limited too.
+    // Fresh sessions are free to make, so the network address is checked first.
     if (!limits.allow(`ip:${clientIp(c)}`, 30, 3_600_000)) return c.json({ error: "Easy there. Try again in a while." }, 429);
+    if (!limits.allow(`s:${session}`, 6, 60_000)) return c.json({ error: "Easy there. Try again in a minute." }, 429);
     if (!limits.allow("global", 240, 3_600_000)) return c.json({ error: "The demo is busy. Try again in a few minutes." }, 429);
     const country = typeof body.country === "string" && COUNTRY.test(body.country) ? body.country : null;
     touchVisitor(session, country);
@@ -122,6 +117,13 @@ export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins,
   app.get("/public/feed/:session", (c) => {
     const session = c.req.param("session");
     if (!SESSION.test(session)) return c.json({ error: "bad session" }, 400);
+    const ip = clientIp(c);
+    if (!feeds.take(ip)) return c.json({ error: "Too many live views are open. Close a tab and try again." }, 429);
+    let released = false;
+    const release = () => {
+      if (!released) feeds.release(ip);
+      released = true;
+    };
     return streamSSE(c, async (stream) => {
       const queue: FeedEvent[] = [];
       let wake: (() => void) | null = null;
@@ -132,6 +134,8 @@ export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins,
       bus.on(`session:${session}`, onEvent);
       stream.onAbort(() => {
         bus.off(`session:${session}`, onEvent);
+        release();
+        wake?.();
       });
       const until = Date.now() + 10 * 60_000;
       while (!stream.aborted && Date.now() < until) {
@@ -150,6 +154,10 @@ export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins,
         await stream.writeSSE({ event: ev.type, data: JSON.stringify(ev) });
       }
       bus.off(`session:${session}`, onEvent);
+      release();
+    }, async (err) => {
+      console.error("feed:", err);
+      release();
     });
   });
 
@@ -158,6 +166,7 @@ export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins,
     const body = ((await c.req.json().catch(() => ({}))) ?? {}) as { session?: string; flow?: string; fix_id?: number };
     const flow = body.flow as Flow;
     if (!SESSION.test(body.session ?? "") || !(typeof flow === "string" && Object.hasOwn(FLOWS, flow)) || !Number.isInteger(body.fix_id)) return c.json({ error: "bad request" }, 400);
+    if (!limits.allow(`aip:${clientIp(c)}`, 120, 3_600_000) || !limits.allow(`a:${body.session}`, 20, 60_000)) return c.json({ error: "Easy there. Try again in a minute." }, 429);
     const fix = db
       .prepare(
         `SELECT f.status, f.gate_result, i.transaction_name FROM fixes f JOIN diagnoses d ON d.id = f.diagnosis_id JOIN incidents i ON i.id = d.incident_id
@@ -174,7 +183,7 @@ export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins,
   app.post("/public/undo", async (c) => {
     const body = ((await c.req.json().catch(() => ({}))) ?? {}) as { session?: string; heal_id?: number };
     if (!SESSION.test(body.session ?? "") || !Number.isInteger(body.heal_id)) return c.json({ error: "bad request" }, 400);
-    if (!limits.allow(`u:${body.session}`, 10, 60_000) || !limits.allow(`uip:${clientIp(c)}`, 60, 3_600_000)) return c.json({ error: "Easy there. Try again in a minute." }, 429);
+    if (!limits.allow(`uip:${clientIp(c)}`, 60, 3_600_000) || !limits.allow(`u:${body.session}`, 10, 60_000)) return c.json({ error: "Easy there. Try again in a minute." }, 429);
     if (!healer?.undoSession(body.heal_id!, body.session!)) return c.json({ error: "Nothing to undo." }, 409);
     return c.json({ ok: true });
   });
@@ -182,6 +191,7 @@ export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins,
   app.post("/public/sign", async (c) => {
     const body = ((await c.req.json().catch(() => ({}))) ?? {}) as { session?: string; name?: string; country?: string; live_app?: boolean };
     if (!SESSION.test(body.session ?? "")) return c.json({ error: "bad session" }, 400);
+    if (!limits.allow(`gip:${clientIp(c)}`, 30, 3_600_000) || !limits.allow(`g:${body.session}`, 5, 60_000)) return c.json({ error: "Easy there. Try again in a minute." }, 429);
     const name = (typeof body.name === "string" ? body.name : "").replace(/[<>]/g, "").trim().slice(0, 40);
     const country = (typeof body.country === "string" ? body.country : "").replace(/[<>]/g, "").trim().slice(0, 40);
     if (!name || !country) return c.json({ error: "Add a name or handle and a country." }, 400);

@@ -174,8 +174,19 @@ ${healHtml}
 </main></body></html>`;
 }
 
+/** The page is self-contained: inline styles and Google Fonts only, no scripts, never framed. */
+export const OWNER_CSP =
+  "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+
 export function ownerRoutes(db: DB) {
   const app = new Hono();
+  app.use("/owner/*", async (c, next) => {
+    await next();
+    c.header("content-security-policy", OWNER_CSP);
+    c.header("x-frame-options", "DENY");
+    c.header("x-content-type-options", "nosniff");
+    c.header("referrer-policy", "no-referrer");
+  });
   app.get("/owner/incident/:id", (c) => {
     const id = Number(c.req.param("id"));
     const ok = Number.isInteger(id) && verifyOwnerLink(id, Number(c.req.query("e")), c.req.query("s") ?? "");

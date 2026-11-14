@@ -7,7 +7,7 @@ import { describe, it } from "node:test";
 import { openDb } from "../src/db/db.js";
 import type { CleanEvent } from "../src/intake/allowlist.js";
 import { storeEvent } from "../src/intake/store.js";
-import { Worker } from "../src/pipeline/worker.js";
+import { phoneAllowedFor, Worker } from "../src/pipeline/worker.js";
 import { callTwiml, maskNumber, maskText, phoneConfig, Phone, twilioSignature } from "../src/phone/phone.js";
 import type { Telegram } from "../src/telegram/api.js";
 
@@ -19,6 +19,8 @@ const ENV = {
   JR_TWILIO_TO: "+919876543210",
   JR_PUBLIC_INTAKE_URL: "https://jr-api.example.test",
 } as NodeJS.ProcessEnv;
+// These tests ring on the demo portal (a sandbox project), which needs the founder's own-demo switch.
+process.env.JR_DEMO_PHONE = "1";
 
 function fakeFetch() {
   const calls: Array<{ url: string; body: URLSearchParams; auth: string }> = [];
@@ -108,6 +110,27 @@ describe("phone wake-up call", () => {
   it("masks phone numbers in logs", () => {
     assert.equal(maskNumber("+919876543210"), "**********210");
     assert.equal(maskText("The number +91 98765 43210 is unverified"), "The number **********210 is unverified");
+  });
+
+  it("the public demo never rings the phone unless JR_DEMO_PHONE=1", async () => {
+    assert.equal(phoneAllowedFor("sandbox", {}), false);
+    assert.equal(phoneAllowedFor("sandbox", { JR_DEMO_PHONE: "0" }), false);
+    assert.equal(phoneAllowedFor("sandbox", { JR_DEMO_PHONE: "1" }), true);
+    assert.equal(phoneAllowedFor("faurus", {}), true);
+    const before = process.env.JR_DEMO_PHONE;
+    delete process.env.JR_DEMO_PHONE;
+    try {
+      const db = setup();
+      const f = fakeFetch();
+      const { tg, sent } = fakeTelegram();
+      storeEvent(db, 1, event("on"));
+      await drain(db, new Worker(db, null, tg, null, new Phone(db, phoneConfig(ENV)!, f.impl)));
+      assert.equal((db.prepare("SELECT action FROM decisions").get() as { action: string }).action, "wake");
+      assert.equal(sent.length >= 1, true, "the Telegram alert still goes out");
+      assert.equal(f.calls.length, 0, "no Twilio call for an anonymous demo visitor");
+    } finally {
+      process.env.JR_DEMO_PHONE = before;
+    }
   });
 
   it("calls on WAKE (critical flow during an exam), with no error text in the spoken words", async () => {
