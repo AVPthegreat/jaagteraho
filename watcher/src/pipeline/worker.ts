@@ -19,6 +19,7 @@ import { runGate } from "./gate.js";
 import { proveFix } from "./verify.js";
 import type { Healer } from "./heal.js";
 import { lastChange, loadChange, saveChange, type Change } from "../source/changes.js";
+import { envInt } from "../envint.js";
 
 type Job = { id: number; kind: string; incident_id: number; payload: string; attempts: number };
 type ProjectRow = { id: number; name: string; kind: "faurus" | "sandbox" | "paste"; repo: string | null; created_at: string; github_installation?: number | null };
@@ -30,9 +31,9 @@ const MAX_PINGS = 3;
 const CONCURRENCY = 4;
 const DAILY_SONNET = 80; // about $0.75 a day at the measured $0.009 per diagnosis
 /** Live diagnoses a day per lane, so the demo and outside apps can never use up Faurus's (ai/claude.ts has the $ caps). */
-export const DAILY_DIAGNOSES: Record<Lane, number> = { faurus: DAILY_SONNET, demo: 80, outside: 40, paste: 0 };
+export const DAILY_DIAGNOSES: Record<Lane, number> = { faurus: DAILY_SONNET, demo: envInt("JR_DEMO_DIAGNOSES_PER_DAY", 80, 0, 2000), outside: 40, paste: 0 };
 const VOICE_REUSE_MS = 15 * 60 * 1000;
-const SANDBOX_LIVE_PER_FAULT = 15;
+const SANDBOX_LIVE_PER_FAULT = envInt("JR_DEMO_LIVE_PER_FAULT", 15, 0, 1000);
 const MAX_WAKES_PER_NIGHT = 3;
 const OUTSIDE_PER_DAY = 5;
 const OUTSIDE_DECISIONS_PER_DAY = 200;
