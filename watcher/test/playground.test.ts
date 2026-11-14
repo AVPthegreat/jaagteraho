@@ -492,9 +492,15 @@ describe("protected areas in the playground copy (Ledgerly GST)", () => {
   });
 
   it("copyVerdict gives the true reason for each case", () => {
-    assert.deepEqual(copyVerdict("recommended", [], [], null), { appliable: true, reason: null, protectedNote: null });
+    assert.deepEqual(copyVerdict("recommended", [], [], null), { appliable: true, reason: null, protectedNote: null, careNote: null });
     assert.equal(copyVerdict("caution", ["it touches a sensitive area"], ["shop/payments.py"], null).appliable, true);
-    assert.match(copyVerdict("caution", ["the reviewer is not sure it removes the cause"], [], null).reason ?? "", /AI reviewer had concerns \(the reviewer is not sure/);
+    assert.equal(copyVerdict("caution", ["it touches a sensitive area"], ["shop/payments.py"], null).careNote, null, "the protected note already says it");
+    const care = copyVerdict("caution", ["the reviewer is not sure it removes the cause", "it may change what some working requests get"], [], null);
+    assert.equal(care.appliable, true, "in the copy, a caution fix may be applied");
+    assert.equal(care.careNote, "Use with care: the reviewer is not sure it removes the cause; it may change what some working requests get. In a real app this would wait for your tap.");
+    const none = copyVerdict("withheld", ["no edit proposed"], [], null);
+    assert.equal(none.noEdit, true);
+    assert.match(none.reason ?? "", /found the cause but did not propose a safe edit\. In a real app you would get the cause only\./);
     assert.match(copyVerdict("withheld", ["text to replace not found in a.py"], [], null).reason ?? "", /checks withheld this fix \(text to replace not found/);
     assert.match(copyVerdict("recommended", [], ["a/payment.py"], "starts processes or changes files").reason ?? "", /^Not applied: the fix starts processes/);
     assert.equal(areaWords(["accounts/login.py"]), "sign-in or permissions");
@@ -523,5 +529,58 @@ describe("playground instances used by scripts", () => {
     assert.equal(pg.ownRun("script-session-1", (r as { run_id: number }).run_id)?.state, "broken");
     pg.stop();
     assert.deepEqual(pg.startOwn({ session: "script-session-2", caseId: CASE_ID, exam: false, heal: "ask" }, "messmenu"), { error: "full" });
+  });
+});
+
+describe("playground: caution fixes, app requires, hint list", () => {
+  it("a caution fix can be applied in the copy, never heals on its own, and shows the reviewer's concerns", async () => {
+    const db = openDb(":memory:");
+    const { ai } = fakeAI(db);
+    const parse = ai.client.messages.parse.bind(ai.client.messages);
+    (ai.client.messages as { parse: unknown }).parse = async (req: { system: string }) => {
+      const r = (await parse(req as never)) as { parsed_output: Record<string, unknown> };
+      if (!req.system.includes("diagnosis step") && !req.system.includes("You assess")) r.parsed_output = { fix_quality: "2", touches_sensitive: "no", could_break: "yes" };
+      return r;
+    };
+    const pg = new Playground(db, ai, { dir, canSpend: () => true });
+    const got: PlaygroundEvent[] = [];
+    playgroundBus.on("session:caution-visitor", (e: PlaygroundEvent) => got.push(e));
+    const r = pg.startOwn({ session: "caution-visitor", caseId: CASE_ID, exam: false, heal: "auto" }, "messmenu") as { run_id: number };
+    await pg.settle();
+    const ready = got.find((e) => e.step === "ready")!.data;
+    assert.equal(ready.approvable, true);
+    assert.match(String(ready.care_note), /^Use with care: the reviewer is not sure it removes the cause; it may change what some working requests get\./);
+    const o = pg.ownRun("caution-visitor", r.run_id)!;
+    assert.equal(o.state, "broken", "not healed on its own");
+    assert.equal(await pg.applyFix(o, "approved"), "applied");
+    assert.equal(pg.latest(1)[0].hidden_test, "passed");
+    pg.stop();
+  });
+
+  it("a Node.js fix may require another file of the app; requiring a system module still blocks", () => {
+    const db = openDb(":memory:");
+    const pg = new Playground(db, null, { canSpend: () => false });
+    const d = (replace: string) => ({ cause_plain: "", cause_technical: "", file: "src/order/service.js", line: 1, confidence_words: "sure" as const, edits: [{ file: "src/order/service.js", find: "  menuRepo.find(item.menuId);", replace }], test_hint: "", regression_test: { file: "", code: "" } });
+    const app = join(BENCH, "apps", "tiffinbox");
+    assert.equal(pg.reachesOutside(app, { "src/order/service.js": "x" }, d("  const kitchenRepo = require('../kitchen/repo');\n  item.kitchen = kitchenRepo.find(1).name;")), null);
+    assert.ok(pg.reachesOutside(app, { "src/order/service.js": "x" }, d("  const fs = require('fs');\n  fs.writeFileSync('x', '1');")));
+    assert.ok(pg.reachesOutside(app, { "src/order/service.js": "x" }, d("  const cp = require('child_process');")));
+    pg.stop();
+  });
+
+  it("Surprise me picks from the hint list of bugs the last full run fixed and proved", () => {
+    const hdir = mkdtempSync(join(tmpdir(), "jrpgtest-hints-"));
+    try {
+      cpSync(join(BENCH, "apps", "messmenu"), join(hdir, "apps", "messmenu"), { recursive: true });
+      writeFileSync(join(hdir, "cases.json"), readFileSync(join(BENCH, "cases.json")));
+      writeFileSync(join(hdir, "playground-cases.json"), readFileSync(join(BENCH, "playground-cases.json")));
+      writeFileSync(join(hdir, "playground-hints.json"), JSON.stringify({ good: ["pg-messmenu-plates-left", "messmenu-missing-plates"] }));
+      const pg = new Playground(openDb(":memory:"), null, { dir: hdir, canSpend: () => false });
+      const picked = new Set(Array.from({ length: 40 }, () => pg.surprise(pg.casesFor("messmenu")).id));
+      assert.deepEqual([...picked].sort(), ["messmenu-missing-plates", "pg-messmenu-plates-left"]);
+      pg.stop();
+    } finally {
+      rmSync(hdir, { recursive: true, force: true });
+    }
   });
 });
