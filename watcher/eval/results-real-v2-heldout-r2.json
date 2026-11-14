@@ -1,0 +1,177 @@
+[
+  {
+    "repo": "psf/black",
+    "issue": "https://github.com/psf/black/issues/4062",
+    "fix": "https://github.com/psf/black/pull/4086",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/black/__init__.py",
+      "src/black/parsing.py",
+      "src/black/output.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "src/black/linegen.py"
+    ],
+    "named": "src/black/__init__.py:1444",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "Black reformatted a piece of code and the result was not valid Python, so its own safety check stopped it. Users saw an internal error and nothing was formatted. I can't tell from the event which input caused it.",
+    "cause_technical": "The check in assert_equivalent (src/black/__init__.py:1444) calls parse_ast on the formatted output, and that fails with \"expected ':'\" on line 1. The check is working as intended. The bug is in the formatting step (format_str / linegen), which emitted a compound statement header without its colon. The event shows neither the input nor the Black version, and the stack contains no linegen frames. I could not identify the faulty transform, and a guessed edit would be unsafe. To find it, open the dumped file /var/folders/.../blk_wad8_c6m.log and run Black on the original input. Suspects are `# fmt: skip` or `# fmt: off` handling on a compound statement line, and preview features that rewrite statement headers.",
+    "real_cause": "left_hand_split() only checked for a missing opening bracket, not for empty tail leaves, so at line length 1 it produced a split that broke the code and failed the equivalence check.",
+    "seconds": 9,
+    "cost_usd": 0.0115
+  },
+  {
+    "repo": "pallets/jinja",
+    "issue": "https://github.com/pallets/jinja/issues/1701",
+    "fix": "https://github.com/pallets/jinja/pull/1702",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/jinja2/nativetypes.py",
+      "src/jinja2/environment.py",
+      "src/jinja2/debug.py"
+    ],
+    "lookups": [
+      "search_code {\"text\":\"join(\"}",
+      "search_code {\"text\":\"_output_const_repr\"}",
+      "read_lines {\"path\":\"src/jinja2/compiler.py\",\"start\":1435,\"end\":1470}",
+      "read_lines {\"path\":\"src/jinja2/compiler.py\",\"start\":1500,\"end\":1580}",
+      "search_code {\"text\":\"str_join\"}",
+      "read_lines {\"path\":\"src/jinja2/runtime.py\",\"start\":70,\"end\":100}"
+    ],
+    "files_read": [
+      "src/jinja2/compiler.py",
+      "src/jinja2/runtime.py"
+    ],
+    "fixed_files": [
+      "src/jinja2/runtime.py"
+    ],
+    "named": "src/jinja2/compiler.py:1448",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "guess",
+    "cause_plain": "Rendering a template whose output mixes constant numbers with text crashed with a TypeError instead of producing a result. The compiler tried to join the values as if they were all text, and a number was one of them.",
+    "cause_technical": "The error is raised while the compiled template's root generator runs, inside islice in native_concat. It comes from joining a non-str constant. CodeGenerator._output_const_repr (src/jinja2/compiler.py:1448) calls repr(concat(group)), and concat is \"\".join. The group holds the output of finalize.const(const), which can be an int. NativeCodeGenerator overrides this method with str() conversion, but I could not confirm which generator class compiled this template. I did not trace where the int enters the group, so this is a best guess. The fix is to convert each item to str before joining in the base method.",
+    "real_cause": "BlockReference.__call__/_async_call joined block output with the module-level str concat instead of environment.concat, so NativeEnvironment blocks returning non-strings failed.",
+    "seconds": 25,
+    "cost_usd": 0.0425
+  },
+  {
+    "repo": "marshmallow-code/marshmallow",
+    "issue": "https://github.com/marshmallow-code/marshmallow/issues/2868",
+    "fix": "https://github.com/marshmallow-code/marshmallow/pull/2894",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/marshmallow/schema.py",
+      "src/marshmallow/error_store.py"
+    ],
+    "lookups": [
+      "read_lines {\"path\":\"src/marshmallow/fields.py\",\"start\":120,\"end\":200}",
+      "read_lines {\"path\":\"src/marshmallow/fields.py\",\"start\":340,\"end\":450}",
+      "read_lines {\"path\":\"src/marshmallow/fields.py\",\"start\":200,\"end\":240}",
+      "search_code {\"text\":\"self.make_error(\\\"null\\\")\"}",
+      "read_lines {\"path\":\"src/marshmallow/fields.py\",\"start\":285,\"end\":305}"
+    ],
+    "files_read": [
+      "src/marshmallow/fields.py"
+    ],
+    "fixed_files": [
+      "src/marshmallow/fields.py"
+    ],
+    "named": "src/marshmallow/fields.py:300",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "Loading data where the field \"sentinel\" is null was rejected with \"Field may not be null.\". I found no bug in the library code. It looks like the field was declared without permission to accept null, so this is the expected result.",
+    "cause_technical": "Field._validate_missing (src/marshmallow/fields.py:299-300) raises make_error(\"null\") when value is None and allow_none is False. Field.__init__ (line 213) sets allow_none correctly: it is True if load_default is None or allow_none=True is passed. The Schema._do_load path in schema.py only collects and re-raises the error. src/test.py is not shown, so I can't see how the \"sentinel\" field is declared. It most likely lacks allow_none=True or load_default=None. I can't safely change the library, so I propose no edit.",
+    "real_cause": "fields.Constant set load_default/dump_default after Field.__init__ had already computed allow_none from a missing default, so a None constant was rejected as null on load.",
+    "seconds": 18,
+    "cost_usd": 0.038
+  },
+  {
+    "repo": "psf/requests",
+    "issue": "https://github.com/psf/requests/issues/6643",
+    "fix": "https://github.com/psf/requests/pull/6644",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/requests/adapters.py",
+      "src/requests/sessions.py",
+      "src/requests/api.py",
+      "src/requests/models.py",
+      "src/requests/cookies.py"
+    ],
+    "lookups": [
+      "find_definition {\"name\":\"PreparedRequest.path_url\"}",
+      "find_definition {\"name\":\"HTTPAdapter.request_url\"}",
+      "read_lines {\"path\":\"src/requests/models.py\",\"start\":91,\"end\":98}",
+      "find_definition {\"name\":\"PreparedRequest\"}",
+      "search_code {\"text\":\"def path_url\"}",
+      "read_lines {\"path\":\"src/requests/models.py\",\"start\":84,\"end\":90}"
+    ],
+    "files_read": [],
+    "fixed_files": [
+      "src/requests/adapters.py"
+    ],
+    "named": "src/requests/models.py:93",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "A request to a web address whose path begins with two slashes, such as http://host//v:h, crashed with a raw urllib3 parsing error. The library mistook the path for a server name. The caller got no clear 'invalid URL' message.",
+    "cause_technical": "RequestEncodingMixin.path_url in src/requests/models.py (around line 93-97) returns urlsplit(url).path unchanged. When the path starts with '//', for example '//v:h', the adapter passes it as the url to conn.urlopen. urllib3's parse_url treats '//v:h' as a network location and tries to parse 'h' as a port, which raises LocationParseError. That error is not caught in HTTPAdapter.send. The fix is to collapse the leading slashes in path_url so the request target is always a path. I did not run this against the repo.",
+    "real_cause": "HTTPAdapter.request_url() passed a path starting with '//' through unchanged, and urllib3 then parsed '//v:h' as a network location and failed; the fix collapses the leading slashes.",
+    "seconds": 34,
+    "cost_usd": 0.0484
+  },
+  {
+    "repo": "celery/celery",
+    "issue": "https://github.com/celery/celery/issues/6164",
+    "fix": "https://github.com/celery/celery/pull/10406",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "celery/backends/base.py",
+      "celery/backends/redis.py",
+      "celery/backends/asynchronous.py"
+    ],
+    "lookups": [
+      "find_definition {\"name\":\"KeyValueStoreBackend.get_key_for_task\"}",
+      "find_definition {\"name\":\"AsyncResult.__del__\"}",
+      "read_lines {\"path\":\"celery/result.py\",\"start\":440,\"end\":449}",
+      "read_lines {\"path\":\"celery/result.py\",\"start\":380,\"end\":392}",
+      "read_lines {\"path\":\"celery/result.py\",\"start\":444,\"end\":448}",
+      "find_definition {\"name\":\"AsyncResult.__init__\"}"
+    ],
+    "files_read": [
+      "celery/result.py",
+      "celery/beat.py"
+    ],
+    "fixed_files": [
+      "celery/backends/base.py"
+    ],
+    "named": "celery/result.py:444",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "guess",
+    "cause_plain": "A background cleanup step that runs when a task result object is thrown away crashed with a TypeError. Nothing in the task itself was wrong. The cleanup tried to build a Redis key for the result and could not. I am not certain of the exact bad value, so this fix is a best guess.",
+    "cause_technical": "In celery/result.py, `AsyncResult.__del__` (line 444) calls `backend.remove_pending_result(self)` with no protection. That goes through `on_result_fulfilled`, then `ResultConsumer.cancel_for`, then `_get_key_for` in celery/backends/base.py (`key_t('').join([prefix, key_t(id), key_t(key)])`). That join raised a TypeError. The likely causes are a half-built result object, or module globals already torn down at interpreter shutdown, so `key_t` or the key prefix is unusable. I did not confirm which. `__del__` can run at any time, including shutdown, so it should not let cleanup errors escape. The fix makes `__del__` read `backend` and `id` defensively and swallow cleanup errors. That only stops the noisy traceback; it does not identify the bad value.",
+    "real_cause": "BaseKeyValueStoreBackend._get_key_for() passed the task id straight to key_t(), so a uuid.UUID task id made the bytes join raise TypeError.",
+    "seconds": 26,
+    "cost_usd": 0.0344
+  }
+]

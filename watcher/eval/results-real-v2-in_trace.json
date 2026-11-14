@@ -1,0 +1,575 @@
+[
+  {
+    "repo": "pallets/werkzeug",
+    "issue": "https://github.com/pallets/werkzeug/issues/2708",
+    "fix": "https://github.com/pallets/werkzeug/pull/2709",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "src/werkzeug/urls.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "src/werkzeug/urls.py"
+    ],
+    "named": "src/werkzeug/urls.py:983",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "sure",
+    "cause_plain": "Passing a bytes URL to iri_to_uri without also giving a charset crashes with a confusing TypeError. The bytes branch decodes with charset before the code sets the default of utf-8.",
+    "cause_technical": "In src/werkzeug/urls.py iri_to_uri, line 983 runs `iri.decode(charset)` while charset is still None, because the default `charset = \"utf-8\"` is only set further down (line 993). bytes.decode(None) raises TypeError. The fix is to decode with `charset or \"utf-8\"`. The error handler is also not passed in this call, which is fine because the default is strict.",
+    "real_cause": "iri_to_uri() decoded a bytes argument with charset before the code that defaults charset to 'utf-8' had run, so bytes.decode() received None.",
+    "seconds": 5,
+    "cost_usd": 0.0203
+  },
+  {
+    "repo": "pallets/werkzeug",
+    "issue": "https://github.com/pallets/werkzeug/issues/2955",
+    "fix": "https://github.com/pallets/werkzeug/pull/2956",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "src/werkzeug/http.py",
+      "src/werkzeug/datastructures/auth.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "src/werkzeug/http.py"
+    ],
+    "named": "src/werkzeug/http.py:371",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "text to replace is not unique in src/werkzeug/http.py"
+    ],
+    "confidence": "sure",
+    "cause_plain": "A request with a malformed Authorization header, such as one with an empty parameter name like \"Bearer =abc, x=y\", crashed the server with an error. The header parser assumed every parameter name had at least one character.",
+    "cause_technical": "In src/werkzeug/http.py parse_dict_header, line 371 evaluates key[-1] when key is empty. An item like \"=value\" gives key == \"\" after partition and strip, so the index raises IndexError. Using key.endswith(\"*\") fixes it, and an empty key is then stored as-is.",
+    "real_cause": "parse_dict_header() indexed key[-1] without checking for an empty key, so a parameter like '=foo' with no name raised IndexError.",
+    "seconds": 5,
+    "cost_usd": 0.02
+  },
+  {
+    "repo": "pallets/click",
+    "issue": "https://github.com/pallets/click/issues/2415",
+    "fix": "https://github.com/pallets/click/pull/2555",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "src/click/utils.py",
+      "src/click/globals.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "src/click/_compat.py",
+      "src/click/_termui_impl.py",
+      "src/click/utils.py"
+    ],
+    "named": "src/click/utils.py:268",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "The app crashed when it tried to print \"Hello world\" because it had no console to print to. This happens with a windowed PyInstaller build or pythonw on Windows. Click didn't handle that case and failed instead of skipping the output.",
+    "cause_technical": "In src/click/utils.py echo(), `_default_text_stdout()` or `_default_text_stderr()` returns None when sys.stdout or sys.stderr is None. The code then calls `file.write(out)` (or `file.flush()`) on None, which raises AttributeError. echo needs to return early when there is no standard stream.",
+    "real_cause": "When no console streams exist (e.g. pythonw/PyInstaller windowed apps) _default_text_stdout() returns None and echo() wrote to it without a None check.",
+    "seconds": 6,
+    "cost_usd": 0.0238
+  },
+  {
+    "repo": "pallets/click",
+    "issue": "https://github.com/pallets/click/issues/3487",
+    "fix": "https://github.com/pallets/click/pull/3493",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "src/click/utils.py",
+      "src/click/globals.py"
+    ],
+    "lookups": [
+      "read_lines {\"path\":\"src/click/testing.py\",\"start\":85,\"end\":150}",
+      "read_lines {\"path\":\"src/click/_compat.py\",\"start\":485,\"end\":560}",
+      "search_code {\"text\":\"def _find_binary_writer\"}",
+      "read_lines {\"path\":\"src/click/_compat.py\",\"start\":150,\"end\":215}",
+      "find_definition {\"name\":\"_default_text_stdout\"}"
+    ],
+    "files_read": [
+      "src/click/testing.py",
+      "src/click/_compat.py"
+    ],
+    "fixed_files": [
+      "src/click/utils.py"
+    ],
+    "named": "src/click/utils.py:333",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "guess",
+    "cause_plain": "A command printed text to a destination that only accepts raw bytes, for example a file opened in binary mode. Python refused the write, so the command crashed instead of printing.",
+    "cause_technical": "In src/click/utils.py, echo() ends with `file.write(out)`. A str message goes down the text branch, which only handles ANSI stripping and never checks whether `file` is a binary stream. When a binary stream is passed (or `file` is a testing BytesIO wrapper), `file.write(str)` raises `TypeError: a bytes-like object is required, not 'str'`. I could not confirm which caller passed the binary stream, so this is inferred from the traceback. The fix encodes str output as UTF-8 when `file` is itself a binary writer.",
+    "real_cause": "echo() set out = out or \"\" before appending the newline, which turned an empty bytes/bytearray message into a str and then wrote that str to the binary stream.",
+    "seconds": 23,
+    "cost_usd": 0.0611
+  },
+  {
+    "repo": "pydantic/pydantic",
+    "issue": "https://github.com/pydantic/pydantic/issues/13870",
+    "fix": "https://github.com/pydantic/pydantic/pull/13874",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "pydantic/_internal/_docs_extraction.py",
+      "pydantic/_internal/_fields.py",
+      "pydantic/_internal/_model_construction.py",
+      "pydantic/_internal/_import_utils.py",
+      "pydantic/fields.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "pydantic/_internal/_docs_extraction.py"
+    ],
+    "named": "pydantic/_internal/_docs_extraction.py:100",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Loading a saved (pickled) config in the worker crashed. The config class is rebuilt from the pickle, and pydantic tried to read its source code to get field docs. A class rebuilt this way has no module or source file, so Python raised an error.",
+    "cause_technical": "In pydantic/_internal/_docs_extraction.py line 99, `inspect.getsourcelines(cls)` only catches OSError. For a class that cloudpickle rebuilds as a skeleton class, `inspect.getfile` raises TypeError ('is a built-in class'). This happens when `use_attribute_docstrings` is enabled on Python 3.13+. The fix is to also catch TypeError and return no docstrings.",
+    "real_cause": "extract_docstrings_from_cls() caught only OSError from inspect.getsourcelines(), but for classes rebuilt by cloudpickle inspect raises TypeError ('is a built-in class').",
+    "seconds": 6,
+    "cost_usd": 0.0495
+  },
+  {
+    "repo": "pallets/jinja",
+    "issue": "https://github.com/pallets/jinja/issues/1697",
+    "fix": "https://github.com/pallets/jinja/pull/1698",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "src/jinja2/loaders.py",
+      "src/jinja2/environment.py"
+    ],
+    "lookups": [
+      "search_code {\"text\":\"posixpath\"}",
+      "search_code {\"text\":\"path.sep\"}",
+      "read_lines {\"path\":\"src/jinja2/loaders.py\",\"start\":29,\"end\":35}",
+      "read_lines {\"path\":\"x\",\"start\":1,\"end\":1}",
+      "search_code {\"text\":\"os.path =\"}",
+      "search_code {\"text\":\"\\\"sep\\\"\"}"
+    ],
+    "files_read": [],
+    "fixed_files": [
+      "src/jinja2/loaders.py"
+    ],
+    "named": "src/jinja2/loaders.py:31",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "guess",
+    "cause_plain": "The `build` command crashed while loading the Dockerfile template. Python's path module was missing its `sep` attribute, so jinja2's template-name safety check failed. I couldn't find what removed the attribute, so this fix is a workaround and not the root cause.",
+    "cause_technical": "src/jinja2/loaders.py:31 in split_template_path reads os.path.sep, and os.path is posixpath here. A normal posixpath always has `sep`, so something in the runtime has stripped or replaced it. A mock, a patched os.path, or a shadowing module would do that. I found no such code in the files I could search. The safest change is to use os.sep, os.altsep and os.pardir, which are top-level attributes of `os` and do not depend on the os.path module object. The other os.path.sep uses in loaders.py (lines 228 and later) are in other loaders and I did not change them. Treat this as a guess.",
+    "real_cause": "loaders.py used os.path.sep, which some path modules (posixpath on certain builds) do not define; the fix switches to os.sep.",
+    "seconds": 19,
+    "cost_usd": 0.0465
+  },
+  {
+    "repo": "celery/celery",
+    "issue": "https://github.com/celery/celery/issues/9489",
+    "fix": "https://github.com/celery/celery/pull/10295",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "celery/worker/control.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "celery/worker/control.py"
+    ],
+    "named": "celery/worker/control.py:371",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "A remote \"heartbeat\" request crashed on workers that have events turned off. Those workers have no event sender, and the command tried to use one anyway.",
+    "cause_technical": "In celery/worker/control.py, heartbeat() (line 371) calls state.consumer.event_dispatcher.send(...) without checking the dispatcher. The Events bootstep leaves consumer.event_dispatcher as None when events are not enabled, so this raises AttributeError. The fix is to check for None and return a clear error reply.",
+    "real_cause": "The heartbeat (and enable/disable events) remote control commands used state.consumer.event_dispatcher without checking that it is None when events are disabled.",
+    "seconds": 8,
+    "cost_usd": 0.0212
+  },
+  {
+    "repo": "pypa/pip",
+    "issue": "https://github.com/pypa/pip/issues/6385",
+    "fix": "https://github.com/pypa/pip/pull/14135",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "src/pip/_vendor/packaging/markers.py",
+      "src/pip/_internal/req/constructors.py",
+      "src/pip/_internal/req/req_file.py",
+      "src/pip/_vendor/packaging/_parser.py",
+      "src/pip/_internal/req/req_install.py"
+    ],
+    "lookups": [
+      "read_lines {\"path\":\"src/pip/_internal/req/constructors.py\",\"start\":300,\"end\":408}",
+      "search_code {\"text\":\"def _strip_extras\"}",
+      "search_code {\"text\":\"InvalidMarker\"}",
+      "read_lines {\"path\":\"src/pip/_internal/req/constructors.py\",\"start\":346,\"end\":358}",
+      "find_definition {\"name\":\"InvalidMarker\"}",
+      "read_lines {\"path\":\"src/pip/_internal/req/constructors.py\",\"start\":40,\"end\":57}"
+    ],
+    "files_read": [],
+    "fixed_files": [
+      "src/pip/_internal/req/constructors.py"
+    ],
+    "named": "src/pip/_internal/req/constructors.py:356",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "A requirements line has two marker clauses joined by a second semicolon (and a stray tab). pip can't read that, so the install stopped with a raw internal traceback instead of telling the user which line is wrong.",
+    "cause_technical": "In src/pip/_internal/req/constructors.py parse_req_from_line (line 356), the line is split on the first ';' only. The leftover text \"python_version >= '2.7'; python_version <\\t'3.5'\" still contains a ';', and Marker() raises InvalidMarker on it. InvalidMarker is a ValueError, not an InstallationError, and nothing catches it, so it reaches the top level as a crash. The fix turns it into an InstallationError that names the source line. I couldn't confirm the exact original requirements line.",
+    "real_cause": "parse_req_from_line() built Marker(markers_as_string) without catching InvalidMarker, so a malformed marker in a requirements file crashed pip with a raw traceback.",
+    "seconds": 18,
+    "cost_usd": 0.0771
+  },
+  {
+    "repo": "celery/celery",
+    "issue": "https://github.com/celery/celery/issues/10858",
+    "fix": "https://github.com/celery/celery/pull/10861",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "celery/concurrency/asynpool.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "celery/concurrency/asynpool.py"
+    ],
+    "named": "celery/concurrency/asynpool.py:1484",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "When a Celery worker pool shuts down, the cleanup step reads leftover messages from worker pipes. If a worker's pipe is already closed and empty, the read raises an error and the shutdown ends with a traceback.",
+    "cause_technical": "In celery/concurrency/asynpool.py line 1484, `_help_stuff_finish` calls `fileno_to_proc[fd].inq._reader.recv()` for every readable fd. A pipe at EOF (the worker has exited) is also reported as readable. `recv()` then raises EOFError, which isn't caught. The fix is to catch EOFError, drop that fd from inqR, and continue draining the others.",
+    "real_cause": "AsynPool._help_stuff_finish() kept draining the inqueue of children that had already exited (or died mid-message), so recv() raised EOFError at shutdown.",
+    "seconds": 5,
+    "cost_usd": 0.0174
+  },
+  {
+    "repo": "celery/celery",
+    "issue": "https://github.com/celery/celery/issues/10312",
+    "fix": "https://github.com/celery/celery/pull/10313",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "celery/backends/redis.py",
+      "celery/app/base.py",
+      "celery/apps/worker.py",
+      "celery/utils/functional.py",
+      "celery/utils/imports.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "celery/backends/redis.py"
+    ],
+    "named": "celery/backends/redis.py:399",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "The worker crashed at startup while connecting to the Redis result backend. The backend URL starts with redis://, but SSL settings are also present. Those settings are only allowed with a rediss:// URL, so the worker refused to start and gave no useful message.",
+    "cause_technical": "In celery/backends/redis.py `_params_from_url` (around line 399), `scheme == 'redis'` is checked against `connparams`. `connparams` already holds the ssl_* keys that `__init__` merged in from `redis_backend_use_ssl`, so a redis:// URL plus that setting raises a bare ValueError. The error is raised when the backend is first built, in `startup_info`. The cause is a configuration mismatch, and the raised error carries no explanation. I did not see the definition of the E_REDIS_SSL_PARAMS_AND_SCHEME_MISMATCH constant (it is outside the lines I was shown), so I can't confirm it is empty. The edit adds an explicit message to the raise. It does not change the check itself. The real fix for the app is to use a rediss:// URL, or to remove the SSL settings.",
+    "real_cause": "RedisBackend._params_from_url() raised the scheme-mismatch ValueError whenever SSL params were in connparams, including those supplied by redis_backend_use_ssl, instead of only for SSL params in the URL query.",
+    "seconds": 12,
+    "cost_usd": 0.0557
+  },
+  {
+    "repo": "scrapy/scrapy",
+    "issue": "https://github.com/scrapy/scrapy/issues/6456",
+    "fix": "https://github.com/scrapy/scrapy/pull/7897",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "scrapy/http/response/text.py",
+      "scrapy/core/spidermw.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "scrapy/http/response/text.py"
+    ],
+    "named": "scrapy/http/response/text.py:89",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "The scraper asked for JSON from a web page, but the page's text was not valid UTF-8 (it contained a Windows-1252 apostrophe). The decode crashed the whole callback instead of being handled.",
+    "cause_technical": "TextResponse.json() in scrapy/http/response/text.py line 89 calls json.loads(self.body). With bytes, json.loads auto-detects UTF-8/16/32 and ignores the response's declared or inferred encoding. A body in cp1252 raises UnicodeDecodeError. The fix is to decode with the response's own encoding, falling back to the bytes path. The caller in funcs.py:184 should also catch ValueError.",
+    "real_cause": "TextResponse.json() passed the raw body bytes to json.loads(), which only auto-detects UTF-8/16/32, so a body in another encoding (cp1252) raised UnicodeDecodeError instead of using the response encoding.",
+    "seconds": 5,
+    "cost_usd": 0.0195
+  },
+  {
+    "repo": "Textualize/rich",
+    "issue": "https://github.com/Textualize/rich/issues/3053",
+    "fix": "https://github.com/Textualize/rich/pull/3064",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "rich/markdown.py",
+      "rich/console.py",
+      "rich/segment.py",
+      "rich/table.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "rich/markdown.py"
+    ],
+    "named": "rich/markdown.py:262",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Printing a Markdown table that has a header row but no data rows crashes with a bare AssertionError. Such a table is valid Markdown, but the renderer assumed a table always has body rows.",
+    "cause_technical": "In rich/markdown.py, TableElement.__rich_console__ (line 262) asserts `self.body is not None`. markdown-it emits no tbody tokens when a table has only a header, so `self.body` is never set and stays None. The assertion fails. The body should be optional.",
+    "real_cause": "TableElement.__rich_console__ asserted that the markdown table had a header and a body, which fails for tables with no body rows.",
+    "seconds": 6,
+    "cost_usd": 0.0512
+  },
+  {
+    "repo": "Textualize/rich",
+    "issue": "https://github.com/Textualize/rich/issues/2197",
+    "fix": "https://github.com/Textualize/rich/pull/2212",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "rich/__init__.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "rich/__init__.py"
+    ],
+    "named": "rich/__init__.py:16",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Python crashed on startup when it imported the Rich library. The folder the program was launched from had been deleted, so Rich couldn't ask the system which folder it was in.",
+    "cause_technical": "rich/__init__.py line 16 calls os.getcwd() at import time. If the current working directory no longer exists, os.getcwd() raises FileNotFoundError, so `import rich` fails. _IMPORT_CWD is computed eagerly and unguarded. The fix is to catch OSError and fall back to None.",
+    "real_cause": "rich/__init__.py called os.getcwd() at import time without handling FileNotFoundError, so importing rich from a deleted working directory failed.",
+    "seconds": 5,
+    "cost_usd": 0.0201
+  },
+  {
+    "repo": "scrapy/scrapy",
+    "issue": "https://github.com/scrapy/scrapy/issues/4780",
+    "fix": "https://github.com/scrapy/scrapy/pull/8042",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "scrapy/settings/__init__.py",
+      "scrapy/utils/project.py",
+      "scrapy/cmdline.py",
+      "scrapy/crawler.py",
+      "scrapy/utils/conf.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "scrapy/utils/conf.py",
+      "scrapy/utils/project.py"
+    ],
+    "named": "scrapy/utils/project.py:126",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Running the scrapy command crashed at startup because the project's settings module, named 'tutorial.settings' in scrapy.cfg, could not be found. This usually means the command was run from the wrong folder or the project isn't on Python's path. Users see a raw Python traceback with no hint about that.",
+    "cause_technical": "In scrapy/utils/project.py get_project_settings (line 126), settings.setmodule(settings_module_path) imports the module named in SCRAPY_SETTINGS_MODULE or scrapy.cfg. If that import fails with ModuleNotFoundError, the error propagates as a raw traceback. init_env only appends the scrapy.cfg directory to sys.path when the cfg is found by closest_scrapy_cfg. The environment variable or a global cfg can name a project that is not importable from the current directory. The fix is to catch ImportError there and raise a clear error that names the module and the likely cause.",
+    "real_cause": "get_project_settings() skipped init_env() when SCRAPY_SETTINGS_MODULE was already set, so the project directory was never added to sys.path and the settings module could not be imported.",
+    "seconds": 7,
+    "cost_usd": 0.0504
+  },
+  {
+    "repo": "psf/black",
+    "issue": "https://github.com/psf/black/issues/4781",
+    "fix": "https://github.com/psf/black/pull/4854",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "src/black/linegen.py",
+      "src/black/nodes.py",
+      "src/black/__init__.py",
+      "src/black/mode.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "src/black/linegen.py"
+    ],
+    "named": "src/black/linegen.py:465",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Black crashed with an internal error while formatting a function whose parameter has a type annotation. It assumed every annotated parameter has exactly three parts. Some inputs don't, so formatting failed instead of producing output.",
+    "cause_technical": "In src/black/linegen.py, visit_tname (line ~465) has `assert len(node.children) == 3`. A tname node can have a different number of children. One likely cause is that fmt:off/skip or line-range handling replaced part of the node with a standalone comment leaf. In that case the assert raises AssertionError. I did not confirm which input triggers it. The fix skips the parenthesis-wrapping step for those nodes and still visits their children normally.",
+    "real_cause": "LineGenerator.visit_tname asserted that a tname node has exactly three children, which is false for an annotated parameter inside a '# fmt: skip' one-liner under the preview feature.",
+    "seconds": 10,
+    "cost_usd": 0.0527
+  },
+  {
+    "repo": "aio-libs/aiohttp",
+    "issue": "https://github.com/aio-libs/aiohttp/issues/13758",
+    "fix": "https://github.com/aio-libs/aiohttp/pull/13760",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "aiohttp/multipart.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "aiohttp/multipart.py"
+    ],
+    "named": "aiohttp/multipart.py:388",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Reading a multipart body part in small pieces, for example `read_chunk(4)`, crashed with an assertion error. The reader needs to read at least as many bytes as the boundary marker so it can spot the end of the part. Small requests weren't raised to that minimum.",
+    "cause_technical": "In aiohttp/multipart.py `BodyPartReader.read_chunk` (around line 385-392), `want = max(want, self._boundary_len)` only runs when a base64 carry exists. A plain small size is passed straight to `_read_chunk_from_stream`. That function asserts `size >= self._boundary_len` (line 451) and fails. The fix is to raise `want` to the boundary length on the stream path whether or not there is a carry. I did not run this. One side effect is that a call with a tiny size can return more bytes than requested.",
+    "real_cause": "BodyPartReader.read_chunk() tested 'if self._length:' so a Content-Length of 0 was treated as unknown length and the part was read from the stream, tripping the chunk-size assertion.",
+    "seconds": 10,
+    "cost_usd": 0.0263
+  },
+  {
+    "repo": "psf/black",
+    "issue": "https://github.com/psf/black/issues/4077",
+    "fix": "https://github.com/psf/black/pull/4161",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "src/black/__init__.py",
+      "src/black/files.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "src/black/__init__.py",
+      "src/black/files.py"
+    ],
+    "named": "src/black/__init__.py:703",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Running Black on a symlinked file crashed with a traceback. The symlink sits in one folder and its real file is in another. Black treated the symlink's location as outside the project folder and failed instead of skipping it.",
+    "cause_technical": "In get_sources (src/black/__init__.py:703), `path.absolute().relative_to(root)` runs before any check on the path. `root` comes from find_project_root, which resolves symlinks. `absolute()` does not resolve them, so a symlink in a different tree is not under `root` and relative_to raises ValueError. The fix calls normalize_path_maybe_ignore first. It resolves the path, reports a path outside the root as ignored, and returns None. The loop then skips the file before relative_to is reached. I did not read normalize_path_maybe_ignore's body, so this relies on it returning None for such paths.",
+    "real_cause": "get_sources() called path.absolute().relative_to(root) directly, which raises ValueError for a file reached through a symlink that points outside the project root.",
+    "seconds": 11,
+    "cost_usd": 0.0473
+  },
+  {
+    "repo": "marshmallow-code/marshmallow",
+    "issue": "https://github.com/marshmallow-code/marshmallow/issues/1357",
+    "fix": "https://github.com/marshmallow-code/marshmallow/pull/1359",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "src/marshmallow/fields.py",
+      "src/marshmallow/schema.py",
+      "src/marshmallow/utils.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "src/marshmallow/fields.py"
+    ],
+    "named": "src/marshmallow/fields.py:1115",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Declaring a List of DateTime, Date or Time fields (for example fields.List(fields.DateTime())) makes the schema crash when it is created. The inner field expects to be attached to a schema, but it is attached to the List field instead.",
+    "cause_technical": "fields.List._bind_to_schema (fields.py:636) calls self.inner._bind_to_schema(field_name, self), so the parent passed in is the List field. DateTime._bind_to_schema (fields.py:1117) reads schema.opts, and a List field has no opts, so it raises AttributeError. The fix is to read opts with getattr and a None default. The list's own schema is available as self.parent, so use that when the object has no opts.",
+    "real_cause": "DateTime._bind_to_schema() read schema.opts from its parent, but when used as an inner field of List/Tuple the parent is a field without opts; the fix uses self.root.opts.",
+    "seconds": 6,
+    "cost_usd": 0.0373
+  },
+  {
+    "repo": "pytest-dev/pytest",
+    "issue": "https://github.com/pytest-dev/pytest/issues/13734",
+    "fix": "https://github.com/pytest-dev/pytest/pull/14025",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "src/_pytest/_code/code.py",
+      "src/_pytest/nodes.py",
+      "src/_pytest/python.py",
+      "src/_pytest/outcomes.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "src/_pytest/_code/code.py"
+    ],
+    "named": "src/_pytest/_code/code.py:1196",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "When a test failed with an exception group, pytest crashed while building the failure report. The traceback list was empty after filtering, so it read item 0 of an empty list. The user got an internal error and not the real test failure.",
+    "cause_technical": "In src/_pytest/_code/code.py repr_excinfo (line ~1196), the exception-group branch does `traceback[0]._rawentry` on the filtered traceback. `filter_excinfo_traceback` can return an empty Traceback, for example when every frame is hidden by `__tracebackhide__` or by internal filtering. Indexing it raises IndexError. The `style == \"native\"` branch in getrepr guards the same access with `if self.traceback else None`. This branch has no such guard.",
+    "real_cause": "FormattedExcinfo.repr_excinfo() indexed traceback[0] for an exception group even when every traceback entry had been hidden, so the cut traceback was empty and raised IndexError.",
+    "seconds": 7,
+    "cost_usd": 0.0418
+  },
+  {
+    "repo": "pytest-dev/pytest",
+    "issue": "https://github.com/pytest-dev/pytest/issues/13478",
+    "fix": "https://github.com/pytest-dev/pytest/pull/13573",
+    "difficulty": "in_trace",
+    "files_shown": [
+      "src/_pytest/terminal.py",
+      "src/_pytest/logging.py",
+      "src/_pytest/main.py"
+    ],
+    "lookups": [
+      "read_lines {\"path\":\"src/_pytest/terminal.py\",\"start\":1395,\"end\":1410}",
+      "find_definition {\"name\":\"CollectReport\"}",
+      "search_code {\"text\":\"sum(r.duration for r in not_reported)\"}",
+      "read_lines {\"path\":\"src/_pytest/terminal.py\",\"start\":737,\"end\":737}",
+      "search_code {\"text\":\"sum(r.duration\"}",
+      "read_lines {\"path\":\"src/_pytest/terminal.py\",\"start\":736,\"end\":738}"
+    ],
+    "files_read": [
+      "src/_pytest/reports.py"
+    ],
+    "fixed_files": [
+      "src/_pytest/terminal.py"
+    ],
+    "named": "src/_pytest/terminal.py:737",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "When pytest's progress display is set to show times, it adds up how long each test report took. Reports from the collection phase have no duration, so pytest crashed and the whole run stopped.",
+    "cause_technical": "In src/_pytest/terminal.py line 737, `_get_progress_information_message` runs `sum(r.duration for r in not_reported)`. `all_reports` includes the `\"\"` stats key (line 720), and that key holds CollectReport objects. `CollectReport` (reports.py:400) never sets `duration`, so the access raises AttributeError. The fix is to read it with `getattr(r, \"duration\", 0.0)`. I did not open `_pytest/reports.py` beyond the `CollectReport` class, and I did not confirm that collect reports are what ends up under the `\"\"` key.",
+    "real_cause": "_get_progress_information_message() summed r.duration over all not-yet-reported reports, but with console_output_style=times a skipped module leaves a CollectReport, which has no duration.",
+    "seconds": 17,
+    "cost_usd": 0.048
+  }
+]

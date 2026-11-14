@@ -399,7 +399,7 @@ At 08:00 India time (sent between 08:00 and 12:00 so a restart in the evening se
 
 ### 4.21 Measurement
 
-- `npm run eval:real`: 30 real bugs from 17 public Python projects (traceback as posted on GitHub, scored against the lines the merged fix changed), run exactly as the paste page runs.
+- `npm run eval:real`: 30 real bugs from 17 public Python projects, plus 12 more with the cause outside the traceback (`-- --cases real-bugs-new.json`) (traceback as posted on GitHub, scored against the lines the merged fix changed), run exactly as the paste page runs.
 - `npm run bench`: JR-Bench, 7 generated sample apps (six Python apps of 21 to 101 files, one Node.js app of 30) with 20 planted bugs and 4 noise errors. Each bug is planted into clean code and triggered for real; JaagteRaho decides, diagnoses, gates and proves; a hidden test it never sees judges the fix. `--validate` checks every case for free first.
 
 ## 5. Connecting Faurus safely

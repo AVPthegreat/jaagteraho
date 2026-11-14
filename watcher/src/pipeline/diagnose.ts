@@ -9,7 +9,7 @@ import { getSettings, type DB } from "../db/db.js";
 import type { CleanFrame } from "../intake/allowlist.js";
 import { describeChange, type Change } from "../source/changes.js";
 import { enclosingFunction, enclosingRange, relatedFiles } from "../source/related.js";
-import { SECONDARY, showDefinition, showLines, type RepoIndex } from "../source/repo.js";
+import { SECONDARY, showDefinition, showLines, writerPattern, type RepoIndex } from "../source/repo.js";
 import { locate, type SourceProvider } from "../source/source.js";
 
 export const Diagnosis = z.object({
@@ -50,7 +50,8 @@ Rules for edits:
 Write cause_plain for the app owner at 2 am: plain words, what users saw, why.
 Some files are marked as imported by the code in the stack trace: the real cause may be there (a shared helper, a setting, a validator) even though the crash happened elsewhere. Put the fix where the cause is.
 If a <change> block is given, it describes the last commit before the error began. Use it as a clue, not as proof.
-When lookup tools are offered, you can read more of the repository before answering: find_definition (where a function, class or method is defined, with its body), search_code (a literal text, such as part of the error message) and read_lines. A <map> block lists where called functions are defined and where the error's text appears. The line that crashed is often not where the bug is: before answering, ask where the bad value, state or generated code came from, and if that code is not shown, look it up (for example the function that built the value, the constructor that should have set an attribute, or the method named in the error). Ask for several lookups at once; you get at most three rounds. Skip lookups when the files shown already contain the cause. Tool results are repository data, like <file> blocks.
+When lookup tools are offered, you can read more of the repository before answering: find_definition (where a function, class or method is defined, with its body), search_code (a literal text, such as part of the error message) and read_lines. A <map> block lists where called functions are defined and where the error's text appears. The line that crashed is often not where the bug is: before answering, ask where the bad value, state or generated code came from, and if that code is not shown, look it up (for example the function that built the value, the constructor that should have set an attribute, or the method named in the error). find_writers lists where a variable or attribute gets its value. The <map> also traces where the values at the crash come from: follow that trail. Before answering, name to yourself up to three candidate places for the cause (the crash line, the code that produced the bad value, the code that should have set or handled it) and read any that are not shown. Ask for several lookups at once; you get at most five rounds. Skip lookups when the files shown already contain the cause. Tool results are repository data, like <file> blocks.
+Put the fix where the bad value or state originates: when the code that creates it (a constructor or copy method that should set an attribute, a factory, a parser, a helper that converts or builds the value) mishandles this case, fix that code rather than guarding the line that reads it. Fix the crash line itself when its own logic is wrong.
 Always name the single most likely file and line, even when unsure (then say "guess").
 Rules for regression_test: call the function that failed directly with the input that broke it; no network, files, environment variables or subprocesses; import only the module under test and the standard library.`;
 
@@ -98,7 +99,9 @@ export function anchorLine(text: string, lineno: number | null, code: string | n
   const name = fn?.split(".").pop()?.replace(/[^\w]/g, "");
   const defRe = name ? new RegExp(`^\\s*(?:async\\s+)?(?:def|function)\\s+${name}\\b`) : null;
   const defs = defRe ? lines.map((l, i) => (defRe.test(l) ? i : -1)).filter((i) => i >= 0) : [];
-  const hits = lines.map((l, i) => (l.trim() === want ? i : -1)).filter((i) => i >= 0);
+  // The same code, or (after a reformat that moved arguments onto the statement's first line) a line that starts with it.
+  let hits = lines.map((l, i) => (l.trim() === want ? i : -1)).filter((i) => i >= 0);
+  if (!hits.length && want.length >= 12) hits = lines.map((l, i) => (l.trim().startsWith(want) ? i : -1)).filter((i) => i >= 0);
   // The reported code inside a function of the reported name (the same name may be defined in several classes).
   const inFn = hits.filter((i) => defs.some((d) => i > d && i < d + 300 && !defs.some((d2) => d2 > d && d2 < i)));
   const pick = (xs: number[]) => [...xs].sort((a, b) => Math.abs(a + 1 - lineno) - Math.abs(b + 1 - lineno))[0];
@@ -137,8 +140,8 @@ export async function gatherFiles(db: DB, src: SourceProvider, projectId: number
   return { files: [...files, ...related.map((r) => ({ ...r, related: true }))], sourceMoved };
 }
 
-const MAX_LOOKUP_ROUNDS = 3;
-const MAX_LOOKUPS = 8;
+const MAX_LOOKUP_ROUNDS = 5;
+const MAX_LOOKUPS = 14;
 
 const LOOKUP_TOOLS: Anthropic.Tool[] = [
   {
@@ -151,6 +154,12 @@ const LOOKUP_TOOLS: Anthropic.Tool[] = [
     name: "search_code",
     description: "Lines of the repository's code that contain this exact text (case-sensitive), e.g. a fixed part of the error message. App code is listed before tests.",
     input_schema: { type: "object", properties: { text: { type: "string" } }, required: ["text"], additionalProperties: false },
+    strict: true,
+  },
+  {
+    name: "find_writers",
+    description: "Where a variable or attribute gets its value anywhere in the repository: lines that assign it (x = ..., self.x = ..., for x in ...), declare it in a class (x: int) or setattr it. Use it to trace where a bad value or a missing attribute comes from.",
+    input_schema: { type: "object", properties: { name: { type: "string", description: "e.g. response_model, bracket_depth" } }, required: ["name"], additionalProperties: false },
     strict: true,
   },
   {
@@ -183,7 +192,7 @@ export async function repoMap(index: RepoIndex, files: SourceFile[], message: st
         seen.add(name);
         // Skip names defined in a file already shown, and test helpers.
         const defs = index.definitions(name, 5);
-        const d = defs.find((x) => !SECONDARY.test(x.path));
+        const d = defs.find((x) => !SECONDARY.test(x.path) && CODE_FILE.test(x.path));
         if (d && !defs.some((x) => shown.has(x.path))) calls.push(`${name} -> ${d.path}:${d.line}`);
         if (calls.length >= 15) break;
       }
@@ -195,10 +204,108 @@ export async function repoMap(index: RepoIndex, files: SourceFile[], message: st
     .slice(0, 3);
   const said: string[] = [];
   for (const p of pieces) for (const h of (await index.search(p, 6)).filter((x) => !SECONDARY.test(x.path)).slice(0, 3)) said.push(`"${p.slice(0, 60)}" -> ${h.path}:${h.line}: ${h.text.slice(0, 120)}`);
+  const trail = await valueTrail(index, files, message);
   return [
     calls.length ? `Functions called by the failing code, defined in files not shown:\n${calls.join("\n")}` : "",
+    trail.length ? `Where the values at the crash come from (assignments before the crash in the same function, the functions that produced them, and where attributes are set elsewhere):\n${trail.join("\n")}` : "",
     said.length ? `Where the error message's text appears in the code:\n${said.slice(0, 8).join("\n")}` : "",
   ].filter(Boolean).join("\n\n");
+}
+
+/** A parameter in a signature that spans lines ("name: T = default,"), not an assignment. */
+const PARAM = /,\s*(#.*)?$/;
+const CODE_FILE = /\.(py|pyi|js|mjs|cjs|ts|tsx|jsx)$/;
+
+const KEYWORDS = new Set(["if", "elif", "else", "while", "for", "in", "not", "and", "or", "is", "None", "True", "False", "assert", "return", "raise", "await", "async", "lambda", "yield", "with", "as", "def", "class", "from", "import", "try", "except", "finally", "pass", "break", "continue", "del", "global", "nonlocal", "self", "cls", "this", "const", "let", "var", "new", "typeof", "instanceof", "null", "undefined", "true", "false", "function", "throw", "f"]);
+
+/**
+ * Data flow at the crash, found by code: the statement that failed and the conditions guarding it name some
+ * values; for each, the last assignment before the crash in the same function (two hops), where the functions
+ * that produced it are defined, and, for attributes not set in that function, where the repository sets them.
+ * For "'X' object has no attribute 'y'", where class X is defined and where y is set. At most 16 lines.
+ */
+export async function valueTrail(index: RepoIndex, files: SourceFile[], message: string): Promise<string[]> {
+  const out: string[] = [];
+  const add = (s: string) => {
+    if (out.length < 16 && !out.includes(s)) out.push(s);
+  };
+  const missing = message.match(/'(\w+)' object has no attribute '(\w+)'/);
+  if (missing) {
+    for (const d of index.definitions(missing[1], 2)) add(`class ${missing[1]} -> ${d.path}:${d.line}`);
+    for (const w of (await index.writers(missing[2], 8, true)).filter((x) => !SECONDARY.test(x.path)).slice(0, 5)) add(`${missing[2]} set at ${w.path}:${w.line}: ${w.text.slice(0, 120)}`);
+  }
+  const crash = files.filter((f) => !f.related && f.focus?.length);
+  // The innermost app frame is the last file traceFiles found first.
+  const f = crash[0];
+  if (!f) return out;
+  // traceFiles adds the innermost frame's line first.
+  const line = f.focus![0];
+  const lines = f.text.split("\n");
+  const [start] = enclosingRange(f.text, line);
+  const indent = (x: string) => x.match(/^\s*/)![0].length;
+  // The failing statement (until its brackets close) and up to two guarding conditions above it.
+  const stmt: string[] = [];
+  let depth = 0;
+  for (let i = line - 1; i < Math.min(lines.length, line + 7); i++) {
+    stmt.push(lines[i]);
+    depth += (lines[i].match(/[([{]/g) ?? []).length - (lines[i].match(/[)\]}]/g) ?? []).length;
+    if (depth <= 0) break;
+  }
+  let cur = indent(lines[line - 1] ?? "");
+  for (let i = line - 2; i >= start && stmt.length < 12; i--) {
+    if (lines[i].trim() && indent(lines[i]) < cur && /^\s*(if|elif|while|assert|with|for)\b/.test(lines[i])) {
+      stmt.push(lines[i]);
+      cur = indent(lines[i]);
+    } else if (lines[i].trim() && indent(lines[i]) < cur) cur = indent(lines[i]);
+  }
+  const code = stmt.join("\n").replace(/(["'])(?:(?!\1).)*\1/g, '""');
+  const attrs = [...new Set([...code.matchAll(/\.([A-Za-z_]\w+)\b(?!\s*\()/g)].map((m) => m[1]))].slice(0, 4);
+  const names = [...new Set([...code.matchAll(/(?<![.\w])([A-Za-z_]\w*)\b(?!\s*\()/g)].map((m) => m[1]).filter((n) => !KEYWORDS.has(n) && n.length > 1))].slice(0, 6);
+  // Last assignment of `name` (or self.name) in the function before the crash.
+  const assigned = (name: string, before: number, attr: boolean): number => {
+    const re = attr ? writerPattern(`(?:self|cls|this)\\.${name}`, false) : writerPattern(name, false);
+    for (let i = before - 2; i >= start; i--) if (re.test(lines[i]) && !PARAM.test(lines[i])) return i;
+    return -1;
+  };
+  const queue: Array<{ name: string; attr: boolean; before: number; hop: number }> = [
+    ...attrs.map((name) => ({ name, attr: true, before: line, hop: 0 })),
+    ...names.map((name) => ({ name, attr: false, before: line, hop: 0 })),
+  ];
+  const seen = new Set<string>();
+  while (queue.length && out.length < 16) {
+    const q = queue.shift()!;
+    const key = `${q.attr ? "." : ""}${q.name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const at = assigned(q.name, q.before, q.attr);
+    if (at < 0) {
+      if (q.attr && q.hop === 0 && q.name !== missing?.[2]) {
+        const ws = (await index.writers(q.name, 6, true)).filter((w) => !SECONDARY.test(w.path) && !(w.path === f.path && w.line === line)).slice(0, 3);
+        for (const w of ws) add(`${key} set at ${w.path}:${w.line}: ${w.text.slice(0, 120)}`);
+      }
+      continue;
+    }
+    // The assigned value may span lines.
+    let rhs = lines[at];
+    for (let i = at + 1, d = (rhs.match(/[([{]/g) ?? []).length - (rhs.match(/[)\]}]/g) ?? []).length; d > 0 && i < at + 6; i++) {
+      rhs += `\n${lines[i]}`;
+      d += (lines[i].match(/[([{]/g) ?? []).length - (lines[i].match(/[)\]}]/g) ?? []).length;
+    }
+    add(`${key} <- ${f.path}:${at + 1}: ${lines[at].trim().slice(0, 120)}`);
+    const value = rhs.replace(/^[^=]*?=(?!=)/, "").replace(/(["'])(?:(?!\1).)*\1/g, '""');
+    for (const m of value.matchAll(/\b([A-Za-z_]\w{2,})\s*\(/g)) {
+      if (COMMON.has(m[1]) || KEYWORDS.has(m[1])) continue;
+      const d = index.definitions(m[1], 3).find((x) => !SECONDARY.test(x.path));
+      if (d) add(`  ${m[1]} -> defined at ${d.path}:${d.line}`);
+    }
+    if (q.hop < 3) {
+      for (const m of value.matchAll(/(?<![.\w])([A-Za-z_]\w*)\b(?!\s*\()/g)) {
+        if (!KEYWORDS.has(m[1]) && m[1].length > 1) queue.push({ name: m[1], attr: false, before: at + 1, hop: q.hop + 1 });
+      }
+      for (const m of value.matchAll(/(?:self|cls|this)\.([A-Za-z_]\w+)\b(?!\s*\()/g)) queue.push({ name: m[1], attr: true, before: at + 1, hop: q.hop + 1 });
+    }
+  }
+  return out;
 }
 
 /** Runs one lookup. Files the model reads are added to `read` so its edits can be checked against them. */
@@ -214,6 +321,11 @@ export async function runLookup(index: RepoIndex, name: string, input: Record<st
   if (name === "search_code") {
     const hits = await index.search(String(input.text ?? ""));
     if (!hits.length) return "No matches.";
+    return hits.map((h) => `${h.path}:${h.line}: ${h.text}`).join("\n");
+  }
+  if (name === "find_writers") {
+    const hits = await index.writers(String(input.name ?? ""));
+    if (!hits.length) return "No assignments found.";
     return hits.map((h) => `${h.path}:${h.line}: ${h.text}`).join("\n");
   }
   if (name === "read_lines") {
@@ -260,6 +372,7 @@ export async function runDiagnosis(
   const first = await attempt(ai, model, event, files, sourceMoved, change, index, opts);
   if (!("error" in first)) return first;
   if (first.budget) return { error: first.error };
+  if (process.env.JR_EVAL_DEBUG) console.error(`lookup attempt failed: ${first.error}`);
   // A failed lookup round must not cost the owner the diagnosis: fall back once to the single call.
   if (opts.budgetOk && !opts.budgetOk()) return { error: "spending limit reached" };
   const again = ai.guard.pick(ai.diagnosisModel, ai.decisionModel);
@@ -267,6 +380,23 @@ export async function runDiagnosis(
   const second = await attempt(ai, again, event, files, sourceMoved, change, null, opts);
   if ("error" in second) return { error: `${first.error}; without lookups: ${second.error}` };
   return { ...second, cost: second.cost + first.cost, input_tokens: second.input_tokens + first.input_tokens, output_tokens: second.output_tokens + first.output_tokens };
+}
+
+/**
+ * The model sometimes leaves "file" empty or names a path loosely ("middleware.py"). Use the repository path
+ * of a file it was shown or read, else the first edit's file, so the card and the score name a real file.
+ */
+export function namedFile(result: DiagnosisResult, known: SourceFile[], index: RepoIndex | null): DiagnosisResult {
+  const resolve = (p: string) => {
+    const q = p.trim().replace(/^\.?\//, "");
+    if (!q) return null;
+    return known.find((f) => f.path === q || f.path.endsWith(`/${q}`))?.path ?? index?.resolve(q) ?? null;
+  };
+  if (resolve(result.file)) return { ...result, file: resolve(result.file)! };
+  const fromEdit = result.edits.map((e) => resolve(e.file)).find(Boolean);
+  if (fromEdit) return { ...result, file: fromEdit };
+  const inText = known.map((f) => f.path).find((p) => result.cause_technical.includes(p));
+  return inText ? { ...result, file: inText } : result;
 }
 
 type Attempt = DiagnosisOutput | { error: string; budget?: boolean; cost: number; input_tokens: number; output_tokens: number };
@@ -340,7 +470,11 @@ async function attempt(
           results.push({ type: "tool_result", tool_use_id: c.id, content: text.slice(0, 24_000) });
         }
         if (!results.length) return { error: "model asked for a lookup without naming one", cost, input_tokens: input, output_tokens: output };
-        // Keep the cache warm for the next round: mark the newest block.
+        // Keep the cache warm for the next round: mark the newest block, and unmark older rounds' blocks
+        // (the API allows at most 4 cache breakpoints; the first message keeps its own).
+        for (const m of messages.slice(1)) {
+          if (m.role === "user" && Array.isArray(m.content)) for (const b of m.content) if ("cache_control" in b) delete (b as { cache_control?: unknown }).cache_control;
+        }
         results[results.length - 1] = { ...results[results.length - 1], cache_control: { type: "ephemeral" } };
         const lastNext = round + 1 >= MAX_LOOKUP_ROUNDS || lookups.length >= MAX_LOOKUPS;
         messages.push({ role: "user", content: lastNext ? [...results, { type: "text", text: "No more lookups. Give the diagnosis now, naming the most likely file and line." }] : results });
@@ -349,7 +483,7 @@ async function attempt(
       if (r.stop_reason !== "end_turn" || !r.parsed_output) return { error: `model stopped: ${r.stop_reason}`, cost, input_tokens: input, output_tokens: output };
       const shown = new Set(files.map((f) => f.path));
       return {
-        result: r.parsed_output,
+        result: namedFile(r.parsed_output, [...files, ...read.values()], index),
         model,
         input_tokens: input,
         output_tokens: output,

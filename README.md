@@ -91,13 +91,14 @@ Every number is produced by a script in this repository. Measured 13 and 14 Nov 
 
 What the benchmark changed: the first fix gate showed a fix only when every review answer was clean, and held back 10 of 16 fixes that were in fact correct. The three-level gate shows 15 of the same 16, still with none wrong.
 
-**30 real bugs from 17 open-source Python projects** ([`watcher/eval`](watcher/eval)): tracebacks people posted on GitHub (requests, Flask, pip, pytest, Celery, black and others), scored against the lines the real, merged fix changed. JaagteRaho reads the code as it was before the fix and never sees the real fix.
+**42 real bugs from 18 open-source Python projects** ([`watcher/eval`](watcher/eval)): tracebacks people posted on GitHub (requests, Flask, pip, pytest, Celery, black and others), scored against the lines the real, merged fix changed. JaagteRaho reads the code as it was before the fix and never sees the real fix. For 22 of them the fix is in code the traceback never shows; JaagteRaho then searches the repository itself (definitions, where a value is set, the error's text).
 
 | | Result |
 |---|---|
 | Bug in a file from the traceback: right file | 20 of 20 (100%) |
-| Bug in a file from the traceback: right lines (±3) | 16 of 20 (80%) |
-| Cost per diagnosis | about $0.03 (these are large library files) |
+| Bug in a file from the traceback: right lines (±3) | 17 of 20 (85%) |
+| Bug in code the traceback never shows: right file | 25 of 44 diagnoses (22 bugs, two runs each) |
+| Cost per diagnosis | about $0.045 (these are large library files) |
 
 **A real Node.js app:** an Express app connected with `npx jaagteraho init` (real `@sentry/node`); its `TypeError` was decided ("notify: blocks users"), diagnosed at `server.js:10` in plain words for $0.011, and a correct fix reached the gate.
 

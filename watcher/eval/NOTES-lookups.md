@@ -36,3 +36,32 @@ Total eval spend: about $2.79 of the $6 budget.
 - A failed lookup round falls back once to the single call without tools; the spend cap and the owner's credit are re-checked before every follow-up round.
 - The snapshot cache key carries who could read it (project id, paste page, or public); unsafe refs are never put in a URL.
 - Cached reads are charged at 0.1x the input price for every model.
+
+# Round 2 (14 Nov 2026): following the value, not only the call
+
+## What changed (`src/pipeline/diagnose.ts`, `src/source/repo.ts`)
+- **Value trail** in the map: the failing statement and the conditions guarding it name some values; code follows each back to its last assignment in the same function (up to 3 hops), names where the producing functions are defined, and for attributes not set there, where the repository sets them. For "'X' object has no attribute 'y'": where class X is defined and where y is set.
+- **`find_writers` lookup**: lines that assign a variable or attribute (assignments, loop targets, class declarations, setattr), app code first. Parameters in multi-line signatures are not counted.
+- **Up to 5 lookup rounds / 14 lookups** (was 3 / 8). This exposed a bug: each round marked a cache breakpoint and the API refuses more than 4, so the 5th round failed and fell back to a single call at extra cost. Now only the first block and the newest block are marked (test added).
+- **Re-anchoring** also accepts a line that starts with the reported code (a statement whose arguments a formatter moved onto its first line). Before, such frames jumped to the wrong function.
+- **Named file**: an empty or loose `file` from the model is replaced by the repository path of a shown/read file, the first edit's file, or a path named in the technical cause.
+- Prompt: follow the trail; name up to three candidate places and read those not shown; put the fix where the bad value or state originates unless the crash line's own logic is wrong.
+
+## Method (anti-overfitting)
+The 10 outside-traceback cases were split before any round-2 change by sha1(issue_url) (`eval/split.json`): design half (attrs 1284, black 5214, fastapi 9424, flask 5258, httpx 309) used for tuning; held-out half (celery 6164, marshmallow 2868, requests 6643, black 4062, jinja 1701) not looked at during round 2 (all 10 were seen in round 1). 12 new outside-traceback cases (`eval/real-bugs-new.json`, from 10 projects, verified fixed lines at the fix's parent commit) were collected by a separate agent and never looked at while tuning. "Before" is the code on main (round 1), run the same day.
+
+## Results (right file / right lines ±3; final code, two runs each unless noted)
+| Set | Before | After |
+|---|---|---|
+| Design half (tuned on) | 3/5, 3/5 (one run) | 3/5 and 2/5 file; 3/5 and 2/5 lines |
+| Held-out half | 2/5 and 2/5 file; 0/5 and 0/5 lines | 3/5 and 1/5 file; 1/5 and 0/5 lines |
+| 12 new cases (never seen) | 8/12 and 6/12 file; 2/12 and 3/12 lines | 8/12 and 8/12 file; 4/12 and 4/12 lines |
+| All 22 outside, 2 runs | - | 25/44 file, 14/44 lines |
+| 20 in-traceback (regression guard, one run) | 20/20, 17/20 (round 1) | 20/20, 17/20 |
+
+Cost: about $0.045 per diagnosis after (range $0.032-0.075 per run), $0.029-0.058 before. Round-2 eval spend about $5.7.
+
+## Honest reading
+- On the cases never seen (the 12 new), right lines went from 5/24 to 8/24 and right file from 14/24 to 16/24. On the held-out half and the design half the change is within run-to-run noise (one case either way). There is no evidence of a large gain; there is no sign of harm to in-traceback cases.
+- Still missed on design: fastapi 9424 (the trail now leads to `get_typed_return_annotation`, but the model fixes the route instead of the annotation helper; the cause needs `from __future__ import annotations` in the user's code, which the traceback does not show) and black 5214 (the model now finds that `Leaf` declares `bracket_depth` but blames `BracketTracker.mark` early returns instead of `Leaf.__init__`/`clone`).
+- Intermediate design runs (v2a: cache-breakpoint failure; v2b: before the origin rule and named-file fix; v2c: an empty `file` cost httpx) are kept as `results-real-v2*-design.json`.
