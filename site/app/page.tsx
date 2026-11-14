@@ -63,7 +63,7 @@ export default async function Home() {
   const ev = await getEvidence();
   const bench = benchmarks.jr_bench.after;
   const real = benchmarks.real_bugs.before;
-  const withImports = benchmarks.real_bugs.elsewhere_with_imports;
+  const benchDate = new Date(benchmarks.measured_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
   const at = (v: number | null | undefined) => (secs(v) ? `, about ${secs(v)} after the error` : "");
 
   return (
@@ -71,23 +71,23 @@ export default async function Home() {
       {/* 1 · The problem, in one line */}
       <section className="hero" aria-labelledby="hero-h">
         <div className="hero-text">
-          <p className="eyebrow">An AI night watchman for live apps</p>
-          <h1 id="hero-h">Your app breaks at 2 am. Your users find out before you do.</h1>
+          <p className="eyebrow">An AI on-call agent for apps with nobody on call</p>
+          <h1 id="hero-h">Your app breaks at 2 am. JaagteRaho stays awake for you.</h1>
           <p className="lede">
-            JaagteRaho watches the errors from your live app. It wakes you only when it matters, tells you in plain words what broke and why, and
-            has a small, checked fix waiting for your approval. It never changes your code on its own.
+            An AI agent that reads every error from your live app, wakes you only when real users are hurt, tells you the cause with the file and
+            line, and has a checked fix waiting for your approval. It never changes your code on its own.
           </p>
           <div className="actions">
             <a className="btn" href="#demo">
-              See it catch a real bug
+              Break our demo app now
             </a>
             <Link className="btn ghost" href="/connect">
-              Connect your app
+              Connect your app in 2 minutes
             </Link>
           </div>
           <p className="muted small">
-            For students, freelancers and solo founders who run a live product with nobody on call. Works with Python and Node.js apps. Free during
-            HackGlobal 2026.
+            For students, freelancers and solo founders who run a live product alone. Python and Node.js apps. No sign-up to try the demo; free
+            during HackGlobal 2026.
           </p>
         </div>
 
@@ -122,27 +122,96 @@ export default async function Home() {
         </figure>
       </section>
 
-      {/* 2 · Why it exists */}
+      {/* 2 · The headline numbers, straight after the promise */}
+      <section aria-labelledby="strip-h">
+        <h2 id="strip-h" className="eyebrow">
+          Measured on {benchDate}, mistakes included
+        </h2>
+        <div className="measured">
+          <div>
+            <strong>
+              {bench.alerted} of {bench.bugs}
+            </strong>
+            <span>bugs planted in 7 sample apps reached the owner, each triggered for real</span>
+          </div>
+          <div>
+            <strong>{bench.shown_wrong} wrong</strong>
+            <span>
+              among the {bench.shown} fixes shown to the owner, judged by hidden tests it never saw
+            </span>
+          </div>
+          <div>
+            <strong>
+              {bench.noise_quiet} of {bench.noise}
+            </strong>
+            <span>harmless errors (bot scanners, a missing favicon) kept quiet: nobody woken for nothing</span>
+          </div>
+          <div>
+            <strong>{bench.median_decision_seconds} s</strong>
+            <span>
+              median from error to decision; a checked fix in {bench.median_fix_seconds} s. <a href="#proof">Every number →</a>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* 3 · Live demo: show it working before explaining it */}
+      <section className="section" id="demo" aria-labelledby="demo-h">
+        <p className="eyebrow">Live demo</p>
+        <h2 id="demo-h">Break our exam portal. Watch the agent handle it.</h2>
+        <div className="prose muted">
+          <p>
+            A real Django exam portal that we run so you can break it. Each button triggers one bug we planted on purpose. The crash reaches
+            JaagteRaho exactly as one from your app would, and the logbook beside the buttons shows what the owner gets, with a timer: the decision,
+            the wake-up call, the cause and a checked fix. No sign-up. Nothing is pre-recorded unless it is marked &ldquo;replayed&rdquo;.
+          </p>
+        </div>
+        <ol className="see" aria-label="What you will see">
+          <li>
+            <b>Error received</b>
+            <span>the real Python error and the page it broke</span>
+          </li>
+          <li>
+            <b>Decision</b>
+            <span>a stamp (woke owner or notified) and the rule that chose it{at(ev?.median_seconds.alert)}</span>
+          </li>
+          <li>
+            <b>Wake-up call</b>
+            <span>the voice note the owner&apos;s phone gets; press play to hear it</span>
+          </li>
+          <li>
+            <b>Cause</b>
+            <span>in plain words, with file and line{at(ev?.median_seconds.cause)}</span>
+          </li>
+          <li>
+            <b>Fix</b>
+            <span>the change and its checks{at(ev?.median_seconds.fix)}. If every check passed, Approve makes the same button work again</span>
+          </li>
+        </ol>
+        <BreakIt country={country && /^[A-Z]{2}$/.test(country) ? country : null} />
+      </section>
+
+      {/* 4 · Why it exists: the builder lived the problem */}
       <section className="section" id="why" aria-labelledby="why-h">
-        <h2 id="why-h">Why I built this</h2>
+        <h2 id="why-h">Why I built this: I am the person it wakes</h2>
         <div className="story">
           <div className="prose">
             <p>
-              I run <a href="https://faurus.app">Faurus</a>, a coding and exam platform that colleges use, with about 11,000 accounts. I run it
-              alone. Its server errors went to a log file nobody read.
+              I run <a href="https://faurus.app">Faurus</a>, a coding and exam platform that colleges use: about 11,000 accounts, one engineer.
+              Its server errors went to a log file nobody read.
             </p>
             <p>
-              If something broke during a live exam at 2 am, I found out the next morning, from a student. By then the exam was over, and the
+              If something broke during a live exam at 2 am, I heard about it the next morning, from a student. By then the exam was over, and the
               students who could not submit had already lost their attempt.
             </p>
             <p>
-              I am not the only one. Students, freelancers and solo founders now ship real products, often written with AI help, and nobody watches
-              them after launch. Error trackers collect the errors, but one tired person still has to decide which ones matter, find the cause and
-              fix it, usually at night.
+              Error trackers collect errors. They do not decide which one is worth waking a tired person for, find the cause, or write the fix. For
+              one person running a live product, that is the whole job, and it happens at night.
             </p>
             <p>
-              JaagteRaho (Hindi for &ldquo;stay awake&rdquo;, the night watchman&apos;s call) does that first part for you, so you only get up when
-              you are really needed.
+              Students, freelancers and solo founders now ship real products, often written with AI help, and nobody is on call for them after
+              launch. JaagteRaho (Hindi for &ldquo;stay awake&rdquo;, the night watchman&apos;s call) is the one who stays up, so you only get up
+              when you are really needed.
             </p>
             <p className="muted">Anant Vardhan Pandey, founder of Faurus</p>
           </div>
@@ -163,9 +232,9 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* 3 · How it works */}
+      {/* 5 · How it works */}
       <section className="section" id="how" aria-labelledby="how-h">
-        <h2 id="how-h">How it works</h2>
+        <h2 id="how-h">What the agent does with each error</h2>
         <ol className="steps">
           <li>
             <Icon name="inbox" />
@@ -232,49 +301,14 @@ export default async function Home() {
         </p>
       </section>
 
-      {/* 4 · Live demo */}
-      <section className="section" id="demo" aria-labelledby="demo-h">
-        <p className="eyebrow">Live demo</p>
-        <h2 id="demo-h">Break our demo exam portal</h2>
-        <div className="prose muted">
-          <p>
-            This is a small exam portal (a Django app) that we run for you to break. Each button below triggers one real bug we planted on purpose.
-            The crash goes to JaagteRaho exactly as it would from your app, and the logbook next to the buttons shows what the owner gets, step by step,
-            with a timer. Nothing is pre-recorded unless it is marked &ldquo;replayed&rdquo;.
-          </p>
-        </div>
-        <ol className="see" aria-label="What you will see">
-          <li>
-            <b>Error received</b>
-            <span>the real Python error and the page it broke</span>
-          </li>
-          <li>
-            <b>Decision</b>
-            <span>a stamp (woke owner or notified) and the rule that chose it{at(ev?.median_seconds.alert)}</span>
-          </li>
-          <li>
-            <b>Wake-up call</b>
-            <span>the voice note the owner&apos;s phone gets; press play to hear it</span>
-          </li>
-          <li>
-            <b>Cause</b>
-            <span>in plain words, with file and line{at(ev?.median_seconds.cause)}</span>
-          </li>
-          <li>
-            <b>Fix</b>
-            <span>the change and its checks{at(ev?.median_seconds.fix)}. If every check passed, Approve makes the same button work again</span>
-          </li>
-        </ol>
-        <BreakIt country={country && /^[A-Z]{2}$/.test(country) ? country : null} />
-      </section>
-
-      {/* 5 · Proof */}
+      {/* 6 · Proof */}
       <section className="section" id="proof" aria-labelledby="proof-h">
         <h2 id="proof-h">Measured, not claimed</h2>
         <div className="prose muted">
           <p>
-            Every number here comes from a script in the <a href={REPO}>repository</a>, measured on {new Date(benchmarks.measured_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}. The sample apps are
-            small and generated, and the real-bug set is 30 cases. These numbers claim nothing beyond those runs.
+            Every number here comes from a script in the <a href={REPO}>repository</a>, measured on {benchDate}. We count the mistakes,
+            not only the hits. The sample apps are small and generated, and the real-bug set is 30 cases; these numbers
+            claim nothing beyond those runs.
           </p>
         </div>
         <div className="measured six">
@@ -298,12 +332,9 @@ export default async function Home() {
           </div>
           <div>
             <strong>
-              {real.elsewhere.right_file} of {real.elsewhere.cases}
+              {bench.exam_woke} of {bench.exam_cases}
             </strong>
-            <span>
-              our weak spot: the cause is in a file the error never mentions, deep in a large library ({withImports.right_file} of{" "}
-              {withImports.cases} when also shown the files the code imports)
-            </span>
+            <span>bugs on a critical route during an exam woke the owner; no AI answer can lower that rule</span>
           </div>
           <div>
             <strong>
@@ -332,7 +363,7 @@ export default async function Home() {
         </p>
       </section>
 
-      {/* 6 · Connect + safety */}
+      {/* 7 · Connect + safety */}
       <section className="section" id="connect" aria-labelledby="connect-h">
         <h2 id="connect-h">Connect your app in 2 minutes</h2>
         <div className="ways">

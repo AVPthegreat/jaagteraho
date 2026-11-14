@@ -315,8 +315,8 @@ export default function How() {
             <div>
               <strong>Check our numbers</strong>
               <p>
-                The <Link href="/evidence">Evidence page</Link> shows how it did on 20 planted bugs and 30 real bugs from GitHub, including where it
-                is weak.
+                The <Link href="/evidence">Evidence page</Link> shows how it did on 20 planted bugs and 30 real bugs from GitHub, and how each number
+                was measured.
               </p>
             </div>
           </li>
