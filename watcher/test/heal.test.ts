@@ -4,10 +4,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { openDb, type DB } from "../src/db/db.js";
 import {
-  DEFAULT_POLICY, GRACE_MS, WATCH_MS, Healer, healBlocker, normalisePolicy, notImproved, parseHealArgs, policyOf, reverseEdits, savePolicy,
+  DEFAULT_POLICY, GRACE_MS, WATCH_MS, Healer, editShape, healBlocker, normalisePolicy, notImproved, parseHealArgs, policyOf, reverseEdits, savePolicy,
   type GitHubOps, type HealFacts,
 } from "../src/pipeline/heal.js";
 import type { Telegram } from "../src/telegram/api.js";
+import { createOutsideApp } from "../src/projects.js";
 
 const iso = (ms: number) => new Date(ms).toISOString();
 
@@ -811,5 +812,48 @@ describe("small bugs fix themselves (founder's rule, 14 Nov)", () => {
   it("the demo portal is unchanged: a visitor's session follows only the visitor's own heal rule", async () => {
     const { h, s } = setup({ kind: "sandbox", proved: true });
     assert.equal(await h.onFix(s.inc, { session: null, action: "notify" }), null, "the owner's own demo card keeps its Approve button");
+  });
+});
+
+describe("review fixes for small-bug healing", () => {
+  it("a policy saved before small-bug healing keeps the owner's caution", () => {
+    assert.equal(normalisePolicy({ mode: "ask" }).minor, "off");
+    assert.equal(normalisePolicy({ mode: "off" }).minor, "off");
+    assert.equal(normalisePolicy({ mode: "auto-after" }).minor, "auto");
+    assert.equal(normalisePolicy({ mode: "ask", minor: "auto" }).minor, "auto", "an explicit choice wins");
+    const db = openDb(":memory:");
+    db.prepare("INSERT INTO projects (id, name, public_key, kind, settings, created_at) VALUES (7, 'old', 'k7', 'faurus', ?, ?)").run(JSON.stringify({ heal: { mode: "ask", after_min: 3, max_per_night: 2, flows: [] } }), iso(Date.now()));
+    assert.equal(policyOf(db, 7).minor, "off");
+  });
+
+  it("a legacy 'ask' app gets no unattended merge", async () => {
+    const db = openDb(":memory:");
+    const { tg } = fakeTg();
+    const { github, calls } = fakeGitHub();
+    const h = new Healer(db, tg, { twinFixed: "http://x", github });
+    const s = seed(db, { action: "notify" });
+    db.prepare("UPDATE projects SET settings = ? WHERE id = ?").run(JSON.stringify({ heal: { mode: "ask", after_min: 3, max_per_night: 2, flows: [] } }), s.pid);
+    assert.equal(await h.onFix(s.inc, { session: null, action: "notify" }), null);
+    assert.equal(calls.length, 0);
+  });
+
+  it("unattended fixes never remove a check and stay small; the owner can still approve them", () => {
+    const removesIf = editShape([{ find: "    if not user.is_admin:\n        raise Forbidden()\n    do()", replace: "    do()" }]);
+    assert.match(removesIf.removes_guard ?? "", /if not user.is_admin/);
+    const addsGuard = editShape([{ find: '    language = data["language"]', replace: '    if "language" not in data:\n        return bad("pick a language")\n    language = data["language"]' }]);
+    assert.equal(addsGuard.removes_guard, null, "adding a check is fine");
+    assert.equal(addsGuard.changed, 2);
+    for (const trigger of ["auto-minor", "auto-after", "auto-now"] as const) {
+      assert.match(healBlocker(facts({ trigger, policy: normalisePolicy({ mode: trigger === "auto-minor" ? "auto-after" : trigger }), ...removesIf })) ?? "", /removes a check/, trigger);
+      assert.match(healBlocker(facts({ trigger, policy: normalisePolicy({ mode: trigger === "auto-minor" ? "auto-after" : trigger }), changed: 7 })) ?? "", /changes 7 lines/, trigger);
+    }
+    assert.equal(healBlocker(facts({ trigger: "owner", ...removesIf, changed: 12 })), null, "a person may approve it");
+  });
+
+  it("new apps from Connect get small-bug healing even when they chose 'ask'", () => {
+    const db = openDb(":memory:");
+    const app = createOutsideApp(db, "shop", null, "ask");
+    assert.equal(policyOf(db, app.id).minor, "auto");
+    assert.equal(policyOf(db, app.id).mode, "ask");
   });
 });

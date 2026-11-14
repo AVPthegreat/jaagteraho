@@ -91,7 +91,8 @@ export function normalisePolicy(raw: Partial<HealPolicy>): HealPolicy {
     after_min: clamp(raw.after_min, 3, 240, DEFAULT_POLICY.after_min),
     max_per_night: clamp(raw.max_per_night, 1, 5, DEFAULT_POLICY.max_per_night),
     flows: Array.isArray(raw.flows) ? raw.flows.filter((f) => typeof f === "string" && /^\/[\w\-./]{0,80}$/.test(f)).slice(0, 10) : [],
-    minor: raw.minor === "off" ? "off" : "auto",
+    // A policy saved before small-bug healing existed keeps the owner's caution: "ask" or "off" means small ones wait too.
+    minor: raw.minor === "off" || raw.minor === "auto" ? raw.minor : raw.mode === "ask" || raw.mode === "off" ? "off" : "auto",
     max_minor_per_night: clamp(raw.max_minor_per_night, 1, 10, DEFAULT_POLICY.max_minor_per_night),
     suspended_until: raw.suspended_until ?? null,
     suspended_reason: raw.suspended_reason ?? null,
@@ -174,10 +175,32 @@ export type HealFacts = {
   files: string[];
   risky: string[]; // riskyAdditions of the fix's edits
   authenticated: boolean; // every error in the incident carried the app's ingest secret
+  /** Lines the fix removes or adds (not counting unchanged context), and any removed line that guards something. */
+  changed?: number;
+  removes_guard?: string | null;
   heals_last_night: number; // big heals (every trigger but auto-minor) in the last 12 hours
   minor_heals_last_night?: number; // small-bug heals in the last 12 hours
   now: number;
 };
+
+/** Fixes that go in without a person: at most this many removed plus added lines. */
+export const UNATTENDED_MAX_LINES = 6;
+const GUARD_WORD = /\b(if|elif|else|raise|throw|return|assert|require|check\w*|validate\w*|verify\w*|permission\w*|authori[sz]\w*)\b/i;
+
+/** Removed and added lines of a fix's edits, and the first removed line that guards something. */
+export function editShape(edits: Array<{ find: string; replace: string }>): { changed: number; removes_guard: string | null } {
+  let changed = 0;
+  let guard: string | null = null;
+  for (const e of edits) {
+    const before = e.find.split("\n").map((l) => l.trim());
+    const after = e.replace.split("\n").map((l) => l.trim());
+    const removed = before.filter((l) => l && !after.includes(l));
+    const added = after.filter((l) => l && !before.includes(l));
+    changed += removed.length + added.length;
+    guard ??= removed.find((l) => GUARD_WORD.test(l)) ?? null;
+  }
+  return { changed, removes_guard: guard };
+}
 
 /** Why a fix may NOT be applied; null means it may. Pure: every rule is here. */
 export function healBlocker(f: HealFacts): string | null {
@@ -212,6 +235,12 @@ export function healBlocker(f: HealFacts): string | null {
   const sensitive = f.files.find((x) => HEAL_PROTECTED.test(x));
   if (sensitive) return `it touches a protected area (${sensitive})`;
   if (f.risky.length) return `the fix ${f.risky[0]}, which only a person may approve`;
+  // Unattended fixes stay small and never take a check away: text from an app's users can reach the diagnosis,
+  // and removing a guard (an if, a raise, a return...) is how a fix could open a hole without adding anything risky.
+  if (f.trigger !== "owner") {
+    if (f.removes_guard) return `it removes a check (${f.removes_guard.slice(0, 60)}), which only a person may approve`;
+    if ((f.changed ?? 0) > UNATTENDED_MAX_LINES) return `it changes ${f.changed} lines; only fixes of up to ${UNATTENDED_MAX_LINES} lines go in without you`;
+  }
   if (f.kind === "sandbox" && f.gate.test_run?.verdict !== "proved") return "its regression test did not prove it";
   return null;
 }
@@ -495,6 +524,7 @@ export class Healer {
       // Recomputed here, plus what the gate found with the full original files (modules the file already imports).
       risky: [...new Set([...riskyAdditions(edits), ...((JSON.parse(info.gate_result) as { risky?: string[] }).risky ?? [])])],
       authenticated: this.incidentAuthenticated(info.incident_id),
+      ...editShape(edits),
       heals_last_night: this.healsSince(info.project_id, session, now - NIGHT_MS),
       minor_heals_last_night: this.healsSince(info.project_id, session, now - NIGHT_MS, true),
       now,
