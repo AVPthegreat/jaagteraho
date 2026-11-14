@@ -1,0 +1,167 @@
+[
+  {
+    "repo": "fastapi/fastapi",
+    "issue": "https://github.com/fastapi/fastapi/issues/9424",
+    "fix": "https://github.com/fastapi/fastapi/pull/9425",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "fastapi/routing.py",
+      "fastapi/dependencies/utils.py",
+      "fastapi/utils.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "fastapi/dependencies/utils.py"
+    ],
+    "named": "fastapi/routing.py:477",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "The app crashes at startup. A route is declared with status 204 (No Content), and its function has a return type such as `-> dict`. FastAPI treats that return type as the response body, and 204 responses can't have a body.",
+    "real_cause": "get_typed_annotation() turned the string annotation 'None' (from postponed annotations) into NoneType rather than None, so the route was treated as having a response body and the 204 assertion failed.",
+    "seconds": 9,
+    "cost_usd": 0.0157
+  },
+  {
+    "repo": "pallets/flask",
+    "issue": "https://github.com/pallets/flask/issues/5258",
+    "fix": "https://github.com/pallets/flask/pull/5264",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/flask/helpers.py",
+      "src/flask/globals.py"
+    ],
+    "lookups": [
+      "find_definition {\"name\":\"Flask.url_for\"}",
+      "read_lines {\"path\":\"src/flask/app.py\",\"start\":953,\"end\":955}",
+      "find_definition {\"name\":\"Flask.url_for\"}"
+    ],
+    "files_read": [
+      "src/flask/app.py"
+    ],
+    "fixed_files": [
+      "src/flask/app.py"
+    ],
+    "named": "src/flask/app.py:954",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Passing a URL value named \"self\" to url_for crashes with a TypeError instead of building the URL. This is because the method's own \"self\" argument has the same name as the value.",
+    "real_cause": "Flask.url_for() declared self as an ordinary parameter, so a URL value named 'self' passed via **values collided with it; the fix makes self positional-only.",
+    "seconds": 13,
+    "cost_usd": 0.0298
+  },
+  {
+    "repo": "encode/httpx",
+    "issue": "https://github.com/encode/httpx/issues/309",
+    "fix": "https://github.com/encode/httpx/pull/310",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "httpx/dispatch/http11.py",
+      "httpx/concurrency/asyncio.py",
+      "httpx/dispatch/connection.py",
+      "httpx/config.py",
+      "httpx/models.py"
+    ],
+    "lookups": [
+      "read_lines {\"path\":\"httpx/models.py\",\"start\":560,\"end\":630}",
+      "search_code {\"text\":\"def build_redirect_request\"}",
+      "search_code {\"text\":\"def redirect_headers\"}",
+      "read_lines {\"path\":\"httpx/middleware.py\",\"start\":80,\"end\":185}",
+      "read_lines {\"path\":\"httpx/middleware.py\",\"start\":1,\"end\":3}",
+      "search_code {\"text\":\"def __delitem__\"}"
+    ],
+    "files_read": [
+      "httpx/middleware.py"
+    ],
+    "fixed_files": [
+      "httpx/middleware.py"
+    ],
+    "named": "httpx/middleware.py:91",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "A POST that gets redirected (301, 302 or 303) is turned into a GET with no body. The new request still says it has a body, so the client fails and the request hangs and then times out.",
+    "real_cause": "RedirectMiddleware.redirect_headers() kept Content-Length/Transfer-Encoding when a redirect switched the method to GET and dropped the body, so h11 saw too little data for the declared length.",
+    "seconds": 21,
+    "cost_usd": 0.0504
+  },
+  {
+    "repo": "python-attrs/attrs",
+    "issue": "https://github.com/python-attrs/attrs/issues/1284",
+    "fix": "https://github.com/python-attrs/attrs/pull/1319",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/attr/_make.py",
+      "src/attr/_next_gen.py"
+    ],
+    "lookups": [
+      "search_code {\"text\":\"pre_init_has_args\"}",
+      "search_code {\"text\":\"__attrs_pre_init__\"}",
+      "read_lines {\"path\":\"src/attr/_make.py\",\"start\":2195,\"end\":2250}",
+      "find_definition {\"name\":\"kw_only_args\"}",
+      "find_writers {\"name\":\"kw_only_args\"}",
+      "search_code {\"text\":\"kw_only_args.append\"}"
+    ],
+    "files_read": [],
+    "fixed_files": [
+      "src/attr/_make.py"
+    ],
+    "named": "src/attr/_make.py:2209",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Defining a class with `@define` crashed with a SyntaxError. The class has a `__attrs_pre_init__` that takes arguments, plus keyword-only fields that have defaults. attrs wrote broken code for the `__init__` it generates, and Python refused to compile it.",
+    "real_cause": "_attrs_to_init_script() built the __attrs_pre_init__ call from kw_only argument strings that still included '=default', generating invalid code like a=attr_dict['a'].default=a=....",
+    "seconds": 20,
+    "cost_usd": 0.0419
+  },
+  {
+    "repo": "psf/black",
+    "issue": "https://github.com/psf/black/issues/5214",
+    "fix": "https://github.com/psf/black/pull/5414",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/black/lines.py",
+      "src/black/linegen.py",
+      "src/black/__init__.py",
+      "src/black/nodes.py",
+      "src/black/trans.py"
+    ],
+    "lookups": [
+      "find_definition {\"name\":\"Line.append\"}",
+      "find_definition {\"name\":\"BracketTracker.mark\"}",
+      "search_code {\"text\":\"for i, leaf in enumerate(line.leaves):\"}",
+      "read_lines {\"path\":\"src/black/lines.py\",\"start\":1400,\"end\":1403}",
+      "search_code {\"text\":\"bracket_depth\"}",
+      "find_definition {\"name\":\"Leaf\"}"
+    ],
+    "files_read": [
+      "tests/data/cases/preview_long_strings__regression.py",
+      "src/black/brackets.py",
+      "src/blib2to3/pytree.py"
+    ],
+    "fixed_files": [
+      "src/blib2to3/pytree.py"
+    ],
+    "named": "src/black/lines.py:1401",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "guess",
+    "cause_plain": "Black crashed while formatting a file that has a multi-line string. It checks whether the line is short enough and reads a nesting-depth value that some pieces of code never get. The run stops with an internal error instead of formatting the file.",
+    "real_cause": "blib2to3 Leaf declared bracket_depth only as an annotation and neither __init__ nor clone() set it, so leaves created outside the bracket tracker lacked the attribute that is_line_short_enough() reads.",
+    "seconds": 24,
+    "cost_usd": 0.0658
+  }
+]

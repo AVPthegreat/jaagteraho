@@ -1,0 +1,165 @@
+[
+  {
+    "repo": "fastapi/fastapi",
+    "issue": "https://github.com/fastapi/fastapi/issues/9424",
+    "fix": "https://github.com/fastapi/fastapi/pull/9425",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "fastapi/routing.py",
+      "fastapi/dependencies/utils.py",
+      "fastapi/utils.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "fastapi/dependencies/utils.py"
+    ],
+    "named": "fastapi/routing.py:477",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "The app crashes on startup. A route is declared with status 204 (No Content), and its function has a return type such as `-> dict`. FastAPI treated that return type as a response body, and 204 responses can't have one.",
+    "cause_technical": "In fastapi/routing.py, APIRoute.__init__ (lines 472-477) infers response_model from the endpoint's return annotation when response_model isn't given. The assert at line 514 then fails for status codes that forbid a body, such as 204. The inferred model should be dropped for those codes. An explicitly passed response_model should still fail the assert.",
+    "real_cause": "get_typed_annotation() turned the string annotation 'None' (from postponed annotations) into NoneType rather than None, so the route was treated as having a response body and the 204 assertion failed.",
+    "seconds": 10,
+    "cost_usd": 0.0508
+  },
+  {
+    "repo": "pallets/flask",
+    "issue": "https://github.com/pallets/flask/issues/5258",
+    "fix": "https://github.com/pallets/flask/pull/5264",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/flask/helpers.py",
+      "src/flask/globals.py"
+    ],
+    "lookups": [
+      "find_definition {\"name\":\"Flask.url_for\"}"
+    ],
+    "files_read": [
+      "src/flask/app.py"
+    ],
+    "fixed_files": [
+      "src/flask/app.py"
+    ],
+    "named": "src/flask/app.py:954",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Building a link with a URL parameter named \"self\" crashes with a TypeError instead of producing a URL. Python reads that keyword as the method's own first argument.",
+    "cause_technical": "Flask.url_for in src/flask/app.py (line 953) declares `self` as a normal positional-or-keyword parameter. flask.url_for passes user values through as **values, so `self=1` collides with the bound instance and raises \"got multiple values for argument 'self'\". Making `self` positional-only (`self, /`) lets `self` go into **values.",
+    "real_cause": "Flask.url_for() declared self as an ordinary parameter, so a URL value named 'self' passed via **values collided with it; the fix makes self positional-only.",
+    "seconds": 10,
+    "cost_usd": 0.0294
+  },
+  {
+    "repo": "encode/httpx",
+    "issue": "https://github.com/encode/httpx/issues/309",
+    "fix": "https://github.com/encode/httpx/pull/310",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "httpx/dispatch/http11.py",
+      "httpx/concurrency/asyncio.py",
+      "httpx/dispatch/connection.py",
+      "httpx/config.py",
+      "httpx/models.py"
+    ],
+    "lookups": [
+      "read_lines {\"path\":\"httpx/models.py\",\"start\":540,\"end\":630}",
+      "search_code {\"text\":\"AsyncRequest(\"}",
+      "find_definition {\"name\":\"BaseRequest.stream\"}",
+      "read_lines {\"path\":\"httpx/concurrency/asyncio.py\",\"start\":268,\"end\":289}",
+      "read_lines {\"path\":\"httpx/concurrency/asyncio.py\",\"start\":286,\"end\":289}"
+    ],
+    "files_read": [],
+    "fixed_files": [
+      "httpx/middleware.py"
+    ],
+    "named": "httpx/concurrency/asyncio.py:286",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "guess",
+    "cause_plain": "A POST request timed out waiting for the server to reply. While the client was cleaning up, it hit a second, confusing error about the request body size, and that error hid the real timeout.",
+    "cause_technical": "In httpx/concurrency/asyncio.py, BackgroundManager.__aexit__ (line 286) always does `await self.task`, even when the body already failed with ReadTimeout. The background body-sending task is still running and is forced to finish. Its h11 error (`LocalProtocolError: Too little data for declared Content-Length`) is raised from that await and replaces the ReadTimeout. I could not see why the body was short, so this edit fixes the masking and not the short body. The fix cancels the background task when the body raised an exception and swallows any error from it, so the original exception propagates. The normal path is unchanged.",
+    "real_cause": "RedirectMiddleware.redirect_headers() kept Content-Length/Transfer-Encoding when a redirect switched the method to GET and dropped the body, so h11 saw too little data for the declared length.",
+    "seconds": 23,
+    "cost_usd": 0.0927
+  },
+  {
+    "repo": "python-attrs/attrs",
+    "issue": "https://github.com/python-attrs/attrs/issues/1284",
+    "fix": "https://github.com/python-attrs/attrs/pull/1319",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/attr/_make.py",
+      "src/attr/_next_gen.py"
+    ],
+    "lookups": [
+      "search_code {\"text\":\"pre_init\"}",
+      "find_definition {\"name\":\"_attrs_to_init_script\"}",
+      "read_lines {\"path\":\"src/attr/_make.py\",\"start\":2063,\"end\":2260}",
+      "read_lines {\"path\":\"src/attr/_make.py\",\"start\":2204,\"end\":2250}",
+      "read_lines {\"path\":\"src/attr/_make.py\",\"start\":1886,\"end\":1974}"
+    ],
+    "files_read": [],
+    "fixed_files": [
+      "src/attr/_make.py"
+    ],
+    "named": "src/attr/_make.py:2210",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Defining an attrs class failed at import time with a SyntaxError. This happens when the class has an `__attrs_pre_init__` that takes arguments and also has a keyword-only field with a default. attrs wrote broken Python code for the class's `__init__`, and Python refused to compile it.",
+    "cause_technical": "In `src/attr/_make.py`, `_attrs_to_init_script` (about lines 2209-2211) builds the arguments passed to `__attrs_pre_init__` from `kw_only_args`. Those entries are full parameter declarations such as `x=attr_dict['x'].default` or `x=NOTHING`. The code formats each one as `f\"{kw_arg}={kw_arg}\"`, which gives `x=attr_dict['x'].default=x=attr_dict['x'].default`. That is invalid syntax, and `compile()` in `_compile_and_eval` raises the SyntaxError. The fix is to use only the parameter name on both sides of the `=`. I did not read `user/attrs_pre_init.py`, so I am assuming it matches this case. I also did not check that positional defaults (`b=attr_dict[...]`) reach the pre-init call correctly. They are valid syntax, so I left them alone.",
+    "real_cause": "_attrs_to_init_script() built the __attrs_pre_init__ call from kw_only argument strings that still included '=default', generating invalid code like a=attr_dict['a'].default=a=....",
+    "seconds": 25,
+    "cost_usd": 0.0939
+  },
+  {
+    "repo": "psf/black",
+    "issue": "https://github.com/psf/black/issues/5214",
+    "fix": "https://github.com/psf/black/pull/5414",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/black/lines.py",
+      "src/black/linegen.py",
+      "src/black/__init__.py",
+      "src/black/nodes.py",
+      "src/black/trans.py"
+    ],
+    "lookups": [
+      "read_lines {\"path\":\"src/black/brackets.py\",\"start\":70,\"end\":135}",
+      "read_lines {\"path\":\"src/black/lines.py\",\"start\":56,\"end\":110}",
+      "read_lines {\"path\":\"src/black/brackets.py\",\"start\":89,\"end\":98}",
+      "find_definition {\"name\":\"Leaf.__init__\"}",
+      "read_lines {\"path\":\"src/black/brackets.py\",\"start\":92,\"end\":97}"
+    ],
+    "files_read": [
+      "src/black/brackets.py",
+      "src/blib2to3/pytree.py",
+      "src/black/rusty.py"
+    ],
+    "fixed_files": [
+      "src/blib2to3/pytree.py"
+    ],
+    "named": "src/black/brackets.py:97",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "Black crashed while formatting a file that contains a multiline string. It hit a bracket it never recorded the nesting depth for, and it reported an internal error instead of formatting the file.",
+    "cause_technical": "In src/black/brackets.py, BracketTracker.mark() returns early at line 97 for a closing bracket at depth 0 with no matching opener, which happens on lines continued from an earlier split. That return skips `leaf.bracket_depth = self.depth` (line 113), so the leaf never gets the attribute. `is_line_short_enough` in src/black/lines.py (line 1404 in the shown file) reads `leaf.bracket_depth` for every leaf on a line that contains a multiline string, and it raises AttributeError. The fix is to set `bracket_depth` before the early return. I did not confirm which exact leaf lacked the attribute, so this is the most likely cause rather than a certain one.",
+    "real_cause": "blib2to3 Leaf declared bracket_depth only as an annotation and neither __init__ nor clone() set it, so leaves created outside the bracket tracker lacked the attribute that is_line_short_enough() reads.",
+    "seconds": 25,
+    "cost_usd": 0.1066
+  }
+]

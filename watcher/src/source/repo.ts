@@ -101,6 +101,48 @@ export class RepoIndex {
     }
     return hits.sort((a, b) => Number(a.secondary) - Number(b.secondary)).slice(0, limit).map(({ path, line, text }) => ({ path, line, text }));
   }
+
+  /**
+   * Where a variable or attribute gets its value: statements that assign it (x = ..., self.x = ..., a, x = ...,
+   * x += ...), class-level declarations (x: int), loop targets and setattr(obj, "x", ...). App code first.
+   */
+  async writers(name: string, limit = 15, attribute = false): Promise<Array<{ path: string; line: number; text: string }>> {
+    const n = name.split(".").pop() ?? "";
+    if (!/^\w{2,60}$/.test(n)) return [];
+    // An attribute is set through an object (x.name = ...), declared in a class body (name: T) or setattr.
+    const re = attribute ? new RegExp(`${writerPattern(`(?:[\\w\\])]+\\.)+${n}`).source}|^\\s+${n}\\s*:\\s*[\\w\\[\\]. |'"]+\\s*(=.*)?$|setattr\\([^,]+,\\s*["']${n}["']`) : writerPattern(n);
+    const hits: Array<{ path: string; line: number; text: string; secondary: boolean }> = [];
+    let k = 0;
+    for (const [path, text] of this.files) {
+      if (++k % 200 === 0) await new Promise((r) => setImmediate(r));
+      if (!text.includes(n)) continue;
+      text.split("\n").forEach((l, i) => {
+        if (l.length < 400 && hits.length < 500 && re.test(l) && !/,\s*(#.*)?$/.test(l)) hits.push({ path, line: i + 1, text: l.trim().slice(0, 200), secondary: SECONDARY.test(path) });
+      });
+    }
+    return hits.sort((a, b) => Number(a.secondary) - Number(b.secondary)).slice(0, limit).map(({ path, line, text }) => ({ path, line, text }));
+  }
+}
+
+/** A line that gives `name` (a plain name or an attribute) a value or declares it. */
+export function writerPattern(name: string, throughObject = true): RegExp {
+  const target = throughObject ? `(?:[\\w\\]\\)]+\\.)*${name}` : name;
+  const other = `(?:\\*?[\\w.\\[\\]'"]+)`;
+  return new RegExp(
+    [
+      // x = ..., self.x = ..., a, x = ..., x: T = ..., x += ...
+      `^\\s*(?:${other}\\s*,\\s*)*\\(?${target}\\)?\\s*(?:,\\s*${other}\\s*)*(?::\\s*[^=]+)?(?:[-+*/|&%^]|//|<<|>>)?=(?!=)`,
+      // const x = ..., let x = ...
+      `^\\s*(?:export\\s+)?(?:const|let|var)\\s+${name}\\b`,
+      // for x in ..., for a, x in ...
+      `^\\s*(?:async\\s+)?for\\s+(?:${other}\\s*,\\s*)*${name}\\s*(?:,\\s*${other}\\s*)*\\s+in\\b`,
+      // class-level declaration without a value: x: int
+      `^\\s+${name}\\s*:\\s*[\\w\\[\\]. |'"]+\\s*$`,
+      // setattr(obj, "x", ...), with ... as x
+      `setattr\\([^,]+,\\s*["']${name}["']`,
+      `\\bas\\s+${name}\\s*[:,)]`,
+    ].join("|"),
+  );
 }
 
 const DEF = /^(\s*)(?:async\s+)?(?:def|class|function)\s+(\w+)|^(\s*)(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=|^()(\w+)\s*=|^(\s+)(?:static\s+|async\s+|get\s+|set\s+)*(\w+)\s*\([^)]*\)\s*\{/;

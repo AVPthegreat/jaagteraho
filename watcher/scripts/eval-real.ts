@@ -37,7 +37,7 @@ type Case = {
 
 const args = process.argv.slice(2);
 const opt = (n: string) => (args.includes(`--${n}`) ? args[args.indexOf(`--${n}`) + 1] : undefined);
-const STOP_AT_USD = 2;
+const STOP_AT_USD = Number(opt("stop") ?? 2);
 const TOLERANCE = 3;
 
 /** Raw file reads (no API rate limit), trying a src/ layout as well. */
@@ -75,12 +75,16 @@ function score(c: Case, files: SourceFile[], r: { file: string; line: number; ed
 }
 
 async function main() {
-  const cases = (JSON.parse(readFileSync(new URL("../eval/real-bugs.json", import.meta.url), "utf8")) as Case[])
+  const casesFile = opt("cases") ? new URL(`../eval/${opt("cases")}`, import.meta.url) : new URL("../eval/real-bugs.json", import.meta.url);
+  // --split design|heldout|new picks a fixed half of the outside-traceback cases (eval/split.json).
+  const split = opt("split") ? (JSON.parse(readFileSync(new URL("../eval/split.json", import.meta.url), "utf8")) as Record<string, string[]>)[opt("split")!] : null;
+  const cases = (JSON.parse(readFileSync(casesFile, "utf8")) as Case[])
+    .filter((c) => !split || split.includes(c.issue_url))
     .filter((c) => !opt("only") || c.repo.includes(opt("only")!))
     .filter((c) => !opt("difficulty") || c.difficulty === opt("difficulty"))
     .slice(0, Number(opt("limit") ?? 1000));
   mkdirSync(new URL("../eval/", import.meta.url), { recursive: true });
-  const db = openDb(new URL("../eval/eval.db", import.meta.url).pathname);
+  const db = openDb(new URL(`../eval/${opt("db") ?? "eval.db"}`, import.meta.url).pathname);
   const ai = makeAI(db);
   if (!ai) throw new Error("JR_ANTHROPIC_API_KEY is not set");
   const startSpend = ai.guard.total();
@@ -140,6 +144,7 @@ async function main() {
         gate_reasons: gate.reasons,
         confidence: out.result.confidence_words,
         cause_plain: out.result.cause_plain,
+        cause_technical: out.result.cause_technical,
         real_cause: c.cause_summary,
         seconds: Math.round((Date.now() - t0) / 1000),
         cost_usd: Number(out.cost.toFixed(4)),
@@ -170,13 +175,13 @@ async function main() {
     `Total cost $${cost.toFixed(2)} (about $${(cost / Math.max(1, done.length)).toFixed(3)} per diagnosis); median ${median(done.map((r) => r.seconds as number))} s per diagnosis.`,
     `Not diagnosed: ${results.length - done.length} (${results.filter((r) => !("file_hit" in r)).map((r) => `${r.repo}: ${r.error ?? r.skipped}`).join("; ") || "none"}).`,
     "",
-    `How it works: the traceback is parsed as the paste page parses it; frames inside the repository's own packages count as app code; up to 3 repository files from the traceback (plus up to 2 files they import and use) are read at the commit before the fix; Claude proposes the cause and an edit${process.env.JR_DIAGNOSIS_LOOKUPS === "0" ? " in one call" : ", and may first look up definitions, search the code or read lines of the repository at that commit (at most 2 rounds)"}.`+"  The model never sees the real fix. 'Right lines' means the named line, or the text the edit replaces, is within 3 lines of a line the real fix changed. The fix-review step is skipped here to save cost.",
+    `How it works: the traceback is parsed as the paste page parses it; frames inside the repository's own packages count as app code; up to 3 repository files from the traceback (plus up to 2 files they import and use) are read at the commit before the fix; Claude proposes the cause and an edit${process.env.JR_DIAGNOSIS_LOOKUPS === "0" ? " in one call" : ", and may first look up definitions, assignments, search the code or read lines of the repository at that commit (at most 5 rounds)"}.`+"  The model never sees the real fix. 'Right lines' means the named line, or the text the edit replaces, is within 3 lines of a line the real fix changed. The fix-review step is skipped here to save cost.",
     "",
     "| Repository | Kind | Named | Right file | Right lines | Issue | Real fix |",
     "|---|---|---|---|---|---|---|",
     ...done.map((r) => `| ${r.repo} | ${r.difficulty === "in_trace" ? "in trace" : "elsewhere"} | \`${r.named}\` | ${r.file_hit ? "yes" : "no"} | ${r.line_hit ? "yes" : "no"} | [issue](${r.issue}) | [fix](${r.fix}) |`),
   ].join("\n");
-  const tag = (process.env.JR_RELATED_FILES === "0" ? "-no-related" : "") + (process.env.JR_DIAGNOSIS_LOOKUPS === "0" ? "-no-lookups" : "") + (opt("difficulty") ? `-${opt("difficulty")}` : "");
+  const tag = (opt("tag") ? `-${opt("tag")}` : "") + (process.env.JR_RELATED_FILES === "0" ? "-no-related" : "") + (process.env.JR_DIAGNOSIS_LOOKUPS === "0" ? "-no-lookups" : "") + (opt("difficulty") ? `-${opt("difficulty")}` : "");
   writeFileSync(new URL(`../eval/results-real${tag}.json`, import.meta.url), JSON.stringify(results, null, 2));
   writeFileSync(new URL(`../eval/REAL-BUGS${tag}.md`, import.meta.url), `${summary}\n`);
   console.log(`\n${summary.split("\n").slice(4, 11).join("\n")}`);

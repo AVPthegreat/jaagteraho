@@ -1,0 +1,165 @@
+[
+  {
+    "repo": "psf/black",
+    "issue": "https://github.com/psf/black/issues/4062",
+    "fix": "https://github.com/psf/black/pull/4086",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/black/__init__.py",
+      "src/black/parsing.py",
+      "src/black/output.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "src/black/linegen.py"
+    ],
+    "named": "src/black/__init__.py:1444",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "Black reformatted a piece of code, and its own safety check found that the result was not valid Python. Black refused to output it. The user got an internal error instead of formatted code.",
+    "cause_technical": "The check in assert_equivalent (src/black/__init__.py:1444) calls parse_ast on the formatted output, and the parse fails with \"expected ':'\" on line 1. The check is working as intended. The real bug is in the formatting code (probably linegen.py, e.g. dropping or adding parentheses or splitting a compound statement header), which emitted a header without its colon. The event does not include the input source, and the formatting code is not among the files shown, so I cannot say which construct triggered it. I am not proposing a safe edit. Removing or skipping the check would only hide the bug and let invalid code through.",
+    "real_cause": "left_hand_split() only checked for a missing opening bracket, not for empty tail leaves, so at line length 1 it produced a split that broke the code and failed the equivalence check.",
+    "seconds": 13,
+    "cost_usd": 0.0371
+  },
+  {
+    "repo": "psf/requests",
+    "issue": "https://github.com/psf/requests/issues/6643",
+    "fix": "https://github.com/psf/requests/pull/6644",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/requests/adapters.py",
+      "src/requests/sessions.py",
+      "src/requests/api.py",
+      "src/requests/models.py",
+      "src/requests/cookies.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "src/requests/adapters.py"
+    ],
+    "named": "src/requests/adapters.py:520",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "A web address with an odd shape (for example one whose path starts with `//` and looks like `//v:h`) made the request crash with a raw urllib3 parsing error. Users should have seen a normal 'invalid URL' error instead.",
+    "cause_technical": "In src/requests/adapters.py HTTPAdapter.send (around line 485), only get_connection is wrapped to turn LocationValueError into InvalidURL. conn.urlopen also calls parse_url on the request path, and that raises LocationParseError, a subclass of LocationValueError. It falls into the generic `except (_SSLError, _HTTPError)` branch and is re-raised unchanged. The fix is to catch LocationValueError around urlopen and raise InvalidURL.",
+    "real_cause": "HTTPAdapter.request_url() passed a path starting with '//' through unchanged, and urllib3 then parsed '//v:h' as a network location and failed; the fix collapses the leading slashes.",
+    "seconds": 16,
+    "cost_usd": 0.0559
+  },
+  {
+    "repo": "pallets/jinja",
+    "issue": "https://github.com/pallets/jinja/issues/1701",
+    "fix": "https://github.com/pallets/jinja/pull/1702",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/jinja2/nativetypes.py",
+      "src/jinja2/environment.py",
+      "src/jinja2/debug.py"
+    ],
+    "lookups": [
+      "search_code {\"text\":\"_output_const_repr\"}",
+      "read_lines {\"path\":\"src/jinja2/compiler.py\",\"start\":1495,\"end\":1570}",
+      "read_lines {\"path\":\"src/jinja2/compiler.py\",\"start\":1440,\"end\":1450}"
+    ],
+    "files_read": [
+      "src/jinja2/compiler.py"
+    ],
+    "fixed_files": [
+      "src/jinja2/runtime.py"
+    ],
+    "named": "src/jinja2/nativetypes.py:59",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "A template run through Jinja's native-type renderer crashed. It tried to join values into text, and one of the values was a number. Users saw a TypeError instead of the rendered output.",
+    "cause_technical": "I could not confirm the exact cause and have no safe edit. The crash happens while the template's generator runs, forced by `list(islice(values, 2))` at nativetypes.py:25. The error text is a `str.join` failure, and `native_concat` itself uses `str(v)` at line 37, so the failing join is inside the compiled template code. The most likely cause is that `NativeCodeGenerator` (nativetypes.py:55-85) makes `_default_finalize` return the raw value, so output nodes are no longer wrapped in `str()`. Compiled code for macros, `{% set %}` blocks and call blocks collects output into a buffer and joins it with the plain `utils.concat`, which is `''.join`. If a buffer holds an int, that join raises this TypeError. I did not read the `frame.buffer` code in compiler.py, so this is a guess. The fix would be to convert non-str items to str when joining buffered output in native mode, and that needs the compiler's buffer-join code, which I did not see.",
+    "real_cause": "BlockReference.__call__/_async_call joined block output with the module-level str concat instead of environment.concat, so NativeEnvironment blocks returning non-strings failed.",
+    "seconds": 37,
+    "cost_usd": 0.0526
+  },
+  {
+    "repo": "marshmallow-code/marshmallow",
+    "issue": "https://github.com/marshmallow-code/marshmallow/issues/2868",
+    "fix": "https://github.com/marshmallow-code/marshmallow/pull/2894",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/marshmallow/schema.py",
+      "src/marshmallow/error_store.py"
+    ],
+    "lookups": [
+      "read_lines {\"path\":\"src/marshmallow/fields.py\",\"start\":120,\"end\":215}",
+      "read_lines {\"path\":\"src/marshmallow/fields.py\",\"start\":405,\"end\":450}",
+      "search_code {\"text\":\"self.allow_none\"}",
+      "search_code {\"text\":\"sentinel\"}",
+      "read_lines {\"path\":\"src/marshmallow/fields.py\",\"start\":290,\"end\":305}"
+    ],
+    "files_read": [
+      "src/marshmallow/fields.py"
+    ],
+    "fixed_files": [
+      "src/marshmallow/fields.py"
+    ],
+    "named": "src/marshmallow/fields.py:299",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "A load call passed null for a field called \"sentinel\". That field does not accept null, so marshmallow rejected the data. This looks like marshmallow doing its normal validation, not a bug in the app. I found no faulty code.",
+    "cause_technical": "Field._validate_missing (src/marshmallow/fields.py:299) raises the \"null\" error when value is None and allow_none is False. allow_none defaults to False unless load_default is None (fields.py:213). The crashing call is `schema.load({\"sentinel\": None})` in src/test.py:11, which looks like a script or test. Its schema probably declares \"sentinel\" without allow_none=True. The library code matches its documented behaviour, and I did not see the test.py schema. No safe edit exists. Changing the library to accept None would weaken validation. The fix, if one is wanted, is to set allow_none=True on that field in the caller's schema, or to stop sending null.",
+    "real_cause": "fields.Constant set load_default/dump_default after Field.__init__ had already computed allow_none from a missing default, so a None constant was rejected as null on load.",
+    "seconds": 32,
+    "cost_usd": 0.0472
+  },
+  {
+    "repo": "celery/celery",
+    "issue": "https://github.com/celery/celery/issues/6164",
+    "fix": "https://github.com/celery/celery/pull/10406",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "celery/backends/base.py",
+      "celery/backends/redis.py",
+      "celery/backends/asynchronous.py"
+    ],
+    "lookups": [
+      "find_definition {\"name\":\"KeyValueStoreBackend.get_key_for_task\"}",
+      "find_definition {\"name\":\"ResultConsumer._get_key_for_task\"}",
+      "read_lines {\"path\":\"celery/result.py\",\"start\":378,\"end\":392}",
+      "search_code {\"text\":\"def __del__\"}"
+    ],
+    "files_read": [
+      "celery/result.py"
+    ],
+    "fixed_files": [
+      "celery/backends/base.py"
+    ],
+    "named": "celery/backends/redis.py:197",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "guess",
+    "cause_plain": "A harmless cleanup step crashed with an empty TypeError. It ran when a task result object was garbage-collected, most likely while the app was shutting down. Nothing is lost, but it adds noisy errors to the logs.",
+    "cause_technical": "AsyncResult.__del__ (celery/result.py:444, body not read) calls backend.remove_pending_result. That goes through on_result_fulfilled to RedisBackend ResultConsumer.cancel_for (celery/backends/redis.py:197), which builds the key with _get_key_for (celery/backends/base.py:1042, key_t('').join([...])). The join raises TypeError. The likely reasons are that the key prefix or key_t has been torn down, or that a prefix and an id have mixed bytes and str types. This is a guess: I did not read __del__ and could not confirm which value is bad. The edit below only stops the cleanup from failing. If it only runs during interpreter shutdown, ignoring the error is safe. It does not fix the underlying key-building problem.",
+    "real_cause": "BaseKeyValueStoreBackend._get_key_for() passed the task id straight to key_t(), so a uuid.UUID task id made the bytes join raise TypeError.",
+    "seconds": 24,
+    "cost_usd": 0.0394
+  }
+]

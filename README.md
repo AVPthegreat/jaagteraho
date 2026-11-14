@@ -36,6 +36,7 @@ Students, freelancers and solo founders now ship real products, often written wi
    The command finds Django, Flask, FastAPI, Express or Next.js, shows every change before writing it, adds the free open-source Sentry SDK and two lines, and sends a test error. A ✅ arrives on Telegram. Deploy as usual.
    No code at all? Point your host's log drain at the logs address instead; JaagteRaho picks out Python and Node.js errors and drops every other line.
 2. **Sleep.** JaagteRaho wakes you (Telegram message plus a voice note in Hindi or English, repeated until you tap Acknowledge) only for what matters: a critical route failing during an exam, an outage, an error hitting many people. Everything else waits for the 08:00 summary.
+   Where the owner has turned on phone calls (a Twilio account and their number in the settings), a wake also rings their phone: the call says which app and flow are failing, and pressing 1 acknowledges it like the Telegram button. It repeats with the Telegram pings, at most 3 call wakes a night per app.
 3. **Fix.** The alert says what broke for users, why, which file and line, which recent commit probably caused it, and shows a small fix that passed six code checks and a review. On the demo portal the fix is also proved by a test that fails before and passes after.
 4. **Or let it heal.** `/heal` sets your rule (also offered on the Connect page): `ask` (default: you approve every fix), `auto 10m` (heal if a wake-up is not acknowledged in 10 minutes), `now` (heal right away, optionally only on routes you name) or `off`. See [Self-healing](#self-healing).
 
@@ -91,13 +92,14 @@ Every number is produced by a script in this repository. Measured 13 and 14 Nov 
 
 What the benchmark changed: the first fix gate showed a fix only when every review answer was clean, and held back 10 of 16 fixes that were in fact correct. The three-level gate shows 15 of the same 16, still with none wrong.
 
-**30 real bugs from 17 open-source Python projects** ([`watcher/eval`](watcher/eval)): tracebacks people posted on GitHub (requests, Flask, pip, pytest, Celery, black and others), scored against the lines the real, merged fix changed. JaagteRaho reads the code as it was before the fix and never sees the real fix.
+**42 real bugs from 18 open-source Python projects** ([`watcher/eval`](watcher/eval)): tracebacks people posted on GitHub (requests, Flask, pip, pytest, Celery, black and others), scored against the lines the real, merged fix changed. JaagteRaho reads the code as it was before the fix and never sees the real fix. For 22 of them the fix is in code the traceback never shows; JaagteRaho then searches the repository itself (definitions, where a value is set, the error's text).
 
 | | Result |
 |---|---|
 | Bug in a file from the traceback: right file | 20 of 20 (100%) |
-| Bug in a file from the traceback: right lines (±3) | 16 of 20 (80%) |
-| Cost per diagnosis | about $0.03 (these are large library files) |
+| Bug in a file from the traceback: right lines (±3) | 17 of 20 (85%) |
+| Bug in code the traceback never shows: right file | 25 of 44 diagnoses (22 bugs, two runs each) |
+| Cost per diagnosis | about $0.045 (these are large library files) |
 
 **A real Node.js app:** an Express app connected with `npx jaagteraho init` (real `@sentry/node`); its `TypeError` was decided ("notify: blocks users"), diagnosed at `server.js:10` in plain words for $0.011, and a correct fix reached the gate.
 
@@ -142,6 +144,7 @@ Sentry, PostHog and others diagnose errors for paying teams; Reticle and similar
 - **Vultr (hackathon sponsor):** the backend (intake, worker, Telegram bot, database and the demo portal) runs on a Vultr Compute instance.
 - **Claude through Anthropic's API:** decisions and fix review (Claude Haiku 5.5) and diagnosis (Claude Sonnet 5.5).
 - **Gnani:** speaks the wake-up call in Hindi or English (Timbre text-to-speech), sent as a Telegram voice note.
+- **Twilio (optional):** places the real phone call on a wake, when it is set up (`JR_TWILIO_*` in `watcher/.env`).
 - **Telegram** for alerts, **Vercel** for the website.
 
 ## Repository

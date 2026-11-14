@@ -18,6 +18,7 @@ import { githubRoutes } from "./github/app.js";
 import { logRoutes } from "./intake/logs.js";
 import { cors } from "hono/cors";
 import { makeVoice } from "./voice/voice.js";
+import { makePhone } from "./phone/phone.js";
 import { ensureSelfProject, reportSelf } from "./selfwatch.js";
 import { fileURLToPath } from "node:url";
 
@@ -42,7 +43,8 @@ process.on("uncaughtException", (e) => {
 const ai = makeAI(db);
 const tg = process.env.JR_TELEGRAM_BOT_TOKEN ? new Telegram(process.env.JR_TELEGRAM_BOT_TOKEN) : null;
 const voice = makeVoice(`${dataDir}/voice`);
-const worker = new Worker(db, ai, tg, voice);
+const phone = makePhone(db);
+const worker = new Worker(db, ai, tg, voice, phone);
 const twinBroken = process.env.JR_TWIN_BROKEN_URL ?? "http://127.0.0.1:8001";
 const twinFixed = process.env.JR_TWIN_FIXED_URL ?? "http://127.0.0.1:8002";
 const healer = new Healer(db, tg, { twinFixed });
@@ -67,6 +69,7 @@ app.route("/", ownerRoutes(db));
 app.use("/public/connect", cors({ origin: (process.env.JR_SITE_ORIGINS ?? "http://localhost:3000").split(",").filter(Boolean), allowMethods: ["POST"], allowHeaders: ["Content-Type"] }));
 app.route("/", connectRoutes(db));
 app.route("/", githubRoutes(db, tg));
+if (phone) app.route("/", phone.routes((id) => worker.acknowledgedByPhone(id)));
 app.route(
   "/",
   publicRoutes({
@@ -82,7 +85,7 @@ app.route(
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? "127.0.0.1";
 serve({ fetch: app.fetch, port, hostname: host }, () =>
-  console.log(`JaagteRaho watcher on http://${host}:${port} · AI ${ai ? "on" : "off"} · Telegram ${bot ? "on" : "off"} · voice ${voice ? "on" : "off"}`),
+  console.log(`JaagteRaho watcher on http://${host}:${port} · AI ${ai ? "on" : "off"} · Telegram ${bot ? "on" : "off"} · voice ${voice ? "on" : "off"} · phone ${phone ? "on" : "off"}`),
 );
 
 const shutdown = () => {

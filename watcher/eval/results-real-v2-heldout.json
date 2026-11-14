@@ -1,0 +1,176 @@
+[
+  {
+    "repo": "psf/black",
+    "issue": "https://github.com/psf/black/issues/4062",
+    "fix": "https://github.com/psf/black/pull/4086",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/black/__init__.py",
+      "src/black/parsing.py",
+      "src/black/output.py"
+    ],
+    "lookups": [],
+    "files_read": [],
+    "fixed_files": [
+      "src/black/linegen.py"
+    ],
+    "named": "src/black/__init__.py:1444",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "guess",
+    "cause_plain": "Black reformatted a piece of code and its own safety check found that the result was not valid Python, so it stopped without writing anything. The event doesn't include the input that triggered this, so I can't tell which construct caused it.",
+    "cause_technical": "The assertion is raised in assert_equivalent (src/black/__init__.py:1444-1447). parse_ast(dst) failed with \"expected ':'\" at line 1, so the formatter (format_str in the linegen code, not shown) emitted a one-line statement with a missing colon. The checking code is behaving correctly. The bug is in the formatting step, and finding it needs the input source, which is only in the temp log file named in the error (blk_*.log). Without that I can't point to a safe edit, so I'm proposing none.",
+    "real_cause": "left_hand_split() only checked for a missing opening bracket, not for empty tail leaves, so at line length 1 it produced a split that broke the code and failed the equivalence check.",
+    "seconds": 9,
+    "cost_usd": 0.0405
+  },
+  {
+    "repo": "psf/requests",
+    "issue": "https://github.com/psf/requests/issues/6643",
+    "fix": "https://github.com/psf/requests/pull/6644",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/requests/adapters.py",
+      "src/requests/sessions.py",
+      "src/requests/api.py",
+      "src/requests/models.py",
+      "src/requests/cookies.py"
+    ],
+    "lookups": [
+      "find_definition {\"name\":\"HTTPAdapter.request_url\"}",
+      "find_definition {\"name\":\"PreparedRequest.prepare_url\"}",
+      "read_lines {\"path\":\"src/requests/adapters.py\",\"start\":498,\"end\":501}",
+      "find_definition {\"name\":\"InvalidURL\"}"
+    ],
+    "files_read": [
+      "tests/conftest.py",
+      "src/requests/exceptions.py"
+    ],
+    "fixed_files": [
+      "src/requests/adapters.py"
+    ],
+    "named": "src/requests/adapters.py:499",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "A request to a malformed web address (one whose path starts with \"//\", like \"//v:h\") crashed with a raw low-level urllib3 error. Users got an unexplained crash, not a clear \"invalid URL\" message.",
+    "cause_technical": "In src/requests/adapters.py HTTPAdapter.send (~line 485), conn.urlopen() is given request.path_url, which here is \"//v:h\". urllib3's parse_url reads that as a host and port and raises LocationParseError. That error is a LocationValueError. Only the earlier get_connection call is wrapped to turn LocationValueError into InvalidURL. The urlopen call is not wrapped, so the raw urllib3 exception escapes. The fix catches it around urlopen and raises requests' InvalidURL.",
+    "real_cause": "HTTPAdapter.request_url() passed a path starting with '//' through unchanged, and urllib3 then parsed '//v:h' as a network location and failed; the fix collapses the leading slashes.",
+    "seconds": 15,
+    "cost_usd": 0.0789
+  },
+  {
+    "repo": "marshmallow-code/marshmallow",
+    "issue": "https://github.com/marshmallow-code/marshmallow/issues/2868",
+    "fix": "https://github.com/marshmallow-code/marshmallow/pull/2894",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/marshmallow/schema.py",
+      "src/marshmallow/error_store.py"
+    ],
+    "lookups": [
+      "read_lines {\"path\":\"src/marshmallow/fields.py\",\"start\":385,\"end\":450}",
+      "search_code {\"text\":\"sentinel\"}",
+      "search_code {\"text\":\"allow_none\"}",
+      "read_lines {\"path\":\"src/marshmallow/fields.py\",\"start\":200,\"end\":216}",
+      "read_lines {\"path\":\"src/marshmallow/fields.py\",\"start\":290,\"end\":382}",
+      "read_lines {\"path\":\"src/marshmallow/fields.py\",\"start\":170,\"end\":199}"
+    ],
+    "files_read": [
+      "src/marshmallow/fields.py"
+    ],
+    "fixed_files": [
+      "src/marshmallow/fields.py"
+    ],
+    "named": "src/marshmallow/fields.py:299",
+    "file_hit": true,
+    "line_hit": false,
+    "gate_passed": false,
+    "gate_reasons": [
+      "no edit proposed"
+    ],
+    "confidence": "likely",
+    "cause_plain": "Loading `{\"sentinel\": None}` was rejected because the `sentinel` field in the test script's schema doesn't accept null. The rejection is marshmallow's normal behaviour, not a bug in the library.",
+    "cause_technical": "The error comes from `Field._validate_missing` (src/marshmallow/fields.py:299). It raises the \"null\" error when `value is None and not self.allow_none`. `allow_none` is set at fields.py:213 and is only true if `allow_none=True` or `load_default=None` is passed. The marshmallow code I read is correct, and the crash is the expected result of `schema.load` in src/test.py:11. The `sentinel` field there is declared without `allow_none=True`. I did not see that schema definition, so this is inferred. No safe library edit exists. To accept null, declare the field as `fields.X(allow_none=True)`.",
+    "real_cause": "fields.Constant set load_default/dump_default after Field.__init__ had already computed allow_none from a missing default, so a None constant was rejected as null on load.",
+    "seconds": 15,
+    "cost_usd": 0.054
+  },
+  {
+    "repo": "pallets/jinja",
+    "issue": "https://github.com/pallets/jinja/issues/1701",
+    "fix": "https://github.com/pallets/jinja/pull/1702",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "src/jinja2/nativetypes.py",
+      "src/jinja2/environment.py",
+      "src/jinja2/debug.py"
+    ],
+    "lookups": [
+      "search_code {\"text\":\"join(\"}",
+      "search_code {\"text\":\"_output_const_repr\"}",
+      "read_lines {\"path\":\"src/jinja2/compiler.py\",\"start\":1440,\"end\":1580}",
+      "find_definition {\"name\":\"do_join\"}",
+      "find_definition {\"name\":\"sync_do_join\"}"
+    ],
+    "files_read": [
+      "src/jinja2/compiler.py",
+      "src/jinja2/filters.py"
+    ],
+    "fixed_files": [
+      "src/jinja2/runtime.py"
+    ],
+    "named": "src/jinja2/compiler.py:1448",
+    "file_hit": false,
+    "line_hit": false,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "guess",
+    "cause_plain": "Rendering a template with the native-types environment crashed because a join step got a number where it needed text. I could not confirm the exact spot, so this fix is a best guess.",
+    "cause_technical": "The error is a `\"\".join` over a sequence that contains an int. I read the likely candidates. `native_concat` and `NativeCodeGenerator._output_const_repr` in nativetypes.py both convert with `str(v)`, so they look correct. `sync_do_join` in filters.py also converts every item to a string. The one remaining unprotected join is the base `CodeGenerator._output_const_repr` in compiler.py line 1448, which calls `repr(concat(group))`. In native mode, constant output children can be non-str values such as ints, and `concat` fails on them. Making that join convert each item with `str()` is the smallest defensive fix. I did not find a path that reaches it in native mode, so this is a guess.",
+    "real_cause": "BlockReference.__call__/_async_call joined block output with the module-level str concat instead of environment.concat, so NativeEnvironment blocks returning non-strings failed.",
+    "seconds": 24,
+    "cost_usd": 0.0673
+  },
+  {
+    "repo": "celery/celery",
+    "issue": "https://github.com/celery/celery/issues/6164",
+    "fix": "https://github.com/celery/celery/pull/10406",
+    "difficulty": "root_elsewhere",
+    "files_shown": [
+      "celery/backends/base.py",
+      "celery/backends/redis.py",
+      "celery/backends/asynchronous.py"
+    ],
+    "lookups": [
+      "search_code {\"text\":\"def __del__\"}",
+      "read_lines {\"path\":\"celery/result.py\",\"start\":435,\"end\":455}",
+      "read_lines {\"path\":\"celery/backends/redis.py\",\"start\":196,\"end\":198}",
+      "find_definition {\"name\":\"BaseKeyValueStoreBackend.get_key_for_task\"}",
+      "search_code {\"text\":\"key_t\"}"
+    ],
+    "files_read": [
+      "celery/result.py"
+    ],
+    "fixed_files": [
+      "celery/backends/base.py"
+    ],
+    "named": "celery/backends/base.py:1043",
+    "file_hit": true,
+    "line_hit": true,
+    "gate_passed": true,
+    "gate_reasons": [],
+    "confidence": "likely",
+    "cause_plain": "A task result object crashed while being cleaned up. Celery builds a Redis key from the task id, and that fails when the id isn't plain text. This is most likely a UUID object, not a string. The error appears during garbage collection, so it's noisy and the cleanup is skipped.",
+    "cause_technical": "In celery/backends/base.py `_get_key_for` (line ~1042), `key_t(id)` uses `ensure_bytes`, which returns non-str, non-bytes values unchanged. If an AsyncResult has a non-string id such as a uuid.UUID, `key_t('').join([prefix, id, key])` mixes bytes with that object and raises TypeError. It surfaces from `AsyncResult.__del__` → `remove_pending_result` → `cancel_for` → `get_key_for_task`. I did not confirm the id type from the event, so this is inferred from the code. The fix is to turn non-str, non-bytes ids into str before building the key.",
+    "real_cause": "BaseKeyValueStoreBackend._get_key_for() passed the task id straight to key_t(), so a uuid.UUID task id made the bytes join raise TypeError.",
+    "seconds": 19,
+    "cost_usd": 0.0469
+  }
+]

@@ -1,0 +1,19 @@
+{
+ "design": [
+  "https://github.com/python-attrs/attrs/issues/1284",
+  "https://github.com/psf/black/issues/5214",
+  "https://github.com/fastapi/fastapi/issues/9424",
+  "https://github.com/pallets/flask/issues/5258",
+  "https://github.com/encode/httpx/issues/309"
+ ],
+ "heldout": [
+  "https://github.com/celery/celery/issues/6164",
+  "https://github.com/marshmallow-code/marshmallow/issues/2868",
+  "https://github.com/psf/requests/issues/6643",
+  "https://github.com/psf/black/issues/4062",
+  "https://github.com/pallets/jinja/issues/1701"
+ ],
+ "_how": [
+  "The 10 outside-traceback cases sorted by sha1(issue_url); the first 5 are the design half (round 2 was tuned on them), the last 5 the held-out half (not looked at while tuning round 2). All 10 were seen while building round 1."
+ ]
+}
