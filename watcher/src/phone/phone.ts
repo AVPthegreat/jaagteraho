@@ -253,9 +253,16 @@ export class Phone {
     // POST /twilio/twiml/:token: Twilio fetches the call script for a call we placed.
     app.post("/twilio/twiml/:token", async (c) => {
       if (!this.cfg.publicBase) return c.text("forbidden", 403);
-      if (!(await signed(c))) return c.text("forbidden", 403);
+      if (!(await signed(c))) {
+        console.log("phone: call script refused (bad Twilio signature)");
+        return c.text("forbidden", 403);
+      }
       const call = this.peek(c.req.param("token"));
-      if (!call) return twiml(say("This JaagteRaho alert has expired. Goodbye."));
+      if (!call) {
+        console.log("phone: call script asked for an unknown or expired call");
+        return twiml(say("This JaagteRaho alert has expired. Goodbye."));
+      }
+      console.log(`phone: call script served (attempt ${call.attempt})`);
       const ackUrl = `${this.cfg.publicBase}/twilio/ack/${c.req.param("token")}`;
       return new Response(`<?xml version="1.0" encoding="UTF-8"?>${callTwiml(callText(call.info, call.attempt, this.cfg.repeats), this.cfg.voice, ackUrl)}`, {
         headers: { "content-type": "text/xml" },
