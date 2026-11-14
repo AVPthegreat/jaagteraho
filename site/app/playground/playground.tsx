@@ -208,9 +208,19 @@ export function Playground() {
     let es: EventSource | null = null;
     let wait = 1000;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const connect = () => {
+    const retry = () => {
       if (!alive) return;
-      es = new EventSource(`${WATCHER}/public/playground/mine/${session}`);
+      setConn("reconnecting");
+      timer = setTimeout(connect, wait);
+      wait = Math.min(wait * 2, 30_000);
+    };
+    // The session id is a credential: it is POSTed for a one-time ticket, and only the ticket goes in the URL.
+    const connect = async () => {
+      if (!alive) return;
+      const t = await post<{ ticket: string }>("/public/playground/mine", { session });
+      if (!alive) return;
+      if (!t.ok || !t.data.ticket) return retry();
+      es = new EventSource(`${WATCHER}/public/playground/mine/${encodeURIComponent(t.data.ticket)}`);
       es.addEventListener("snapshot", (m) => {
         wait = 1000;
         setConn("live");
@@ -230,14 +240,12 @@ export function Playground() {
       });
       es.addEventListener("error", () => {
         if (!alive || !es) return;
-        setConn("reconnecting");
-        if (es.readyState !== EventSource.CLOSED) return; // the browser is retrying by itself
+        // A ticket works once, so the browser's own retry cannot reuse it: always reconnect with a new one.
         es.close();
-        timer = setTimeout(connect, wait);
-        wait = Math.min(wait * 2, 30_000);
+        retry();
       });
     };
-    connect();
+    void connect();
     return () => {
       alive = false;
       es?.close();

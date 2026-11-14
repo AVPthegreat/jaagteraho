@@ -13,6 +13,7 @@ import { SpendGuard } from "../src/ai/claude.js";
 import { openDb } from "../src/db/db.js";
 import { playgroundBus, type PlaygroundEvent } from "../src/playground/events.js";
 import { Playground } from "../src/playground/runner.js";
+import { crashReport } from "../src/playground/sandbox.js";
 import { laneFor, phoneAllowedFor, Worker } from "../src/pipeline/worker.js";
 import type { Phone } from "../src/phone/phone.js";
 import type { Telegram } from "../src/telegram/api.js";
@@ -74,6 +75,12 @@ function fakeAI(db: ReturnType<typeof openDb>) {
   };
   const ai = { client, guard: new SpendGuard(db, 40, 45), decisionModel: "claude-haiku-5-5", diagnosisModel: "claude-sonnet-5-5" } as unknown as AI;
   return { ai, calls };
+}
+
+async function useOk(pg: Playground, o: Parameters<Playground["use"]>[0]) {
+  const r = await pg.use(o);
+  assert.notEqual(r, "busy");
+  return r as Exclude<typeof r, "busy">;
 }
 
 function collect(app: string) {
@@ -296,18 +303,18 @@ describe("a visitor's own run: pick the bug, use the app, approve, undo", () => 
     assert.equal(o.state, "broken");
     assert.equal(o.approvable, true);
     assert.equal(pg.latest(1)[0].hidden_test, "not_run", "the hidden test waits for the visitor");
-    const before = await pg.use(o);
+    const before = await useOk(pg, o);
     assert.equal(before.answered, false);
     assert.match(before.error ?? "", /KeyError/);
     assert.equal(await pg.applyFix(o, "approved"), "applied");
     assert.equal(o.state, "fixed");
     assert.equal(pg.latest(1)[0].hidden_test, "passed");
     assert.equal(pg.latest(1)[0].applied_by, "approved");
-    const after = await pg.use(o);
+    const after = await useOk(pg, o);
     assert.equal(after.answered, true);
     assert.deepEqual(after.response, { status: 400, error: "missing: plates" });
     assert.equal(pg.undo(o), true);
-    assert.equal((await pg.use(o)).answered, false, "undo puts the bug back");
+    assert.equal((await useOk(pg, o)).answered, false, "undo puts the bug back");
     playgroundBus.off(`session:${S1}`, on);
     for (const s of ["plant", "crash", "decision", "cause", "gate", "own_test", "ready", "done", "used_crash", "applied", "hidden_test", "used_ok", "undone"]) assert.ok(steps.includes(s), s);
     pg.stop();
@@ -347,6 +354,58 @@ describe("a visitor's own run: pick the bug, use the app, approve, undo", () => 
     assert.equal(last, 429, "approve/undo are rate-limited per visitor");
     const apps = (await (await app.request("/public/playground/apps")).json()) as { apps: Array<{ cases: Array<{ id: string; title: string }> }> };
     assert.equal(apps.apps[0].cases[0].id, CASE_ID);
+    pg.stop();
+  });
+});
+
+describe("playground review fixes", () => {
+  const S = (n: number) => `visitor-${String(n).padStart(6, "0")}`;
+
+  it("one Use in flight per run, and at most two across all visitors", async () => {
+    const db = openDb(":memory:");
+    const { ai } = fakeAI(db);
+    const pg = new Playground(db, ai, { dir, canSpend: () => true });
+    const ids = [1, 2, 3].map((n) => (pg.startOwn({ session: S(n), caseId: CASE_ID, exam: false, heal: "ask" }, "messmenu") as { run_id: number }).run_id);
+    await pg.settle();
+    const runs = ids.map((id, i) => pg.ownRun(S(i + 1), id)!);
+    const same = await Promise.all([pg.use(runs[0]), pg.use(runs[0])]);
+    assert.equal(same.filter((r) => r === "busy").length, 1, "a second Use on the same run waits");
+    const all = await Promise.all(runs.map((o) => pg.use(o)));
+    assert.equal(all.filter((r) => r === "busy").length, 1, "the third concurrent Use is turned away");
+    pg.stop();
+  });
+
+  it("an address plants at most 5 bugs an hour, a network at most 15", async () => {
+    const db = openDb(":memory:");
+    const pg = new Playground(db, null, { dir, canSpend: () => false });
+    const app = playgroundRoutes(pg, []);
+    const plant = (n: number, ip: string) =>
+      app.request("/public/playground/run", { method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": ip }, body: JSON.stringify({ session: S(n), app: "messmenu", case: CASE_ID }) });
+    for (let i = 0; i < 5; i++) assert.notEqual((await plant(i, "10.1.1.1")).status, 429);
+    assert.equal((await plant(9, "10.1.1.1")).status, 429);
+    let blocked = 0;
+    for (let i = 2; i < 30; i++) if ((await plant(100 + i, `10.1.1.${i}`)).status === 429) blocked++;
+    assert.ok(blocked >= 28 - 10, "the /24 shares 15 an hour");
+    assert.notEqual((await plant(500, "10.9.9.9")).status, 429, "another network is not affected");
+    pg.stop();
+  });
+
+  it("Node.js crashes keep their stack in Use the app", () => {
+    const stderr = "node:internal/x\nTypeError: not an amount: NaN\n    at toMoney (/tmp/jrrun-x/src/core/money.js:5:34)\nNode.js v22";
+    assert.match(crashReport(true, stderr), /^TypeError: not an amount/);
+    assert.equal(crashReport(false, stderr), "", "a Python report needs a Python traceback");
+  });
+
+  it("the live feed opens with a one-time ticket, never with the session in the URL", async () => {
+    const db = openDb(":memory:");
+    const pg = new Playground(db, null, { dir, canSpend: () => false });
+    const app = playgroundRoutes(pg, []);
+    assert.equal((await app.request(`/public/playground/mine/${S(1)}`)).status, 401, "a session id is not a ticket");
+    const t = ((await (await app.request("/public/playground/mine", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session: S(1) }) })).json()) as { ticket: string }).ticket;
+    const first = await app.request(`/public/playground/mine/${t}`);
+    assert.equal(first.status, 200);
+    await first.body?.cancel();
+    assert.equal((await app.request(`/public/playground/mine/${t}`)).status, 401, "single use");
     pg.stop();
   });
 });

@@ -123,6 +123,8 @@ type Own = {
 };
 
 const OWN_TTL_MS = 30 * 60_000;
+/** "Use the app" jobs running at once across all visitors (the runner also has its own small queue). */
+export const USE_AT_ONCE = 2;
 const WATCH_TTL_MS = 90_000;
 const OPEN_GAP_MS = 15_000;
 const EVENTS_PER_RUN = 40;
@@ -148,6 +150,9 @@ export class Playground {
   private openFeeds = new Map<string, number>(); // app -> open live feeds
   private nextCase = new Map<string, number>();
   private own = new Map<number, Own>();
+  private usesInFlight = 0;
+  /** One-time tickets for the visitor's live feed, so the session id never travels in a URL. */
+  private tickets = new Map<string, { session: string; until: number }>();
   private titles: Record<string, { title: string; symptom: string; action: string }> = {};
   private ownBySession = new Map<string, number>();
   private timer: NodeJS.Timeout | null = null;
@@ -398,7 +403,7 @@ export class Playground {
         const ran = await runJob({ kind: "trigger", base: runFrom, code: c.trigger! });
         if (ran.kind !== "trigger") throw new Error("unexpected runner answer");
         // The runner's paths, mapped onto the readable copy, so frames point at files the diagnosis can read.
-        const tb = crashReport(broken, ran.stderr.replaceAll(`${ran.dir}${sep}`, `${broken}${sep}`));
+        const tb = crashReport(isNodeApp(broken), ran.stderr.replaceAll(`${ran.dir}${sep}`, `${broken}${sep}`));
         const parsed = tb ? parseTraceback(tb) : null;
         if (ran.status === 0 || !parsed) throw new Error("the planted bug did not crash the app");
         const top = [...parsed.frames].reverse().find((f) => f.in_app && (f.abs_path ?? "").startsWith(broken + sep)) ?? null;
@@ -628,6 +633,21 @@ export class Playground {
     return { run_id: runId };
   }
 
+  /** A ticket (60 s, single use) that opens the visitor's live feed. */
+  feedTicket(session: string, now = Date.now()): string {
+    for (const [t, v] of this.tickets) if (now > v.until) this.tickets.delete(t);
+    if (this.tickets.size > 10_000) this.tickets.clear();
+    const t = randomBytes(18).toString("base64url");
+    this.tickets.set(t, { session, until: now + 60_000 });
+    return t;
+  }
+
+  redeemTicket(ticket: string, now = Date.now()): string | null {
+    const v = this.tickets.get(ticket);
+    this.tickets.delete(ticket);
+    return v && now <= v.until ? v.session : null;
+  }
+
   /** The visitor's run, only for that visitor. */
   ownRun(session: string, runId: number, now = Date.now()): Own | null {
     const o = this.own.get(runId);
@@ -681,7 +701,20 @@ export class Playground {
   }
 
   /** "Use the app": the real request on the visitor's copy, broken or with the fix applied. */
-  async use(o: Own): Promise<{ fixed: boolean; answered: boolean; response: unknown; error: string | null; traceback: string | null }> {
+  async use(o: Own): Promise<"busy" | { fixed: boolean; answered: boolean; response: unknown; error: string | null; traceback: string | null }> {
+    // One request in flight per run (it also holds approve and undo), and at most USE_AT_ONCE across all visitors.
+    if (o.busy || this.usesInFlight >= USE_AT_ONCE) return "busy";
+    o.busy = true;
+    this.usesInFlight++;
+    try {
+      return await this.useNow(o);
+    } finally {
+      o.busy = false;
+      this.usesInFlight--;
+    }
+  }
+
+  private async useNow(o: Own): Promise<{ fixed: boolean; answered: boolean; response: unknown; error: string | null; traceback: string | null }> {
     const fixed = o.state === "fixed" && !!o.patched;
     const r = await runJob({ kind: "trigger", base: o.runFrom, code: o.c.trigger!, patched: fixed ? o.patched! : {}, respond: true });
     if (r.kind !== "trigger") throw new Error("unexpected runner answer");
@@ -693,7 +726,8 @@ export class Playground {
       response = null;
     }
     const strip = (t: string) => t.replaceAll(`${r.dir}${sep}`, "");
-    const tb = ok ? null : strip(crashReport(r.dir, r.stderr) || "").slice(-3000) || null;
+    const node = this.apps.find((a) => a.name === o.app)?.stack === "Node.js";
+    const tb = ok ? null : strip(crashReport(node, r.stderr) || "").slice(-3000) || null;
     const last = tb ? tb.trim().split("\n").pop() ?? null : null;
     o.emit(ok ? "used_ok" : "used_crash", { fixed });
     return { fixed, answered: ok, response, error: ok ? null : (last ?? "The app crashed."), traceback: tb };
