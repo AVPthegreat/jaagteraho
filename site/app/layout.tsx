@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
-import { HACKATHON, HOSTED_ON, REPO, TEAM, THANKS } from "./site";
+import { BUILT_WITH, HACKATHON, HACKATHON_LOGO, HACKATHON_TRACK, HOSTED_ON, LINKEDIN_URL, REPO, TEAM } from "./site";
+import { Headroom } from "./ui/headroom";
 import { Lantern } from "./ui/lantern";
 import { Motion } from "./ui/motion";
 import { SiteNav } from "./ui/nav-links";
@@ -55,7 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <div>
                   <h2>Try it</h2>
                   <Link href="/playground">Live playground</Link>
-                  <Link href="/demo">Break our exam portal</Link>
+                  <Link href="/demo">Exam portal demo</Link>
                   <Link href="/paste">Paste your error</Link>
                   <Link href="/connect">Connect your app</Link>
                 </div>
@@ -72,29 +73,53 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </div>
               </nav>
             </div>
+            <div className="footer-with">
+              <h2>Built with</h2>
+              <ul>
+                {BUILT_WITH.map((b) => (
+                  <li key={b.name}>
+                    <a href={b.href} rel="noopener">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={b.logo} alt={b.name} height={b.h ?? 24} style={{ height: b.h ?? 24 }} loading="lazy" />
+                      <span>{b.label}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
             <div className="footer-bottom">
+              <div className="footer-event">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={HACKATHON_LOGO} alt="HackGlobal 2026" height={28} loading="lazy" />
+                <p>
+                  Built for {HACKATHON} · <b>{HACKATHON_TRACK}</b>
+                </p>
+              </div>
               <p className="credits">
-                <b>Built by</b>{" "}
+                Built by{" "}
                 {TEAM.map((m, i) => (
                   <span key={m.name}>
                     {i === 1 ? ", with " : i > 1 ? " and " : ""}
-                    {m.href ? <a href={m.href}>{m.name}</a> : m.name}
+                    {i === 0 && LINKEDIN_URL ? (
+                      <a href={LINKEDIN_URL} rel="noopener">
+                        {m.name}
+                      </a>
+                    ) : (
+                      <b>{m.name}</b>
+                    )}
                     {i > 0 && <span className="soft"> ({m.role})</span>}
                   </span>
                 ))}
-                . <span className="soft">{THANKS}</span>
+                .
               </p>
-              <p>
-                <b>Built for</b> {HACKATHON}
-              </p>
-              <p className="soft">
-                Runs on {HOSTED_ON}. Decisions and diagnosis by Claude (Anthropic API). Wake-up voice by Gnani. Accepts events from the open-source Sentry
-                SDKs; not affiliated with Sentry.
+              <p className="soft small">
+                Runs on {HOSTED_ON}. Accepts events from the open-source Sentry SDKs; not affiliated with Sentry. Logos are trademarks of their owners.
               </p>
             </div>
           </div>
         </footer>
         <Motion />
+        <Headroom />
       </body>
     </html>
   );

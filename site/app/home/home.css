@@ -1165,3 +1165,123 @@
     width: min(100%, calc((100svh - 330px) * 1.78 + 20px));
   }
 }
+
+/* ------- v5: one screen per section ------- */
+.hero4 {
+  min-height: 100svh;
+  padding-top: calc(86px + clamp(8px, 2vh, 24px));
+  padding-bottom: clamp(24px, 4vh, 48px);
+}
+.section.screen {
+  padding-block: clamp(48px, 7vh, 80px);
+}
+@media (min-width: 760px) {
+  .screen {
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .screen > .frame {
+    width: 100%;
+  }
+}
+.screen .section-head {
+  margin-bottom: clamp(20px, 3.5vh, 40px);
+}
+.screen .h-section {
+  font-size: clamp(1.9rem, 1.2rem + 2.3vw, 3.2rem);
+}
+.screen .section-head .lead {
+  margin-top: 10px;
+  font-size: var(--step-body);
+}
+.story-pin[data-pinned] {
+  height: auto;
+  padding-block: 0;
+}
+.story-steps {
+  gap: 12px;
+}
+.story-note {
+  margin-top: 16px;
+}
+.watch-panel {
+  margin-top: 12px;
+}
+.nums-note {
+  margin-top: 16px;
+}
+.close4 {
+  padding-block: clamp(64px, 10vh, 120px);
+}
+
+/* Pinned scroll steps: show which step the scroll is on */
+.screen[data-pinned] .watch-card[aria-selected="true"],
+.screen[data-pinned] .shield-list li:has(button[aria-expanded="true"]) {
+  transition: border-color 0.3s, background 0.3s, box-shadow 0.3s;
+}
+.shield-list {
+  min-height: 0;
+}
+@media (min-width: 980px) {
+  .shield-list {
+    min-height: 26rem;
+    align-content: start;
+  }
+  .shield-art {
+    width: min(100%, 380px, calc(100svh - 360px));
+  }
+}
+
+/* Proof numbers as links */
+.nums li {
+  padding: 0;
+}
+.nums a {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  height: 100%;
+  padding: clamp(20px, 3vw, 36px);
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.2s;
+}
+.nums a:hover {
+  background: rgba(40, 70, 150, 0.14);
+  color: inherit;
+}
+.nums a > span {
+  color: var(--soft);
+  font-size: 0.95rem;
+}
+.nums b {
+  font-size: clamp(3rem, 1.6rem + 4.6vw, 5.6rem);
+  background: linear-gradient(180deg, #ffffff 30%, #b3ccff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.nums b small {
+  -webkit-text-fill-color: var(--faint);
+}
+@media (min-width: 980px) {
+  .hero4 .radar {
+    width: min(100%, 520px, calc(100svh - 300px));
+  }
+}
+.section.screen {
+  padding-block: clamp(24px, 4vh, 72px);
+}
+.screen .story-top {
+  margin-bottom: clamp(16px, 3vh, 40px);
+}
+@media (min-width: 980px) {
+  .shield-list {
+    min-height: 23rem;
+  }
+  .shield-src {
+    margin-top: -8px;
+  }
+}

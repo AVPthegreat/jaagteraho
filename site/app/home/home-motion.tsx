@@ -46,7 +46,7 @@ export function HomeMotion() {
         // Proof: the numbers count up once.
         gsap.utils.toArray<HTMLElement>("[data-count]").forEach((el) => {
           const end = Number(el.dataset.count);
-          const dec = (el.dataset.count ?? "").includes(".") ? 1 : 0;
+          const dec = ((el.dataset.count ?? "").split(".")[1] ?? "").length;
           const o = { v: 0 };
           gsap.to(o, {
             v: end,
@@ -76,10 +76,11 @@ export function HomeMotion() {
           if (clock) clock.textContent = steps[i].dataset.time ?? "";
         };
         show(0);
+        const section = pin.closest<HTMLElement>("section") ?? pin;
         const st = ScrollTrigger.create({
-          trigger: pin,
+          trigger: section,
           pin: true,
-          start: "top top+=64",
+          start: "top top",
           end: () => `+=${window.innerHeight * 2.4}`,
           scrub: 0.4,
           anticipatePin: 1,
@@ -93,6 +94,34 @@ export function HomeMotion() {
           delete pin.dataset.pinned;
           steps.forEach((s, k) => s.classList.toggle("on", k === 0));
           if (bar) bar.style.transform = "";
+        };
+      });
+
+      // "What it watches" and "How safe is it": pinned, and scroll walks through the cards / layers.
+      mm.add("(min-width: 960px) and (min-height: 640px) and (prefers-reduced-motion: no-preference)", () => {
+        const made = gsap.utils.toArray<HTMLElement>("[data-pin-steps]").map((sec) => {
+          const n = Number(sec.dataset.pinSteps) || 1;
+          let cur = -1;
+          sec.dataset.pinned = "";
+          return ScrollTrigger.create({
+            trigger: sec,
+            pin: true,
+            start: "top top",
+            end: () => `+=${window.innerHeight * 0.55 * n}`,
+            scrub: 0.3,
+            anticipatePin: 1,
+            onUpdate: (self) => {
+              const i = Math.min(n - 1, Math.floor(self.progress * n * 0.999));
+              if (i === cur) return;
+              cur = i;
+              sec.dispatchEvent(new CustomEvent("jr:step", { detail: i }));
+            },
+          });
+        });
+        ScrollTrigger.refresh();
+        return () => {
+          made.forEach((st) => st.kill());
+          gsap.utils.toArray<HTMLElement>("[data-pin-steps]").forEach((sec) => delete sec.dataset.pinned);
         };
       });
 

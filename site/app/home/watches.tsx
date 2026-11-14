@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useScrollStep } from "./use-step";
 import { Icon } from "../ui/icons";
 
 /*
@@ -75,6 +76,8 @@ const CASES: Array<{
 
 export function Watches() {
   const [on, setOn] = useState(0);
+  const box = useRef<HTMLDivElement | null>(null);
+  useScrollStep(box, setOn);
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
   const c = CASES[on];
 
@@ -92,7 +95,7 @@ export function Watches() {
   };
 
   return (
-    <div className="watch">
+    <div ref={box} className="watch">
       <div className="watch-cards" role="tablist" aria-label="Parts of your app" onKeyDown={onKey}>
         {CASES.map((w, i) => (
           <button
@@ -124,7 +127,7 @@ export function Watches() {
       </div>
       <div className="watch-panel" role="tabpanel" id="wt-panel" aria-labelledby={`wt-${c.id}`} key={c.id}>
         <div className="wp-err">
-          <span className="wp-k">When this breaks</span>
+          <span className="wp-k">When this fails</span>
           <code>{c.error}</code>
         </div>
         <div className="wp-do">

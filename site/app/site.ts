@@ -11,15 +11,26 @@ export const HOSTED_ON = "a Vultr Cloud Compute server in Bangalore, India";
 /* The demo video, once it is published. Nothing is shown while it is null. */
 export const VIDEO_URL: string | null = null;
 
-export const HACKATHON = "HackGlobal 2026 · Track 01, Agentic and GenAI apps";
+export const HACKATHON = "HackGlobal 2026";
+export const HACKATHON_TRACK = "Track 1";
 
 /* Who built it. The founder built JaagteRaho solo, working with two AI teammates. */
 export const TEAM: Array<{ name: string; role: string; href?: string }> = [
-  { name: "Anant Vardhan Pandey", role: "founder, built it", href: "https://faurus.app" },
+  { name: "Anant Vardhan Pandey", role: "founder, built it" },
   { name: "Ted", role: "AI engineer" },
   { name: "Ido", role: "AI code reviewer" },
 ];
-export const THANKS = "Thanks to Madhvan for help with the UI.";
+/* The founder's LinkedIn. Empty hides the link. */
+export const LINKEDIN_URL = "";
+
+/* The services JaagteRaho runs on, shown as a logo row in the footer. Logos: public/logos (see CREDITS.md). */
+export const BUILT_WITH: Array<{ name: string; label: string; logo: string; href: string; h?: number }> = [
+  { name: "Vultr", label: "Runs on Vultr Cloud", logo: "/logos/vultr.svg", href: "https://www.vultr.com" },
+  { name: "Claude by Anthropic", label: "Diagnosis by Claude", logo: "/logos/claude-white.svg", href: "https://www.anthropic.com/claude" },
+  { name: "Gnani.ai", label: "Voice by Gnani.ai", logo: "/logos/gnani-white.svg", href: "https://gnani.ai", h: 30 },
+  { name: "Twilio", label: "Calls by Twilio", logo: "/logos/twilio-white.svg", href: "https://www.twilio.com" },
+];
+export const HACKATHON_LOGO = "/logos/hackglobal-white.png";
 
 /*
   Short looping product clips for the "See it work" section (demo data only). Files live in

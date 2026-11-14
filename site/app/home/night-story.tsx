@@ -100,7 +100,7 @@ const STEPS: Array<{ t: string; ampm: string; title: string; text: React.ReactNo
 
 export function NightStory() {
   return (
-    <section className="section story4" id="night" aria-labelledby="night-h">
+    <section className="section screen story4" id="night" aria-labelledby="night-h">
       <div className="frame">
         <div className="story-pin" data-story>
           <div className="story-top">
