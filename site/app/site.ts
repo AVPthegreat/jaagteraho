@@ -12,7 +12,9 @@ export const HOSTED_ON = "a Vultr Cloud Compute server in Bangalore, India";
 export const VIDEO_URL: string | null = null;
 
 export const HACKATHON = "HackGlobal 2026";
-export const HACKATHON_TRACK = "Track 1";
+export const HACKATHON_TRACK = "Build with AI track";
+export const HACKATHON_ABOUT = "14–15 Nov 2026 · organised by Polaris School of Technology, powered by Vultr";
+export const HACKATHON_LOGO = "/logos/hackglobal-wordmark.png";
 
 /* Who built it. The founder built JaagteRaho solo, working with two AI teammates. */
 export const TEAM: Array<{ name: string; role: string; href?: string }> = [

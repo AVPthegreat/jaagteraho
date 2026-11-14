@@ -2086,3 +2086,8 @@ body:has(.hero4) main {
   font-weight: 600;
   color: var(--text);
 }
+.footer-event .event-logo {
+  height: 34px;
+  width: auto;
+  border-radius: 6px;
+}

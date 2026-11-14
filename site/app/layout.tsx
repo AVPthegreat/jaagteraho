@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
-import { BUILT_WITH, HACKATHON, HACKATHON_TRACK, HOSTED_ON, LINKEDIN_URL, REPO, TEAM } from "./site";
+import { BUILT_WITH, HACKATHON, HACKATHON_ABOUT, HACKATHON_LOGO, HACKATHON_TRACK, HOSTED_ON, LINKEDIN_URL, REPO, TEAM } from "./site";
 import { Headroom } from "./ui/headroom";
 import { Lantern } from "./ui/lantern";
 import { Motion } from "./ui/motion";
@@ -89,9 +89,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
             <div className="footer-bottom">
               <div className="footer-event">
-                <p className="event-mark">
-                  <span className="soft">Built for</span> <b>{HACKATHON}</b> · {HACKATHON_TRACK}
-                </p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className="event-logo" src={HACKATHON_LOGO} alt="HackGlobal" width={496} height={82} loading="lazy" />
+                <div>
+                  <p className="event-mark">
+                    <span className="soft">Built for</span> <b>{HACKATHON}</b> · {HACKATHON_TRACK}
+                  </p>
+                  <p className="soft small">{HACKATHON_ABOUT}</p>
+                </div>
               </div>
               <p className="credits">
                 Built by{" "}
