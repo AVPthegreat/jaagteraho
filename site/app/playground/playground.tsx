@@ -422,7 +422,7 @@ export function Playground() {
           <span className="soft">{String(cause.unavailable)}</span>
         ) : (
           <>
-            {String(cause.cause_plain ?? "")} <span className="mono soft">{`${String(cause.file ?? "")}:${String(cause.line ?? "")}`}</span>
+            <Typed text={String(cause.cause_plain ?? "")} /> <span className="mono soft">{`${String(cause.file ?? "")}:${String(cause.line ?? "")}`}</span>
           </>
         )
       ) : null,
@@ -491,6 +491,9 @@ export function Playground() {
     },
   ];
   const current = steps.findIndex((s) => !s.done);
+  // The live line under the active step: the latest real progress event since the last step event.
+  const lastEv = run?.events.at(-1);
+  const live = working && lastEv?.step === "progress" ? String(lastEv.data.text ?? "") : null;
   const hiddenResult = hidden ? String(hidden.result) : null;
   const fixSecs = card?.seconds_to_proved_fix ?? card?.total_seconds ?? null;
   const ended = !!run && !working && (fixed || !run.approvable || !!by.failed);
@@ -672,6 +675,11 @@ export function Playground() {
                           <span className="pg2-t">{secs(s.t)}</span>
                         </p>
                         {s.body ? <div className="pg2-step-b">{s.body}</div> : null}
+                        {i === current && live ? (
+                          <p className="pg2-live">
+                            <span className="pg2-live-dot" aria-hidden="true" /> {live}
+                          </p>
+                        ) : null}
                       </div>
                     </li>
                   ))}
@@ -787,5 +795,33 @@ export function Playground() {
         ) : null}
       </div>
     </div>
+  );
+}
+
+/**
+ * Reveals real text as if typed (the cause arrives in one piece from the model; this only paces its display).
+ * Shows it at once for reduced motion and to screen readers.
+ */
+function Typed({ text }: { text: string }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      const t0 = setTimeout(() => setN(text.length), 0);
+      return () => clearTimeout(t0);
+    }
+    let i = 0;
+    const t = setInterval(() => {
+      i = Math.min(text.length, i + 3);
+      setN(i);
+      if (i >= text.length) clearInterval(t);
+    }, 18);
+    return () => clearInterval(t);
+  }, [text]);
+  return (
+    <>
+      <span aria-hidden="true">{text.slice(0, n)}</span>
+      <span className="sr-only">{text}</span>
+    </>
   );
 }

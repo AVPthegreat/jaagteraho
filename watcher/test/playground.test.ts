@@ -103,7 +103,7 @@ describe("playground runner", () => {
     assert.equal(pg.startNow("messmenu"), null, "one run in flight per app");
     await pg.settle();
     feed.stop();
-    assert.deepEqual(feed.got.map((e) => e.step), ["plant", "crash", "connected", "decision", "cause", "gate", "own_test", "hidden_test", "done"]);
+    assert.deepEqual(feed.got.filter((e) => e.step !== "progress").map((e) => e.step), ["plant", "crash", "connected", "decision", "cause", "gate", "own_test", "hidden_test", "done"]);
     const crash = feed.got.find((e) => e.step === "crash")!;
     assert.match(String(crash.data.traceback), /Traceback \(most recent call last\)/);
     assert.equal(crash.data.exception_type, "KeyError");
@@ -582,5 +582,27 @@ describe("playground: caution fixes, app requires, hint list", () => {
     } finally {
       rmSync(hdir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("playground: JaagteRaho thinking, live", () => {
+  it("streams only real progress: the files given to the diagnosis, the model call, each check as it completes", async () => {
+    const db = openDb(":memory:");
+    const { ai } = fakeAI(db);
+    const pg = new Playground(db, ai, { dir, canSpend: () => true });
+    const got: PlaygroundEvent[] = [];
+    playgroundBus.on("session:thinking-visitor", (e: PlaygroundEvent) => got.push(e));
+    pg.startOwn({ session: "thinking-visitor", caseId: CASE_ID, exam: false, heal: "ask" }, "messmenu");
+    await pg.settle();
+    const progress = got.filter((e) => e.step === "progress").map((e) => e.data);
+    const reads = progress.filter((p) => p.kind === "read").map((p) => String(p.path));
+    assert.ok(reads.includes("messmenu/booking/service.py"), reads.join(","));
+    assert.ok(reads.every((p) => !p.startsWith("/")), "paths inside the app, never our temp folder");
+    const order = got.map((e) => (e.step === "progress" ? `progress:${e.data.kind}:${e.data.name ?? ""}` : e.step));
+    const at = (s: string) => order.indexOf(s);
+    assert.ok(at("progress:read:") < at("progress:thinking:") && at("progress:thinking:") < at("cause"), order.join(" "));
+    assert.ok(at("cause") < at("progress:check:Code rules") && at("progress:check:Code rules") < at("progress:check:AI review") && at("progress:check:AI review") < at("gate"), order.join(" "));
+    assert.ok(at("gate") < at("own_test"));
+    pg.stop();
   });
 });

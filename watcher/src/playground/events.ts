@@ -19,7 +19,8 @@ export type PlaygroundStep =
   | "applied" // the fix was applied to the visitor's copy (approved or healed)
   | "undone"
   | "used_ok" // the visitor used the app and it answered
-  | "used_crash"; // the visitor used the app and it crashed
+  | "used_crash" // the visitor used the app and it crashed
+  | "progress"; // live progress inside a step: a file read, the model call, a check completed
 
 export type PlaygroundEvent = {
   step: PlaygroundStep;

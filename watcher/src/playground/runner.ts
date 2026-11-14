@@ -133,7 +133,7 @@ const OWN_TTL_MS = 30 * 60_000;
 export const USE_AT_ONCE = 2;
 const WATCH_TTL_MS = 90_000;
 const OPEN_GAP_MS = 15_000;
-const EVENTS_PER_RUN = 40;
+const EVENTS_PER_RUN = 80;
 
 /** What the protected area is, in plain words, for the visitor. */
 export function areaWords(files: string[]): string {
@@ -504,6 +504,11 @@ export class Playground {
         });
 
         const { files } = await gatherFiles(this.db, new LocalSource(broken), projectId, parsed.frames, null);
+        // Live progress, only for what really happens: the files the diagnosis is given, then the model call.
+        const brokenPrefix = `${broken}${sep}`;
+        const rel = (p: string) => (p.startsWith(brokenPrefix) ? p.slice(brokenPrefix.length) : p);
+        for (const f of files.slice(0, 8)) emit("progress", { kind: "read", path: rel(f.path), related: f.related === true, text: `Reading ${rel(f.path)}${f.related ? " (imported by the failing code)" : ""}` });
+        emit("progress", { kind: "thinking", text: `Asking Claude for the cause, with ${files.length} file${files.length === 1 ? "" : "s"}…` });
         const out = await this.steps.diagnose(this.ai, ev, files);
         const tCause = Date.now();
         const injected = (c.inject ?? []).map((e) => e.file);
@@ -539,7 +544,11 @@ export class Playground {
           });
           const shown = [...files, ...out.files_read];
           const rules = codeChecks(d, shown, { allowProtected: true });
+          // Each check ticks as it completes: the code rules are known now; the AI review runs inside the gate.
+          emit("progress", { kind: "check", name: "Code rules", ok: rules.passed, text: rules.passed ? "Code rules passed" : `Code rules: ${rules.reasons[0] ?? "failed"}` });
+          if (rules.passed && this.ai) emit("progress", { kind: "thinking", text: "The AI reviewer is reading the diff…" });
           const gate = await this.steps.gate(this.ai, d, shown);
+          if (gate.review) emit("progress", { kind: "check", name: "AI review", ok: Number(gate.review.fix_quality) >= 2, text: `AI review: rated ${gate.review.fix_quality} of 3` });
           gateLevel = gate.level ?? (gate.passed ? "recommended" : "withheld");
           gateReasons = gate.reasons;
           emit("gate", {
@@ -556,6 +565,7 @@ export class Playground {
           protectedFiles = gate.protected_files ?? [];
           if (Object.keys(gate.patched).length) {
             // The model's own test: fails on the broken code, passes on the fixed code (Python only).
+            if (d.regression_test?.code?.trim()) emit("progress", { kind: "thinking", text: "Running its own test on the broken and the fixed code, in the sandbox…" });
             const proof = await proveFix(broken, gate.patched, d.regression_test, runFrom);
             ownTest = proof.verdict;
             if (proof.verdict === "proved") tProved = Date.now();
