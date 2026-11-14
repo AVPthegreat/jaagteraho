@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Bars } from "../ui/bars";
+import { BENCH_ALL, benchInr, benchInrPerBug } from "../site";
 import { getEvidence } from "../watcher";
 import benchmarks from "./benchmarks.json";
 
@@ -103,6 +104,33 @@ function Benchmarks() {
           </div>
         </div>
       )}
+      <div className="doc">
+        <h2 id="extended-h" data-rv>
+          Both sets together: {BENCH_ALL.bugs} planted bugs
+        </h2>
+        <div className="body">
+          <p className="soft" data-rv>
+            The {b ? b.bugs : 20} bugs above plus 50 more added for the live playground, run once with the same pipeline (14 Nov 2026). The published
+            JR-Bench numbers above are unchanged. Full tables: <a href={BENCH_ALL.extra_md}>bench/RESULTS-extra.md</a> and{" "}
+            <a href={BENCH_ALL.base_md}>bench/RESULTS.md</a>.
+          </p>
+          <Table
+            label="Both benchmark sets together"
+            head={["Measure", "Result"]}
+            rows={[
+              ["Bugs that reached the owner", frac(BENCH_ALL.reached, BENCH_ALL.bugs)],
+              ["Proposed fix works (our hidden test passes)", frac(BENCH_ALL.fix_works, BENCH_ALL.bugs)],
+              ["Right file named", frac(BENCH_ALL.right_file, BENCH_ALL.bugs)],
+              ["Fixes shown to the owner that were wrong", `${BENCH_ALL.shown_wrong} of ${BENCH_ALL.shown} shown (all 5 in the extended set)`],
+              ["Median seconds to a decision", `${BENCH_ALL.median_decision_s} (all ${BENCH_ALL.cases} errors)`],
+              [
+                "Total AI cost",
+                `$${BENCH_ALL.cost_usd.toFixed(2)} for ${BENCH_ALL.cases} errors (about ₹${benchInr()}, ₹${benchInrPerBug()} a bug at ₹${BENCH_ALL.inr_per_usd} to the dollar)`,
+              ],
+            ]}
+          />
+        </div>
+      </div>
       {real && (
         <div className="doc">
           <h2 id="real-h" data-rv>
