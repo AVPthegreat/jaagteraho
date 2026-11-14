@@ -156,7 +156,7 @@ export default function Home() {
             </li>
           </ul>
           <p className="nums-note" data-rv>
-            One benchmark run on {BENCH_ALL.bugs} planted bugs (plus 4 harmless errors) across 7 apps we built and run; ₹ at about ₹{BENCH_ALL.inr_per_usd} to the
+            Two benchmark runs (the original 24 cases and 50 more) on {BENCH_ALL.bugs} planted bugs (plus 4 harmless errors) across 7 apps we built and run; ₹ at about ₹{BENCH_ALL.inr_per_usd} to the
             dollar.{" "}
             <Link className="textlink" href="/evidence">
               How each number was measured →
