@@ -22,19 +22,30 @@ class MissingLanguage(unittest.TestCase):
 `;
 
 describe("fix proof", () => {
-  it("proves a real fix: the test fails before and passes after", () => {
-    const r = proveFix(SANDBOX, { "portal/submissions.py": fixed }, { file: "tests/test_submissions.py", code: TEST });
+  it("proves a real fix: the test fails before and passes after", async () => {
+    const r = await proveFix(SANDBOX, { "portal/submissions.py": fixed }, { file: "tests/test_submissions.py", code: TEST });
     assert.equal(r.verdict, "proved", r.note);
     assert.equal(r.before, "failed");
     assert.equal(r.after, "passed");
   });
 
-  it("does not prove a fix that changes nothing", () => {
-    const r = proveFix(SANDBOX, { "portal/submissions.py": original }, { file: "t.py", code: TEST });
+  it("does not freeze the server while the test runs (intake, live feeds and the bot keep going)", async () => {
+    let ticks = 0;
+    const timer = setInterval(() => ticks++, 10);
+    const t = Date.now();
+    const r = await proveFix(SANDBOX, { "portal/submissions.py": fixed }, { file: "t.py", code: TEST });
+    clearInterval(timer);
+    assert.equal(r.verdict, "proved", r.note);
+    // With spawnSync the timer could not fire at all until the proof ended.
+    assert.ok(ticks >= Math.floor((Date.now() - t) / 10 / 4), `only ${ticks} ticks in ${Date.now() - t} ms`);
+  });
+
+  it("does not prove a fix that changes nothing", async () => {
+    const r = await proveFix(SANDBOX, { "portal/submissions.py": original }, { file: "t.py", code: TEST });
     assert.equal(r.verdict, "not_proved");
   });
 
-  it("never runs a test that reaches files, processes or the environment", () => {
+  it("never runs a test that reaches files, processes or the environment", async () => {
     for (const bad of [
       "import os\nos.system('id')",
       "import subprocess",
@@ -63,15 +74,15 @@ describe("fix proof", () => {
     assert.deepEqual(testProblems(TEST, ["portal"]), []);
     assert.deepEqual(testProblems(`${TEST}\n\nif __name__ == "__main__":\n    unittest.main()\n`, ["portal"]), []);
     assert.deepEqual(testProblems("from django.utils import timezone\nimport unittest\nx = timezone.now()", ["portal", "django"]), []);
-    const r = proveFix(SANDBOX, { "portal/submissions.py": fixed }, { file: "t.py", code: "import os\nos.system('touch /tmp/jr-pwned')" });
+    const r = await proveFix(SANDBOX, { "portal/submissions.py": fixed }, { file: "t.py", code: "import os\nos.system('touch /tmp/jr-pwned')" });
     assert.equal(r.verdict, "skipped");
   });
 
-  it("does not count a test that cannot even run on the current code as proof", () => {
+  it("does not count a test that cannot even run on the current code as proof", async () => {
     // Imports a name that exists only after the fix: it "fails" before, but not because of the bug.
     const helper = `${fixed}\n\ndef jr_helper():\n    return 1\n`;
     const test = "import unittest\nfrom portal.submissions import jr_helper\n\n\nclass T(unittest.TestCase):\n    def test_x(self):\n        self.assertEqual(jr_helper(), 1)\n";
-    const r = proveFix(SANDBOX, { "portal/submissions.py": helper }, { file: "t.py", code: test });
+    const r = await proveFix(SANDBOX, { "portal/submissions.py": helper }, { file: "t.py", code: test });
     assert.equal(r.verdict, "not_proved");
     assert.equal(r.before, "error");
     assert.match(r.note, /could not run on the current code/);
@@ -86,18 +97,18 @@ describe("fix proof", () => {
     assert.equal(readOutcome(0, null, "Ran 0 tests in 0.000s\n\nOK"), "error");
   });
 
-  it("does not run a fix that adds code reaching outside the program", () => {
+  it("does not run a fix that adds code reaching outside the program", async () => {
     for (const line of ['    import os; os.system("x")', '    __import__("socket")', "    open('/etc/passwd').read()", "    x = ().__class__.__base__.__subclasses__()"]) {
       const bad = original.replace('    language = data["language"]', `    language = data.get("language", "python")\n${line}`);
-      const r = proveFix(SANDBOX, { "portal/submissions.py": bad }, { file: "t.py", code: TEST });
+      const r = await proveFix(SANDBOX, { "portal/submissions.py": bad }, { file: "t.py", code: TEST });
       assert.equal(r.verdict, "skipped", line);
       assert.match(r.note, /reaches outside the program/);
     }
     assert.deepEqual(riskyFixLines("a = 1\n", "a = 1\nb = data.get('x')\n"), []);
   });
 
-  it("skips when there is no test", () => {
-    assert.equal(proveFix(SANDBOX, { "portal/submissions.py": fixed }, { file: "", code: "" }).verdict, "skipped");
+  it("skips when there is no test", async () => {
+    assert.equal((await proveFix(SANDBOX, { "portal/submissions.py": fixed }, { file: "", code: "" })).verdict, "skipped");
   });
 });
 

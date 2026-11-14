@@ -409,7 +409,7 @@ export class Worker {
     }
     // On the demo portal, a passed fix is proved by running the model's regression test on old and fixed code.
     const proofRoot = project.kind !== "sandbox" ? null : project.repo?.startsWith("local:") ? project.repo.slice(6) : process.env.JR_SANDBOX_SOURCE ?? null;
-    const testRun = gate.passed && proofRoot ? proveFix(proofRoot, gate.patched, out.result.regression_test) : null;
+    const testRun = gate.passed && proofRoot ? await proveFix(proofRoot, gate.patched, out.result.regression_test) : null;
     // A test that ran but did not prove the fix is a concern the owner should see before approving.
     if (testRun?.verdict === "not_proved" && gate.level === "recommended") {
       gate.level = "caution";

@@ -152,6 +152,17 @@ describe("intake: performance traces", () => {
     assert.equal((await send(envelopeBytes(withId("1".repeat(32))))).status, 200);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM events").get() as { n: number }).n, 1);
   });
+
+  it("never copies a hostile item type into the response header (it used to throw: a 500 that paged the owner)", async () => {
+    const { send } = setup();
+    for (const type of ["a\r\nX-Evil: 1", "s€", "a b,c:d"]) {
+      const body = Buffer.from(`${JSON.stringify(fixture.envelope_header)}\n${JSON.stringify({ type })}\n{"x":1}\n`);
+      const res = await send(body);
+      assert.equal(res.status, 200, JSON.stringify(type));
+      assert.equal(res.headers.get("x-sentry-rate-limits"), null);
+      assert.equal(res.headers.get("x-evil"), null);
+    }
+  });
 });
 
 describe("masking stays fast on hostile input", () => {

@@ -105,3 +105,31 @@ describe("log drains: body limit", () => {
     assert.equal(r.status, 413);
   });
 });
+
+describe("log drain: hostile bodies stay cheap", () => {
+  it("scans a 1 MB body of exception-looking lines in linear time", () => {
+    const f = new TraceFinder();
+    const bodies = [
+      "ValueError\n".repeat(95_000),
+      `TypeError: x\n${"    at x (a.js:1:1)\n".repeat(50_000)}`,
+      `Traceback (most recent call last):\n${"ValueError\n".repeat(95_000)}`,
+    ];
+    for (const body of bodies) {
+      const t = performance.now();
+      f.push("1", extractLines(body), Date.now());
+      f.flush("1");
+      assert.ok(performance.now() - t < 250, `took ${Math.round(performance.now() - t)} ms`);
+    }
+  });
+
+  it("still finds a traceback after a long run of noise, and a JS stack at the end of a request", () => {
+    const f = new TraceFinder();
+    const noise = Array.from({ length: 500 }, (_, i) => `INFO line ${i}`);
+    const py = f.push("1", extractLines([...noise, ...PY].join("\n")), Date.now());
+    assert.equal(py.length, 1);
+    assert.match(py[0].text, /^Traceback[\s\S]*KeyError: 'answers'$/);
+    const js = [...f.push("2", extractLines([...noise, "TypeError: boom", "    at f (/app/a.js:1:1)", "    at g (/app/b.js:2:2)"].join("\n")), Date.now()), ...f.flush("2")];
+    assert.equal(js.length, 1);
+    assert.equal(js[0].text.split("\n").length, 3);
+  });
+});

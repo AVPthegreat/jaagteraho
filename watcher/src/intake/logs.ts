@@ -76,7 +76,16 @@ const PY_END = /^[A-Za-z_][\w.]*(Error|Exception|Exit|Interrupt|Warning|Fault)\b
 const JS_HEAD = /^\s*(?:Uncaught\s+)?(?:[A-Z]\w*(?:Error|Exception)|Error)(?: \[\w+\])?(?::.*)?$/;
 const JS_AT = /^\s+at /;
 
-type Buffer_ = { lines: string[]; path: string | null; at: number };
+// py: how many lines in `lines` start a Python traceback; atRun: how many trailing lines are "at ...".
+// Both are kept up to date line by line, so each pushed line costs O(1) checks, not a rescan of the
+// whole buffer (a 1 MB drain body of "ValueError" lines used to take about 0.6 s of CPU).
+type Buffer_ = { lines: string[]; path: string | null; at: number; py: number; atRun: number };
+
+const reset = (b: Buffer_) => {
+  b.lines = [];
+  b.py = 0;
+  b.atRun = 0;
+};
 
 /** Finds complete stack traces in a stream of log lines. Keeps a little per-stream state between requests. */
 export class TraceFinder {
@@ -89,30 +98,37 @@ export class TraceFinder {
       const id = `${key}|${l.stream}`;
       // Bounded memory: past MAX_STREAMS, the stream idle longest is forgotten (Maps keep insertion order).
       if (!this.streams.has(id) && this.streams.size >= MAX_STREAMS) this.streams.delete(this.streams.keys().next().value!);
-      const b = this.streams.get(id) ?? { lines: [], path: null, at: now };
+      const b = this.streams.get(id) ?? { lines: [], path: null, at: now, py: 0, atRun: 0 };
       this.streams.delete(id);
       this.streams.set(id, b);
       b.at = now;
       if (l.path) b.path = l.path;
       const text = l.text.replace(/\r$/, "");
+      const isAt = JS_AT.test(text);
 
       // A JavaScript stack ends at the first line that is not "at ...".
-      const jsEnd = this.jsStack(b);
-      if (jsEnd && !JS_AT.test(text)) {
-        found.push({ text: jsEnd, path: b.path });
-        b.lines = [];
+      if (!isAt) {
+        const jsEnd = this.jsStack(b);
+        if (jsEnd) {
+          found.push({ text: jsEnd, path: b.path });
+          reset(b);
+        }
       }
 
       b.lines.push(text);
-      if (b.lines.length > KEEP_LINES) b.lines.splice(0, b.lines.length - KEEP_LINES);
+      b.atRun = isAt ? b.atRun + 1 : 0;
+      if (PY_START.test(text)) b.py++;
+      if (b.lines.length > KEEP_LINES) {
+        for (const gone of b.lines.splice(0, b.lines.length - KEEP_LINES)) if (PY_START.test(gone)) b.py--;
+        b.atRun = Math.min(b.atRun, b.lines.length);
+      }
 
-      if (PY_END.test(text.trim()) && !/^\s/.test(text)) {
-        const start = b.lines.map((x) => PY_START.test(x)).lastIndexOf(true);
-        // Chained exceptions ("During handling...") repeat the marker; take the whole chain.
+      if (b.py > 0 && !/^\s/.test(text) && PY_END.test(text.trim())) {
+        // Chained exceptions ("During handling...") repeat the marker; take the whole chain from the first.
         const first = b.lines.findIndex((x) => PY_START.test(x));
-        if (start >= 0) {
-          found.push({ text: b.lines.slice(first >= 0 ? first : start).join("\n"), path: b.path });
-          b.lines = [];
+        if (first >= 0) {
+          found.push({ text: b.lines.slice(first).join("\n"), path: b.path });
+          reset(b);
         }
       }
     }
@@ -125,19 +141,19 @@ export class TraceFinder {
     for (const [id, b] of this.streams) {
       if (!id.startsWith(`${key}|`)) continue;
       const js = this.jsStack(b);
-      if (js && JS_AT.test(b.lines.at(-1) ?? "")) {
+      if (js) {
         found.push({ text: js, path: b.path });
-        b.lines = [];
+        reset(b);
       }
     }
     return found;
   }
 
+  /** The JavaScript stack the buffer ends with (a head line, then only "at ..." lines), or null. */
   private jsStack(b: Buffer_): string | null {
-    if (!JS_AT.test(b.lines.at(-1) ?? "")) return null;
-    let i = b.lines.length - 1;
-    while (i >= 0 && JS_AT.test(b.lines[i])) i--;
-    return i >= 0 && JS_HEAD.test(b.lines[i]) ? b.lines.slice(i).join("\n") : null;
+    if (b.atRun === 0) return null;
+    const head = b.lines.length - 1 - b.atRun;
+    return head >= 0 && JS_HEAD.test(b.lines[head]) ? b.lines.slice(head).join("\n") : null;
   }
 }
 

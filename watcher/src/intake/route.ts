@@ -88,7 +88,10 @@ export function intakeRoutes({ db, now = () => new Date(), onStored }: IntakeOpt
     // We only use errors. Ask the SDK, in its own protocol, to stop sending everything else
     // (performance traces, sessions, replays) for an hour, so it never competes with errors.
     const types = new Set(envelope.items.map((i) => String(i.header.type)));
-    const others = [...types].filter((t) => t !== "event");
+    // Item types come from the sender: only plain names go into the header. A newline or a character
+    // above U+00FF there makes Headers.set throw, and every such request was a 500 that paged the owner
+    // through the self-watch ("error intake" is a critical flow).
+    const others = [...types].filter((t) => t !== "event" && /^[a-z_]{1,32}$/.test(t)).slice(0, 10);
     if (others.length) c.header("X-Sentry-Rate-Limits", `3600:${others.join(";")}:organization`);
     if (!types.has("event")) return c.json({ id: null });
 

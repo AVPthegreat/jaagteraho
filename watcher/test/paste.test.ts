@@ -29,6 +29,11 @@ describe("paste: traceback parsing", () => {
     assert.equal(parseRepo("github.com/a/b.git"), "a/b");
     assert.equal(parseRepo("https://gitlab.com/a/b"), null);
     assert.equal(parseRepo("https://github.com/a/b/../../evil"), null);
+    assert.equal(parseRepo("https://github.com/../user"), null);
+    assert.equal(parseRepo("github.com/a/.."), null);
+    assert.equal(parseRepo("github.com/./b"), null);
+    assert.equal(parseRepo("github.com/a/b.c"), "a/b.c");
+    assert.equal(parseRepo("github.com/acme/.github"), "acme/.github");
   });
 });
 

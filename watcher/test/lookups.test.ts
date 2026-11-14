@@ -328,7 +328,7 @@ describe("public paste page", () => {
     const app = pasteRoutes(db, { client: {}, guard: new SpendGuard(db, 40, 45) } as unknown as AI);
     const real = globalThis.fetch;
     const urls: string[] = [];
-    globalThis.fetch = (async (u: string) => (urls.push(String(u)), new Response("no", { status: 404 }))) as typeof fetch;
+    globalThis.fetch = (async (u: string) => (urls.push(String(u)), /\/repos\/o\/r$/.test(String(u)) ? Response.json({ private: false }) : new Response("no", { status: 404 }))) as typeof fetch;
     try {
       const res = await app.request("/public/paste", {
         method: "POST",
@@ -340,10 +340,35 @@ describe("public paste page", () => {
       globalThis.fetch = real;
     }
     assert.ok(!urls.some((u) => u.includes("/tarball")), "no tarball download");
+    assert.ok(urls.some((u) => u.includes("/contents/")), "the traceback's files were looked for");
     const rows = db.prepare("SELECT id FROM pastes").all() as Array<{ id: string }>;
     assert.equal(rows.length, 1);
     assert.match(rows[0].id, /^failed-/);
     assert.equal((await app.request(`/public/paste/${rows[0].id}`)).status, 404, "a failed attempt is never shown");
+    db.close();
+  });
+
+  it("reads nothing from a repository GitHub does not call public", async () => {
+    const { pasteRoutes } = await import("../src/web/paste.js");
+    const db = openDb(":memory:");
+    const app = pasteRoutes(db, { client: {}, guard: new SpendGuard(db, 40, 45) } as unknown as AI);
+    const real = globalThis.fetch;
+    const urls: string[] = [];
+    globalThis.fetch = (async (u: string) => {
+      urls.push(String(u));
+      return /\/repos\/o\/secret$/.test(String(u)) ? Response.json({ private: true }) : new Response("print(1)", { status: 200 });
+    }) as typeof fetch;
+    try {
+      const res = await app.request("/public/paste", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ session: "abcdefgh5678", repo: "https://github.com/o/secret", traceback: 'Traceback (most recent call last):\n  File "/app/x.py", line 3, in f\n    g()\nValueError: bad' }),
+      });
+      assert.equal(res.status, 404);
+    } finally {
+      globalThis.fetch = real;
+    }
+    assert.deepEqual(urls, ["https://api.github.com/repos/o/secret"], "only the visibility check, never a file");
     db.close();
   });
 });

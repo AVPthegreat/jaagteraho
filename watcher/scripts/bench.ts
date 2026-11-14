@@ -198,7 +198,7 @@ async function main() {
           const patched = copyApp(c.app, c.inject ?? []);
           for (const [p, text] of Object.entries(gate.patched)) writeFileSync(join(patched, p), text);
           row.fix_works = hiddenTest(patched, c.test!);
-          const proof = proveFix(broken, gate.patched, out.result.regression_test);
+          const proof = await proveFix(broken, gate.patched, out.result.regression_test);
           row.own_test = proof.verdict;
         } else {
           row.fix_works = false;
