@@ -187,31 +187,39 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* Why it exists: the builder lived the problem */}
-      <section className="section field-surface" id="why" aria-labelledby="why-h">
-        <div className="frame">
-          <article className="letter">
+      {/* The real case: why it exists, told by the person it was built for. Lit like the hero's stage, so it can't be missed. */}
+      <section className="section case" id="why" aria-labelledby="why-h">
+        <div className="frame grid case-grid">
+          <div className="case-head">
             <h2 id="why-h" data-rv>
               Why I built this: I am the person it wakes
             </h2>
+            <ul className="case-facts" aria-label="Faurus, the real case">
+              <li data-rv style={{ "--d": 1 } as React.CSSProperties}>
+                <b>11,000</b>
+                <span>accounts on Faurus, a coding and exam platform that colleges use</span>
+              </li>
+              <li data-rv style={{ "--d": 2 } as React.CSSProperties}>
+                <b>1</b>
+                <span>engineer running it: the founder</span>
+              </li>
+              <li data-rv style={{ "--d": 3 } as React.CSSProperties}>
+                <b>2 am</b>
+                <span>a live exam breaks, and he hears about it the next morning</span>
+              </li>
+            </ul>
+          </div>
+          <article className="case-story">
             <p data-rv>
-              I run <a href="https://faurus.app">Faurus</a>, a coding and exam platform that colleges use: about 11,000 accounts, one engineer. Its
-              server errors went to a log file nobody read.
+              I run <a href="https://faurus.app">Faurus</a>, a coding and exam platform that colleges use: about 11,000 accounts, one engineer. Its server
+              errors went to a log file nobody read.
             </p>
-            <p data-rv>
-              If something broke during a live exam at 2 am, I heard about it the next morning, from a student.{" "}
+            <blockquote className="case-quote" data-rv>
+              <p>If something broke during a live exam at 2 am, I heard about it the next morning, from a student.</p>
+            </blockquote>
+            <p className="lead" data-rv>
               <span className="mark">By then the exam was over</span>, and the students who could not submit had already lost their attempt.
             </p>
-            <figure className="breakout" data-rv>
-              <img
-                src="/assets/west-bengal-joint-entrance-examination-howrah-2011-2.jpg"
-                alt="Families waiting in the yard of an exam centre in Howrah while students sit an entrance exam inside"
-                width={1920}
-                height={1440}
-                loading="lazy"
-              />
-              <figcaption className="small soft">Exam day outside an entrance-exam centre in Howrah, West Bengal.</figcaption>
-            </figure>
             <p data-rv>
               Error trackers collect errors. They do not decide which one is worth waking a tired person for, find the cause, or write the fix. For one
               person running a live product, that is the whole job, and it happens at night.
@@ -223,23 +231,11 @@ export default async function Home() {
             </p>
             <p className="signoff" data-rv>
               <b>Anant Vardhan Pandey</b>
-              <span className="small soft">founder of Faurus</span>
+              <span className="small">founder of Faurus</span>
             </p>
           </article>
         </div>
       </section>
-
-      <figure className="night-band">
-        <img
-          data-drift
-          src="/assets/navi-mumbai-night.jpg"
-          alt="Office towers in Navi Mumbai at night, a few windows still lit above an empty road"
-          width={1920}
-          height={2560}
-          loading="lazy"
-        />
-        <figcaption className="small">Navi Mumbai, at night. Our watcher runs on a server in Mumbai.</figcaption>
-      </figure>
 
       {/* How it works: what you give, and what comes back */}
       <section className="section" id="how" aria-labelledby="how-h">

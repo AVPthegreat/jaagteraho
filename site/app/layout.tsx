@@ -4,7 +4,6 @@ import Link from "next/link";
 import { Lantern } from "./ui/lantern";
 import { Motion } from "./ui/motion";
 import { NavLinks } from "./ui/nav-links";
-import { PhotoCredits } from "./ui/photo-credits";
 import "./globals.css";
 
 const jost = Jost({ subsets: ["latin"], weight: ["400", "500", "700"], style: ["normal", "italic"], variable: "--font-jost" });
@@ -66,9 +65,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 Built for HackGlobal 2026, Track 01 (Agentic and GenAI apps), by Anant Vardhan Pandey. Runs on an AWS server in Mumbai today (moving to
                 Vultr when our credits arrive) · decisions and diagnosis by Claude (Anthropic API) · wake-up calls by Gnani · accepts events from the
                 open-source Sentry SDKs, not affiliated with Sentry.
-              </p>
-              <PhotoCredits />
-            </div>
+              </p>            </div>
           </div>
         </footer>
         <Motion />
