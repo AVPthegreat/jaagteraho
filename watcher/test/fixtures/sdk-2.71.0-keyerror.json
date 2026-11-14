@@ -1,0 +1,150 @@
+{
+ "envelope_header": {
+  "event_id": "e6aabf93e810453796fe1c0defda4bef",
+  "sent_at": "2026-11-13T00:00:00Z",
+  "trace": {
+   "trace_id": "31042e59d5674691b7daeab44422652a",
+   "environment": "spike",
+   "release": "test-sha-1",
+   "public_key": "abc123key"
+  }
+ },
+ "item_header": {
+  "type": "event",
+  "content_type": "application/json",
+  "length": 3089
+ },
+ "event": {
+  "level": "error",
+  "exception": {
+   "values": [
+    {
+     "mechanism": {
+      "type": "generic",
+      "handled": true
+     },
+     "module": null,
+     "type": "KeyError",
+     "value": "'language'",
+     "stacktrace": {
+      "frames": [
+       {
+        "filename": "client.py",
+        "abs_path": "/app/client.py",
+        "function": "<module>",
+        "module": "__main__",
+        "lineno": 9,
+        "pre_context": [
+         "def grade(data):",
+         "    secret_token = \"sk_live_should_not_leave\"",
+         "    email = \"student@example.com\"",
+         "    return data[\"language\"]",
+         "try:"
+        ],
+        "context_line": "    grade({\"code\": \"print(1)\"})",
+        "post_context": [
+         "except Exception:",
+         "    sentry_sdk.capture_exception()",
+         "sentry_sdk.flush(5)"
+        ],
+        "vars": {
+         "__name__": "'__main__'",
+         "__doc__": "None",
+         "__package__": "None",
+         "__loader__": "<_frozen_importlib_external.SourceFileLoader object at 0x105895e00>",
+         "__spec__": "None",
+         "__builtins__": "<module 'builtins' (built-in)>",
+         "__file__": "'/app/g1-spike/client.py'",
+         "__cached__": "None",
+         "sentry_sdk": "<module 'sentry_sdk' from '/app/g1-spike/.venv/lib/python3.14/site-packages/sentry_sdk/__init__.py'>",
+         "grade": "<function grade at 0x10b0580f0>"
+        },
+        "in_app": true
+       },
+       {
+        "filename": "client.py",
+        "abs_path": "/app/client.py",
+        "function": "grade",
+        "module": "__main__",
+        "lineno": 7,
+        "pre_context": [
+         "sentry_sdk.init(dsn=\"http://abc123key@127.0.0.1:8765/42\", send_default_pii=False, release=\"test-sha-1\", environment=\"spike\", traces_sample_rate=0)",
+         "sentry_sdk.set_tag(\"jr_session\", \"sess-xyz\")",
+         "def grade(data):",
+         "    secret_token = \"sk_live_should_not_leave\"",
+         "    email = \"student@example.com\""
+        ],
+        "context_line": "    return data[\"language\"]",
+        "post_context": [
+         "try:",
+         "    grade({\"code\": \"print(1)\"})",
+         "except Exception:",
+         "    sentry_sdk.capture_exception()",
+         "sentry_sdk.flush(5)"
+        ],
+        "vars": {
+         "data": {
+          "code": "'print(1)'"
+         },
+         "secret_token": "'sk_live_should_not_leave'",
+         "email": "'student@example.com'"
+        },
+        "in_app": true
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "event_id": "e6aabf93e810453796fe1c0defda4bef",
+  "timestamp": "2026-11-12T20:44:00.474926Z",
+  "contexts": {
+   "trace": {
+    "trace_id": "31042e59d5674691b7daeab44422652a",
+    "span_id": "9c915866e09199ea",
+    "parent_span_id": null
+   },
+   "runtime": {
+    "name": "CPython",
+    "version": "3.14.0",
+    "build": "3.14.0 (v3.14.0:ebf955df7a8, Oct  7 2025, 08:20:14) [Clang 16.0.0 (clang-1600.0.26.6)]"
+   }
+  },
+  "transaction_info": {},
+  "tags": {
+   "jr_session": "sess-xyz"
+  },
+  "breadcrumbs": {
+   "values": []
+  },
+  "extra": {
+   "sys.argv": [
+    "client.py"
+   ]
+  },
+  "release": "test-sha-1",
+  "environment": "spike",
+  "server_name": "test-host",
+  "sdk": {
+   "name": "sentry.python",
+   "version": "2.71.0",
+   "packages": [
+    {
+     "name": "pypi:sentry-sdk",
+     "version": "2.71.0"
+    }
+   ],
+   "integrations": [
+    "argv",
+    "atexit",
+    "dedupe",
+    "excepthook",
+    "logging",
+    "modules",
+    "stdlib",
+    "threading"
+   ]
+  },
+  "platform": "python"
+ }
+}
