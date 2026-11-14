@@ -175,6 +175,21 @@ CREATE TABLE IF NOT EXISTS kv (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- Phone wake-up calls (Twilio). One row per call placed; token_hash guards the one-time "press 1" link.
+CREATE TABLE IF NOT EXISTS phone_calls (
+  id          INTEGER PRIMARY KEY,
+  incident_id INTEGER NOT NULL,
+  project_id  INTEGER NOT NULL,
+  attempt     INTEGER NOT NULL,
+  token_hash  TEXT,
+  sid         TEXT,
+  status      TEXT NOT NULL,
+  info        TEXT,
+  created_at  TEXT NOT NULL,
+  used_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS phone_calls_incident ON phone_calls (incident_id);
 `;
 
 /** Additive changes for databases created by earlier versions. */

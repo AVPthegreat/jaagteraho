@@ -56,7 +56,7 @@ const NIGHT = [
   },
   {
     t: "Your phone gets the alert",
-    d: "A Telegram card like the one on the right. If the decision was \"wake\", a spoken voice message follows so it can actually wake you. The same card updates itself as the next steps finish, so you get one message, not ten.",
+    d: "A Telegram card like the one on the right. If the decision was \"wake\", a spoken voice message follows so it can actually wake you, and where the owner has turned on phone calls, the phone rings too (press 1 to acknowledge). The same card updates itself as the next steps finish, so you get one message, not ten.",
     meta: "seconds after the error",
   },
   {

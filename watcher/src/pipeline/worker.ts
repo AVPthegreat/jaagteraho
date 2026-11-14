@@ -12,6 +12,7 @@ import type { Telegram } from "../telegram/api.js";
 import { renderCard } from "../telegram/card.js";
 import { isSelfProject, reportSelf } from "../selfwatch.js";
 import type { Voice } from "../voice/voice.js";
+import type { Phone } from "../phone/phone.js";
 import { decide, saveDecision, severityWord, type Decision } from "./decide.js";
 import { gatherFiles, runDiagnosis, type DiagnosisResult } from "./diagnose.js";
 import { runGate } from "./gate.js";
@@ -62,7 +63,13 @@ export class Worker {
   private running = 0;
   private timers: NodeJS.Timeout[] = [];
 
-  constructor(private db: DB, private ai: AI | null, private tg: Telegram | null, private voice: Voice | null) {}
+  constructor(
+    private db: DB,
+    private ai: AI | null,
+    private tg: Telegram | null,
+    private voice: Voice | null,
+    private phone: Phone | null = null,
+  ) {}
 
   start() {
     // Jobs left running by a crash go back on the queue.
@@ -226,6 +233,14 @@ export class Worker {
         cardSent = await this.sendCard(inc.id, owner.chat_id, decision);
       }
     }
+    // A real phone call on a WAKE, only when a fresh alert card went out (so Acknowledge and the repeats
+    // have a card to work with). It never blocks the alert or the diagnosis, and a failure is only logged.
+    const phoneDone =
+      decision.action === "wake" && cardSent && this.phone
+        ? this.phone
+            .wake(inc.id, project.id, { project: project.name, flow: decision.facts.critical ?? event.transaction ?? "the app", hits: inc.hits, exam: decision.facts.exam_open })
+            .catch((e) => console.error("phone:", String(e)))
+        : Promise.resolve();
     // The wake-up call runs alongside the diagnosis so it never delays the cause.
     const voiceDone =
       decision.action === "wake" && this.voice
@@ -247,6 +262,7 @@ export class Worker {
       await this.refreshCard(inc.id, false);
     }
     await voiceDone;
+    await phoneDone;
   }
 
   private alertAgeMs(incidentId: number): number {
@@ -467,6 +483,19 @@ export class Worker {
         })
         .catch((e) => console.error("ping:", e));
       this.db.prepare("UPDATE alerts SET pings = pings + 1, last_ping_at = ? WHERE incident_id = ?").run(new Date().toISOString(), a.incident_id);
+      // The phone rings again with each ping, until acknowledged (by keypress or in Telegram).
+      if (this.phone) await this.phone.repeat(a.incident_id, a.pings + 1).catch((e) => console.error("phone repeat:", String(e)));
+    }
+  }
+
+  /** Called after the owner pressed 1 on the phone call: the alert is already marked acknowledged. */
+  async acknowledgedByPhone(incidentId: number) {
+    await this.refreshCard(incidentId, false);
+    const a = this.db.prepare("SELECT chat_id, message_id FROM alerts WHERE incident_id = ?").get(incidentId) as { chat_id: number; message_id: number } | undefined;
+    if (a && this.tg) {
+      await this.tg
+        .call("sendMessage", { chat_id: a.chat_id, text: "Acknowledged on the phone call. Repeats stopped.", reply_parameters: { message_id: a.message_id } })
+        .catch((e) => console.error("phone ack notice:", e));
     }
   }
 }
