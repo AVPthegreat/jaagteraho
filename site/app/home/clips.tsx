@@ -17,12 +17,12 @@ import type { Clip } from "../site";
   <base>.jpg and <tall>.jpg.
 */
 const FILES: Record<string, { base: string; tall?: string; sound?: string; secs: number }> = {
-  "night-scene": { base: "night-scene", tall: "night-scene-9x16", sound: "night-scene-sound", secs: 10 },
-  "error-to-cause": { base: "error-to-cause", sound: "error-to-cause-sound", secs: 10 },
-  "fix-checked": { base: "fix-checked", tall: "fix-checked-9x16", sound: "fix-checked-sound", secs: 11 },
-  "heal-undo": { base: "heal-undo", sound: "heal-undo-sound", secs: 11 },
-  scenarios: { base: "scenarios", sound: "scenarios-sound", secs: 12 },
-  connect: { base: "connect", sound: "connect-sound", secs: 12 },
+  "night-scene": { base: "night-scene", tall: "night-scene-9x16", sound: "night-scene-sound", secs: 6.4 },
+  "error-to-cause": { base: "error-to-cause", sound: "error-to-cause-sound", secs: 6 },
+  "fix-checked": { base: "fix-checked", tall: "fix-checked-9x16", sound: "fix-checked-sound", secs: 5.7 },
+  "heal-undo": { base: "heal-undo", sound: "heal-undo-sound", secs: 6 },
+  scenarios: { base: "scenarios", sound: "scenarios-sound", secs: 6.2 },
+  connect: { base: "connect", sound: "connect-sound", secs: 6.1 },
 };
 
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
