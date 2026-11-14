@@ -1,33 +1,70 @@
 # JaagteRaho
 
-**Your app breaks at 2 am. JaagteRaho stays awake: it wakes you, or heals it under your rules.**
+**The on-call engineer you can't afford.**
 
-**You approve, or let it heal under your rules.**
+**Your app breaks at 2 am. Small bugs fix themselves. Serious ones ring your phone. You approve, or let it heal under your rules.**
 
-An AI night watchman for people who run a live app alone. It reads every error from your app, wakes you only when real users are hurt (Telegram alert, voice note, and a real phone call when you turn it on), tells you the cause in plain words with the file and line, and proposes a fix that must pass six code checks and a Claude review. You approve every fix, or let it heal while you sleep: at most 2 heals a night, never in login, payment or grading code, rolled back if the errors don't drop, one-tap undo.
+**Measured on 70 planted bugs, mistakes counted:** 70 of 70 reached the owner · 62 of 70 fixed and proved by a hidden test the AI never saw (89%) · about 1.7 s to decide, 11 s to a fix · **$1.19 of AI for all 70** (about ₹1.4 a bug). [How each number was measured](#measured).
 
-**Measured on 13 Nov 2026, by scripts in this repository, mistakes included:** 20 of 20 planted bugs reached the owner · 0 wrong fixes among the 19 shown · 4 of 4 harmless errors kept quiet · 1.6 s median to a decision, 11.7 s to a checked fix · about $0.013 per error. [How each number was measured](#measured).
-
-It already watches [Faurus](https://faurus.app) (code.faurus.app, about 11,000 accounts), connected for real in learn mode since 14 Nov 2026.
-
-| | |
-|---|---|
-| **Live demo** | [jaagteraho.139-84-156-94.sslip.io](https://jaagteraho.139-84-156-94.sslip.io): break a demo exam portal (no sign-up) and watch the whole loop with a timer |
-| **Paste your error** | [/paste](https://jaagteraho.139-84-156-94.sslip.io/paste): diagnose a Python or JavaScript error from your own public repository |
-| **Connect your app** | [/connect](https://jaagteraho.139-84-156-94.sslip.io/connect), or send `/new myapp` to [the Telegram bot](https://t.me/hackglobal_jaagte_raho_bot) |
-| **Evidence** | [/evidence](https://jaagteraho.139-84-156-94.sslip.io/evidence): every number, with how it was measured |
-| **API** | [jr-api.139-84-156-94.sslip.io](https://jr-api.139-84-156-94.sslip.io/health) |
-| **Demo video (2:45)** | _link added at submission_ |
-| **System design** | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+- **Play with it (no sign-up):** [Live Playground](https://jaagteraho.139-84-156-94.sslip.io/playground): 7 live apps, 70 planted bugs. Pick one, press the app's own button, watch it break, approve the fix, press it again.
+- **Website:** [jaagteraho.139-84-156-94.sslip.io](https://jaagteraho.139-84-156-94.sslip.io) · **Evidence:** [/evidence](https://jaagteraho.139-84-156-94.sslip.io/evidence) · **API:** [jr-api.139-84-156-94.sslip.io](https://jr-api.139-84-156-94.sslip.io/health)
+- **Video (90 s):** <VIDEO_90S>
+- **System design:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 Hosted on Vultr (Bangalore). Built for HackGlobal 2026 (Build with AI track; 14–15 Nov 2026, organised by Polaris School of Technology, powered by Vultr) by Anant Vardhan Pandey.
 
-<!-- Demo GIF: replace with docs/images/demo.gif once recorded (break-it run: Submit, WOKE OWNER, cause, fix, Approve, works again). -->
+<!-- Demo GIF: replace with docs/images/demo.gif once recorded (Playground run: pick a bug, real 500, cause, fix, approve, real answer, Undo). -->
 ![Demo GIF placeholder: a visitor breaks Submit code on the demo exam portal, JaagteRaho wakes the owner, explains the cause and the approved fix makes it work again](docs/images/break-it-run.png)
+
+## Problem
+
+- **Apps are now built by people with nobody on call.** Over 5 million new business applications are filed in the US every year ([US Census Bureau, Business Formation Statistics](https://www.census.gov/econ/bfs/index.html)); freelancers, startups and college tech teams ship live products with AI help, and nobody watches them at night.
+- **Downtime costs real money.** 1 in 4 small businesses say one hour of downtime costs them $10,000 to $20,000, and 37% have lost customers to it ([Infrascale survey of 500+ SMB executives, 2020](https://www.helpnetsecurity.com/2020/05/14/unexpected-downtime/)).
+- **Error trackers only collect.** They don't decide which error is worth waking a tired person for, find the cause or write the fix. For one person running a live product, that is the whole job, and it happens at night.
+- **I live it.** I run [Faurus](https://faurus.app), a coding and exam platform colleges use: about 11,000 accounts and one engineer, me. Its errors went to a log nobody read; if an exam broke at 2 am, a student told me the next morning.
+
+## Solution
+
+JaagteRaho (Hindi for "stay awake", the night watchman's call) is an AI on-call agent that does the night shift.
+
+- **Small bugs fix themselves.** The fix goes in when every guard passes, you get a quiet note afterwards, and Undo is one tap. `/heal minor off` makes you approve these too.
+- **Serious bugs ring your phone.** Login, exam or payment failures: a real phone call (Twilio); press 1 and the cause is waiting on Telegram.
+- **No answer in 3 minutes?** It heals under your rules, then watches the errors and rolls back if they don't drop.
+- **Readable rules decide, not the AI.** Claude answers fixed questions; rules in code pick wake, message or the 08:00 summary. No AI answer can lower a critical-flow alert.
+- **Strict about what it touches.** A fix goes in without you only if the code rules pass, every AI reviewer agrees and your repo's own required checks pass. Never in payments, login, sessions, exams or config; never a fix that removes a check or changes more than 6 lines. At most 5 small and 2 big heals a night.
+
+## How it works
+
+1. **Connect.** Apps already on Sentry's open-source SDK change one setting (the DSN). New apps run one command that shows every change before writing it. No code? Point a log drain at it.
+2. **Intake.** Only an allowlist of fields is kept; emails, tokens, keys and IPs are masked. The same crash 50 times is one incident.
+3. **Decide (about 1.7 s).** Claude Haiku answers fixed questions five times; [`decide.ts`](watcher/src/pipeline/decide.ts) picks the action. `/exam 2h` marks a live exam.
+4. **Diagnose.** Claude Sonnet reads the failing code, the files it calls and the last deploy: cause in plain words, file, line, likely commit.
+5. **Gate the fix (about 11 s).** Six code checks, then a second Claude review. Every piece of AI-written code runs only in a sealed runner: no network, no secrets, read-only.
+6. **Act.** Small bug: heal now, quiet note. Serious bug: call and Telegram card; you approve, or after 3 minutes it heals under your rules. Every heal is watched for 30 minutes, rolled back if errors don't drop, and undoable in one tap.
+
+## Traction
+
+| | |
+|---|---|
+| **Live** | On a Vultr Cloud Compute instance in Bangalore; the Playground runs 7 live apps with 70 planted bugs |
+| **Real product** | Watches Faurus (code.faurus.app, about 11,000 accounts) in suggest-only mode: it never changes Faurus on its own |
+| **Phone wake-ups** | Real Twilio calls tested end to end (press 1 to acknowledge) |
+| **Reached the owner** | 70 of 70 planted bugs |
+| **Fixed and proved** | 62 of 70 (89%), judged by hidden tests the AI never saw |
+| **Mistakes, counted** | 5 wrong fixes among 64 shown: 4 were labelled "use with care" (never applied without you), and 1 of the 20 that could have healed alone was wrong (that is what Undo is for) |
+| **Speed and cost** | About 1.7 s to decide, 11 s to a fix; $1.19 of AI for all 70 bugs |
+| **Security** | Two independent reviews; every finding fixed |
+
+## Go-to-market
+
+- **Who first:** freelancers, startups and college tech teams, starting in India, where small teams run live apps with nobody on call.
+- **Zero-friction connect:** any app on Sentry's open-source SDK connects by changing one setting; others run `jaagteraho init` from this repo (npm publish pending).
+- **Where we find them:** developer communities and colleges, starting with the colleges already on Faurus.
+- **Free to start:** every Telegram account gets $5 of AI credit; deciding and alerting are always free.
 
 ## Quickstart (60 seconds)
 
-The `npx jaagteraho` installer is not on npm yet, so run it from this repository (Node 18.17+):
+`npx jaagteraho` is not on npm yet, so run it from this repository (Node 18.17+):
 
 ```bash
 git clone https://github.com/AVPthegreat/jaagteraho
@@ -39,69 +76,45 @@ node ../jaagteraho/cli/bin/jaagteraho.mjs init
 
 1. `init` registers your app with the hosted API, finds your framework, **shows every change before writing it**, adds the free open-source Sentry SDK and two lines, and sends a test error.
 2. Open the Telegram link it prints (or scan the QR code): a ✅ arrives. Deploy as usual.
-3. Optional: send `/heal` to the bot to choose your rule (`ask` is the default: you approve every fix), and `/exam 2h` when an exam or launch is running.
+3. Optional: `/heal` to see or change your rule, `/exam 2h` when an exam or launch is running.
 
-Already made the app with `/new myapp` in Telegram? Use `init --dsn <the address it gave you>`. No code at all? Point your host's log drain at the logs address on the Connect page.
+Already on the Sentry SDK? Just set `SENTRY_DSN` to the address from `/new myapp` in Telegram. No code at all? Point your host's log drain at the logs address on the Connect page.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
   A["Your app<br/>(Sentry SDK or log drain)"] --> B["Intake<br/>allowlist + masking"]
-  B --> C["Group repeats<br/>into incidents"]
-  C --> D["Claude Haiku<br/>fixed questions, 5 votes"]
-  D --> E{"Readable rules<br/>decide"}
-  E -- "log" --> F["Logbook +<br/>08:00 summary"]
-  E -- "notify / wake" --> G["Telegram + voice note<br/>+ phone call (Twilio)"]
-  G --> H["Claude Sonnet<br/>cause, file, line, commit"]
-  H --> I["Fix gate<br/>6 code checks + Claude review"]
-  I --> J{"Owner's /heal rule"}
-  J -- "ask" --> K["Owner approves"]
-  J -- "auto / now" --> L["PR auto-merges behind<br/>required checks"]
-  L --> M["Watch 30 min:<br/>proved, or rolled back + wake"]
-  subgraph V["Vultr, Bangalore (2 vCPU / 8 GB)"]
+  B --> C["Claude Haiku<br/>fixed questions, 5 votes"]
+  C --> D{"Readable rules<br/>decide"}
+  D -- "noise" --> E["Logbook +<br/>08:00 summary"]
+  D -- "small bug" --> F["Claude Sonnet diagnoses<br/>+ fix gate"]
+  D -- "serious bug" --> G["Phone call (Twilio)<br/>+ Telegram + voice"]
+  G --> F
+  F --> H{"Every guard passes?"}
+  H -- "small bug" --> I["Healed at once<br/>quiet note + Undo"]
+  H -- "serious: you approve,<br/>or no answer in 3 min" --> J["Heal under your rules"]
+  H -- "no" --> K["Waits for you"]
+  I --> L["Watch errors:<br/>proved, or rolled back"]
+  J --> L
+  subgraph V["Vultr, Bangalore"]
     B
     C
-    E
+    D
     F
-    I
+    H
   end
 ```
 
-More detail, including the high- and low-level design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## Why: I am the person it wakes
-
-I run [Faurus](https://faurus.app), a coding and exam platform that colleges use. It has about 11,000 accounts and one engineer: me.
-
-Its server errors went to a log file nobody read. If something broke during a live exam at 2 am, I heard about it the next morning, from a student. By then the exam was over.
-
-Error trackers collect errors. They do not decide which one is worth waking a tired person for, find the cause or write the fix. For one person running a live product, that is the whole job, and it happens at night.
-
-Students, freelancers and solo founders now ship real products, often written with AI help, and nobody is on call for them after launch. JaagteRaho (Hindi for "stay awake", the night watchman's call) is the one who stays up.
-
-## How a founder uses it
-
-1. **Connect (two minutes).** Send `/new myapp` to the Telegram bot, or use the website's Connect page. Then, in the project folder:
-   ```bash
-   npx jaagteraho init --dsn <the address it gives you>
-   ```
-   The command finds Django, Flask, FastAPI, Express or Next.js, shows every change before writing it, adds the free open-source Sentry SDK and two lines, and sends a test error. A ✅ arrives on Telegram. Deploy as usual.
-   No code at all? Point your host's log drain at the logs address instead; JaagteRaho picks out Python and Node.js errors and drops every other line.
-2. **Sleep.** JaagteRaho wakes you (Telegram message plus a voice note in Hindi or English, repeated until you tap Acknowledge) only for what matters: a critical route failing during an exam, an outage, an error hitting many people. Everything else waits for the 08:00 summary.
-   Where the owner has turned on phone calls (a Twilio account and their number in the settings), a wake also rings their phone: the call says which app and flow are failing, and pressing 1 acknowledges it like the Telegram button. It repeats with the Telegram pings, at most 3 call wakes a night per app.
-3. **Fix.** The alert says what broke for users, why, which file and line, which recent commit probably caused it, and shows a small fix that passed six code checks and a review. On the demo portal the fix is also proved by a test that fails before and passes after.
-4. **Or let it heal.** `/heal` sets your rule (also offered on the Connect page): `ask` (default: you approve every fix), `auto 10m` (heal if a wake-up is not acknowledged in 10 minutes), `now` (heal right away, optionally only on routes you name) or `off`. See [Self-healing](#self-healing).
-
-Every Telegram account gets $5 of free AI credit (about 500 diagnoses); deciding and alerting are always free. `/github` gives read-only access to a private repository; self-healing needs write access you give separately (below).
+Sealed runner, containers and the full high- and low-level design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Self-healing
 
-You approve every fix, or let it heal on its own under rules you set ([`heal.ts`](watcher/src/pipeline/heal.ts), tests in [`heal.test.ts`](watcher/test/heal.test.ts)).
+You approve, or let it heal under your rules (default: small bugs heal at once with a quiet note; a serious one heals if the wake-up is not answered in 3 minutes; `/heal ask` makes you approve everything; [`heal.ts`](watcher/src/pipeline/heal.ts), tests in [`heal.test.ts`](watcher/test/heal.test.ts)).
 
 - **Only recommended fixes** heal on their own: all six code checks passed and, on a real app, every review vote agreed. A fix that adds an import, a network call, a process, a file write, dynamic code, decoding or a built-up URL never does. Never in login, sessions, tokens, admin and roles, payments, exams, grading, migrations, settings and config, CI or infrastructure (`HEAL_PROTECTED` and `riskyAdditions` in [`gate.ts`](watcher/src/pipeline/gate.ts)). On the demo portal the fix must also be proved by its own regression test.
 - **Only errors your server signs.** The DSN's public key ships in browsers, so it proves nothing. Self-healing acts only on incidents whose every error carried the app's server-only secret (`/heal` gives a `https://KEY:SECRET@…` DSN for Python, or an `x-jr-ingest-secret` header for Node). Other errors are still alerted and diagnosed.
-- **Caps:** at most 2 heals per app in 12 hours by default (`/heal max`, up to 5).
+- **Caps:** at most 5 small and 2 big heals per app in 12 hours by default (`/heal max`). A fix that goes in without you never removes a check and changes at most 6 lines.
 - **How it goes in.** Demo portal: no code is written; the visitor's session switches to the portal's prebuilt fixed build and the failing request is sent again as proof. Your app: a pull request with GitHub auto-merge, turned on only when the branch requires status checks; otherwise the PR waits for you and the wake-up calls go on. This needs a write token set on the server by hand for now, bound to one repository (`JR_GITHUB_HEAL_TOKEN_<app id>` and `JR_GITHUB_HEAL_REPO_<app id>`); without it, a heal arrives as the ready-to-apply diff.
 - **Proved or undone.** It waits for the deploy (a newer release reporting in, or 10 minutes after the merge without release tags), then watches the error for 30 minutes, counting only signed errors from the new release. If at least 3 come back after 10 minutes or more and they are not down by half, a revert pull request goes in, you are woken again (once) and self-healing pauses for 12 hours.
 - **Told plainly.** "Healed while you were away": what broke, the cause, what changed, how it is being proved, and a one-tap Undo. Every step is in the incident's logbook.
@@ -128,6 +141,8 @@ flowchart LR
 ## Measured
 
 Every number is produced by a script in this repository. Measured 13 and 14 Nov 2026.
+
+**All 70 planted bugs (JR-Bench plus the 50 Playground bugs, [`bench/RESULTS.md`](bench/RESULTS.md) and [`bench/RESULTS-extra.md`](bench/RESULTS-extra.md)):** 70 of 70 reached the owner; the fix passed our hidden test in 62 of 70 (89%); 5 of the 64 fixes shown were wrong (4 of them labelled "use with care"); $1.19 of AI in total. The two runs separately:
 
 **JR-Bench: 20 planted bugs and 4 noise errors in 7 sample apps** ([`bench`](bench)): six Python apps of 21 to 101 files and one Node.js app. Each bug is planted as if a commit introduced it and triggered for real; a hidden test JaagteRaho never sees judges the fix.
 
@@ -178,7 +193,7 @@ What the benchmark changed: the first fix gate showed a fix only when every revi
 |---|---|
 | Secrets and personal data in errors | Only an allowlist of fields is kept: no request bodies, query strings, headers, cookies, user details, IP addresses or local variables. Emails, phone numbers, tokens and keys in what remains are masked. People are counted only through a one-way hash. Log drains: every line that is not part of a stack trace is dropped unread. |
 | Hidden instructions inside error text | The model has no tools; error text and commit messages are fenced as data; code picks the files and checks every edit; visitors can only press buttons. |
-| Write access to your code | Off unless you give it. The GitHub app is read-only. Self-healing a real app needs a write token bound to that one repository and errors signed with the app's server-only secret; a heal is then a pull request that merges by itself only behind the branch's required checks, and only recommended fixes outside protected areas with no risky code qualify, at most 2 a night, rolled back if the errors don't drop. On the demo portal, the owner's Approve opens a pull request a person merges. |
+| Write access to your code | Off unless you give it. The GitHub app is read-only. Self-healing a real app needs a write token bound to that one repository and errors signed with the app's server-only secret; a heal is then a pull request that merges by itself only behind the branch's required checks, and only recommended fixes outside protected areas with no risky code qualify, at most 5 small and 2 big a night, rolled back if the errors don't drop. On the demo portal, the owner's Approve opens a pull request a person merges. |
 | Running code | Outside apps' code is never run. On the demo portal only, the model's regression test runs in a throwaway copy after a strict check (no files, network, processes or environment). |
 | Runaway cost | Identical errors are grouped before any model call; per-app and daily caps; $5 free credit per account; Haiku-only after $40 and no model calls after $45. |
 
