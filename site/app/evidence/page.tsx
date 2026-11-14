@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Bars } from "../ui/bars";
 import { getEvidence } from "../watcher";
 import benchmarks from "./benchmarks.json";
 
@@ -30,10 +31,10 @@ type Bench = {
 const pct = (a: number, b: number) => (b ? `${Math.round((100 * a) / b)}%` : "-");
 const frac = (a: number, b: number) => `${a} of ${b} (${pct(a, b)})`;
 
-function Table({ head, rows }: { head: string[]; rows: string[][] }) {
+function Table({ head, rows, label }: { head: string[]; rows: string[][]; label: string }) {
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table className="nums">
+    <div className="table-wrap" data-rv>
+      <table className="nums" aria-label={label}>
         <thead>
           <tr>
             {head.map((h, i) => (
@@ -67,60 +68,69 @@ function Benchmarks() {
   return (
     <>
       {b && (
-        <>
-          <h3 style={{ marginTop: 40 }}>JR-Bench: planted bugs in 7 sample apps</h3>
-          <div className="prose muted">
-            <p>
-              Seven generated apps of different sizes (21 to 101 files; six in Python, one in Node.js). Each bug is planted as if a commit
-              introduced it and triggered for real. JaagteRaho decides, explains and proposes a fix; a hidden test it never sees judges whether the
-              fix works. Four noise errors (a dropped connection, a missing favicon, a bot scanner, a planned restart) check that it stays quiet.
+        <div className="grid doc">
+          <h2 id="bench-h" data-rv>
+            JR-Bench: planted bugs in 7 sample apps
+          </h2>
+          <div className="body">
+            <p className="soft" data-rv>
+              Seven generated apps of different sizes (21 to 101 files; six in Python, one in Node.js). Each bug is planted as if a commit introduced
+              it and triggered for real. JaagteRaho decides, explains and proposes a fix; a hidden test it never sees judges whether the fix works. Four
+              noise errors (a dropped connection, a missing favicon, a bot scanner, a planned restart) check that it stays quiet.
             </p>
+            <Table
+              label="JR-Bench results"
+              head={["Measure", "Result"]}
+              rows={[
+                ["Planted bugs that reached the owner", frac(b.alerted, b.bugs)],
+                ["Noise kept quiet", frac(b.noise_quiet, b.noise)],
+                ["Bugs on a critical route during an exam that woke the owner", frac(b.exam_woke, b.exam_cases)],
+                ["Right file", frac(b.right_file, b.bugs)],
+                ["Proposed fix works (hidden test passes)", frac(b.fix_works, b.bugs)],
+                [
+                  "Fixes shown to the owner",
+                  b.caution !== undefined ? `${b.shown} of ${b.bugs}: ${b.recommended} recommended, ${b.caution} "use with care"` : `${b.shown} of ${b.bugs}`,
+                ],
+                ["Fixes shown to the owner that were wrong", `${b.shown_wrong} of ${b.shown} shown`],
+                ["Working fixes the safety gate held back", String(b.withheld_working)],
+                ...(history?.one_level && history?.three_level
+                  ? [["Working fixes shown, same 16 Python bugs: first gate → three-level gate", `${history.one_level.shown} → ${history.three_level.shown} of 16`]]
+                  : []),
+                ["Median seconds: decision / fix ready", `${b.median_decision_seconds ?? "-"} / ${b.median_fix_seconds ?? "-"}`],
+                ["Cost per error (decision, diagnosis, fix review)", `$${b.cost_per_error_usd.toFixed(4)}`],
+              ]}
+            />
           </div>
-          <Table
-            head={["Measure", "Result"]}
-            rows={[
-              ["Planted bugs that reached the owner", frac(b.alerted, b.bugs)],
-              ["Noise kept quiet", frac(b.noise_quiet, b.noise)],
-              ["Bugs on a critical route during an exam that woke the owner", frac(b.exam_woke, b.exam_cases)],
-              ["Right file", frac(b.right_file, b.bugs)],
-              ["Proposed fix works (hidden test passes)", frac(b.fix_works, b.bugs)],
-              ["Fixes shown to the owner", b.caution !== undefined ? `${b.shown} of ${b.bugs}: ${b.recommended} recommended, ${b.caution} "use with care"` : `${b.shown} of ${b.bugs}`],
-              ["Fixes shown to the owner that were wrong", `${b.shown_wrong} of ${b.shown} shown`],
-              ["Working fixes the safety gate held back", String(b.withheld_working)],
-              ...(history?.one_level && history?.three_level
-                ? [["Working fixes shown, same 16 Python bugs: first gate → three-level gate", `${history.one_level.shown} → ${history.three_level.shown} of 16`]]
-                : []),
-              ["Median seconds: decision / fix ready", `${b.median_decision_seconds ?? "-"} / ${b.median_fix_seconds ?? "-"}`],
-              ["Cost per error (decision, diagnosis, fix review)", `$${b.cost_per_error_usd.toFixed(4)}`],
-            ]}
-          />
-        </>
+        </div>
       )}
       {real && (
-        <>
-          <h3 style={{ marginTop: 40 }}>On 30 real bugs from open-source projects</h3>
-          <div className="prose muted">
-            <p>
+        <div className="grid doc">
+          <h2 id="real-h" data-rv>
+            On 30 real bugs from open-source projects
+          </h2>
+          <div className="body">
+            <p className="soft" data-rv>
               Tracebacks that people posted on GitHub for {real.projects} well-known Python projects (requests, Flask, pip, pytest, Celery and
-              others), scored against the lines the real, merged fix changed. JaagteRaho reads the code as it was before the fix and never sees the
-              real fix.
+              others), scored against the lines the real, merged fix changed. JaagteRaho reads the code as it was before the fix and never sees the real
+              fix.
+            </p>
+            <Table
+              label="Real-bug results"
+              head={["Measure", "Result"]}
+              rows={[
+                ["Bug in a file from the traceback: right file", frac(real.in_trace.right_file, real.in_trace.cases)],
+                ["Bug in a file from the traceback: right lines (±3)", frac(real.in_trace.right_lines, real.in_trace.cases)],
+                ["All cases: right file", frac(real.all.right_file, real.all.cases)],
+                ["Cost of the whole run", `$${real.cost_usd.toFixed(2)}`],
+              ]}
+            />
+            <p className="small soft">
+              Measured {benchmarks.measured_at}. The datasets, sample apps and scripts that produce these numbers are in the repository (
+              <code>watcher/eval</code> and <code>bench</code>).
             </p>
           </div>
-          <Table
-            head={["Measure", "Result"]}
-            rows={[
-              ["Bug in a file from the traceback: right file", frac(real.in_trace.right_file, real.in_trace.cases)],
-              ["Bug in a file from the traceback: right lines (±3)", frac(real.in_trace.right_lines, real.in_trace.cases)],
-              ["All cases: right file", frac(real.all.right_file, real.all.cases)],
-              ["Cost of the whole run", `$${real.cost_usd.toFixed(2)}`],
-            ]}
-          />
-        </>
+        </div>
       )}
-      <p className="muted" style={{ fontSize: 14 }}>
-        Measured {benchmarks.measured_at}. The datasets, sample apps and scripts that produce these numbers are in the repository (
-        <code className="mono">watcher/eval</code> and <code className="mono">bench</code>).
-      </p>
     </>
   );
 }
@@ -151,44 +161,56 @@ export default async function Evidence() {
     : [];
 
   return (
-    <section className="section" style={{ borderTop: 0 }}>
-      <p className="eyebrow">Measured, not claimed</p>
-      <h2>Evidence</h2>
-      <div className="prose muted">
-        <p>
-          This page backs up every number on the home page. The first table is counted live by the watchman itself, from people using the{" "}
-          <a href="/#demo">live demo</a>. The benchmark tables below come from scripts in the repository, run against
-          real bugs and planted ones, and say exactly what was measured. Model vote shares are not probabilities. Faurus&apos;s own failure
-          counts stay private.
-        </p>
-      </div>
-      {!ev ? (
-        <p>The watcher is not reachable right now.</p>
-      ) : (
-        <div style={{ overflowX: "auto" }}>
-          <table className="nums">
-            <thead>
-              <tr>
-                <th scope="col">Measure</th>
-                <th scope="col">Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(([k, v]) => (
-                <tr key={k}>
-                  <td>{k}</td>
-                  <td className="n">{v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <>
+      <section className="page-head field-night" aria-labelledby="evidence-h">
+        <div className="frame grid">
+          <h1 id="evidence-h" className="display" data-rv>
+            Evidence
+          </h1>
+          <p className="lead" data-rv style={{ "--d": 1 } as React.CSSProperties}>Measured, not claimed. This page backs up every number on the home page.</p>
         </div>
-      )}
-      {ev && ev.countries.length > 0 && (
-        <p className="muted">Countries: {ev.countries.map((c) => `${c.country} (${c.n})`).join(", ")}</p>
-      )}
-      <Benchmarks />
+      </section>
 
-    </section>
+      <section className="stats short field-navy" aria-labelledby="glance-h">
+        <div className="frame grid stats-top">
+          <div className="stats-figure">
+            <h2 id="glance-h" data-rv>
+              JR-Bench at a glance
+            </h2>
+          </div>
+          <p className="stats-note" data-rv style={{ "--d": 1 } as React.CSSProperties}>
+            20 planted bugs and 4 harmless errors in 7 sample apps, each triggered for real. Every bar below is one of them.
+          </p>
+        </div>
+        <Bars />
+      </section>
+
+      <section className="section">
+        <div className="frame">
+          <div className="grid doc">
+            <h2 id="live-h" data-rv>
+              Counted live, from the demo
+            </h2>
+            <div className="body">
+              <p className="soft" data-rv>
+                The first table is counted live by the watchman itself, from people using the <a href="/#demo">live demo</a>. The benchmark tables below
+                come from scripts in the repository, run against real bugs and planted ones, and say exactly what was measured. Model vote shares are not
+                probabilities. Faurus&apos;s own failure counts stay private.
+              </p>
+              {!ev ? (
+                <p className="lead" data-rv>
+                  The watcher is not reachable right now, so the live counts can&apos;t be shown. The benchmarks below come from the repository and
+                  don&apos;t need it.
+                </p>
+              ) : (
+                <Table label="Live demo counts" head={["Measure", "Value"]} rows={rows} />
+              )}
+              {ev && ev.countries.length > 0 && <p className="soft">Countries: {ev.countries.map((c) => `${c.country} (${c.n})`).join(", ")}</p>}
+            </div>
+          </div>
+          <Benchmarks />
+        </div>
+      </section>
+    </>
   );
 }
