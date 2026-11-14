@@ -1,5 +1,4 @@
 import Link from "next/link";
-import benchmarks from "./evidence/benchmarks.json";
 import { Clips } from "./home/clips";
 import { HomeMotion } from "./home/home-motion";
 import { LiveStrip } from "./home/live-strip";
@@ -7,14 +6,12 @@ import { NightStory } from "./home/night-story";
 import { Radar } from "./home/radar";
 import { Shield } from "./home/shield";
 import { Watches } from "./home/watches";
-import { CLIPS } from "./site";
+import { BENCH_ALL, benchFixPct, benchInr, benchInrPerBug, CLIPS } from "./site";
 import "./home/home.css";
 
 const d = (n: number) => ({ "--d": n }) as React.CSSProperties;
 
 export default function Home() {
-  const bench = benchmarks.jr_bench.after;
-  const real = benchmarks.real_bugs.before;
 
   return (
     <>
@@ -32,6 +29,11 @@ export default function Home() {
             </h1>
             <p className="hero4-sub" data-h>
               It wakes you only when it matters, finds the cause and brings a checked fix. You approve, or let it heal under your rules.
+            </p>
+            <p className="hero4-proof" data-h>
+              <Link href="/evidence#extended-h">
+                <b>{BENCH_ALL.bugs} bugs.</b> <b>{BENCH_ALL.fix_works} fixed and proved by a hidden test.</b> <em>₹{benchInr()} in total.</em>
+              </Link>
             </p>
             <div className="actions" data-h>
               <Link className="btn btn-lg" href="/playground">
@@ -111,47 +113,51 @@ export default function Home() {
               Numbers, <em>not adjectives.</em>
             </h2>
           </div>
-          <ul className="nums">
-            <li data-rv>
-              <Link href="/evidence#bench-h">
+          <ul className="nums nums-cost">
+            <li className="num-hero" data-rv>
+              <Link href="/evidence#extended-h">
                 <b>
-                  <span data-count={bench.alerted}>{bench.alerted}</span>
-                  <small>/{bench.bugs}</small>
+                  <small>₹</small>
+                  <span data-count={benchInrPerBug()}>{benchInrPerBug()}</span>
+                  <small> a bug</small>
                 </b>
-                <span>planted bugs reached the owner</span>
+                <span>
+                  {BENCH_ALL.bugs} bugs diagnosed, {BENCH_ALL.fix_works} fixed and proved by a hidden test, for <strong>${BENCH_ALL.cost_usd.toFixed(2)}</strong> of AI
+                  in total (about ₹{benchInr()}).
+                </span>
               </Link>
             </li>
             <li data-rv style={d(1)}>
-              <Link href="/evidence#bench-h">
+              <Link href="/evidence#extended-h">
                 <b>
-                  <span data-count={bench.shown_wrong}>{bench.shown_wrong}</span>
+                  <span data-count={BENCH_ALL.reached}>{BENCH_ALL.reached}</span>
+                  <small>/{BENCH_ALL.bugs}</small>
                 </b>
-                <span>wrong fixes among the {bench.shown} it showed</span>
+                <span>bugs reached the owner</span>
               </Link>
             </li>
             <li data-rv style={d(2)}>
-              <Link href="/evidence#bench-h">
+              <Link href="/evidence#extended-h">
                 <b>
-                  <span data-count={bench.median_decision_seconds}>{bench.median_decision_seconds}</span>
+                  <span data-count={benchFixPct()}>{benchFixPct()}</span>
+                  <small>%</small>
+                </b>
+                <span>of fixes passed a hidden test the AI never saw</span>
+              </Link>
+            </li>
+            <li data-rv style={d(3)}>
+              <Link href="/evidence#extended-h">
+                <b>
+                  <span data-count={BENCH_ALL.median_decision_s}>{BENCH_ALL.median_decision_s}</span>
                   <small> s</small>
                 </b>
                 <span>median time to decide: wake you, message you, or stay quiet</span>
               </Link>
             </li>
-            <li data-rv style={d(3)}>
-              <Link href="/evidence#bench-h">
-                <b>
-                  <span data-count={(bench.cost_per_error_usd * 100).toFixed(1)}>{(bench.cost_per_error_usd * 100).toFixed(1)}</span>
-                  <small>¢</small>
-                </b>
-                <span>average AI cost per error (US cents), diagnosis and fix included</span>
-              </Link>
-            </li>
           </ul>
           <p className="nums-note" data-rv>
-            JR-Bench: {bench.bugs} planted bugs and {bench.noise} harmless errors (all {bench.noise} kept quiet) in 7 apps we built and run; a fix ready in
-            a median {bench.median_fix_seconds} s. On {real.in_trace.cases} real bugs from open-source projects, it named the right file{" "}
-            {real.in_trace.right_file} of {real.in_trace.cases} times when the traceback shows it.{" "}
+            One benchmark run on {BENCH_ALL.bugs} planted bugs (plus 4 harmless errors) across 7 apps we built and run; ₹ at about ₹{BENCH_ALL.inr_per_usd} to the
+            dollar.{" "}
             <Link className="textlink" href="/evidence">
               How each number was measured →
             </Link>

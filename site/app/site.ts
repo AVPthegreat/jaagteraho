@@ -47,3 +47,26 @@ export const CLIPS: Clip[] = [
   { id: "scenarios", title: "It judges", caption: "Four apps, four errors, four different decisions: wake, message, message, ignore." },
   { id: "connect", title: "You connect in one command", caption: "npx jaagteraho init finds your framework, shows every change first and sends a test error." },
 ];
+
+/*
+  The full benchmark, both sets together: bench/RESULTS.md (24 cases, 4 of them noise) plus
+  bench/RESULTS-extra.md (50 playground bugs). Totals worked out from bench/results.json and
+  bench/results-extra.json. Rupees at about 84 to the dollar.
+*/
+export const BENCH_ALL = {
+  bugs: 70,
+  cases: 74,
+  reached: 70,
+  fix_works: 62,
+  right_file: 61,
+  shown: 64,
+  shown_wrong: 5,
+  median_decision_s: 1.7,
+  cost_usd: 1.19,
+  inr_per_usd: 84,
+  extra_md: `${REPO}/blob/main/bench/RESULTS-extra.md`,
+  base_md: `${REPO}/blob/main/bench/RESULTS.md`,
+};
+export const benchInr = () => Math.round(BENCH_ALL.cost_usd * BENCH_ALL.inr_per_usd);
+export const benchInrPerBug = () => (Math.round(((BENCH_ALL.cost_usd * BENCH_ALL.inr_per_usd) / BENCH_ALL.bugs) * 10) / 10).toFixed(1);
+export const benchFixPct = () => Math.round((BENCH_ALL.fix_works / BENCH_ALL.bugs) * 100);
