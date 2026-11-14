@@ -9,7 +9,7 @@ import { bus, type FeedEvent } from "../bus.js";
 import type { DB } from "../db/db.js";
 import type { Voice } from "../voice/voice.js";
 import { Healer } from "../pipeline/heal.js";
-import { Slots, Window } from "./limits.js";
+import { liveFeeds, Window } from "./limits.js";
 
 export { Window } from "./limits.js";
 
@@ -35,14 +35,12 @@ export function clientIp(c: { req: { header: (name: string) => string | undefine
   return (c.req.header("x-forwarded-for") ?? "").split(",").pop()!.trim() || "direct";
 }
 
-/** Open live feeds: a few per network address, a few hundred in total. */
-export const FEEDS_PER_IP = 20; // a room of judges behind one address still fits
-export const FEEDS_MAX = 300;
+export { FEEDS_MAX, FEEDS_PER_IP } from "./limits.js";
 
 export function publicRoutes({ db, voice, twinBroken, twinFixed, allowedOrigins, healer }: PublicOptions) {
   const app = new Hono();
   const limits = new Window();
-  const feeds = new Slots(FEEDS_PER_IP, FEEDS_MAX);
+  const feeds = liveFeeds;
   app.use("/public/*", cors({ origin: allowedOrigins, allowMethods: ["GET", "POST"], allowHeaders: ["Content-Type"], maxAge: 600 }));
 
   const touchVisitor = (session: string, country: string | null) =>

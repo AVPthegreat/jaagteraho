@@ -13,7 +13,7 @@ import { SpendGuard } from "../src/ai/claude.js";
 import { openDb } from "../src/db/db.js";
 import { playgroundBus, type PlaygroundEvent } from "../src/playground/events.js";
 import { Playground } from "../src/playground/runner.js";
-import { phoneAllowedFor, Worker } from "../src/pipeline/worker.js";
+import { laneFor, phoneAllowedFor, Worker } from "../src/pipeline/worker.js";
 import type { Phone } from "../src/phone/phone.js";
 import type { Telegram } from "../src/telegram/api.js";
 import { playgroundRoutes } from "../src/web/playground.js";
@@ -22,7 +22,7 @@ const BENCH = fileURLToPath(new URL("../../bench", import.meta.url)).replace(/\/
 const CASE_ID = "messmenu-missing-plates";
 
 // A bench folder with one app and one published case, so the test does not depend on the extra cases.
-const dir = mkdtempSync(join(tmpdir(), "jrplay-test-"));
+const dir = mkdtempSync(join(tmpdir(), "jrpgtest-"));
 after(() => rmSync(dir, { recursive: true, force: true }));
 {
   const bench = JSON.parse(readFileSync(join(BENCH, "cases.json"), "utf8"));
@@ -111,9 +111,11 @@ describe("playground runner", () => {
     assert.ok(card.cost_usd > 0, "the stand-in's token use is charged to the run");
     assert.ok(card.seconds_to_cause !== null && card.seconds_to_proved_fix !== null);
     assert.deepEqual([...new Set(calls)].sort(), ["decision", "diagnosis", "review"]);
-    // Charged to the demo lane, under the playground app's own record.
+    // Charged to the playground's own lane, under the playground app's own record.
     const lanes = db.prepare("SELECT DISTINCT lane FROM spend").all() as Array<{ lane: string }>;
-    assert.deepEqual(lanes.map((l) => l.lane), ["demo"]);
+    assert.deepEqual(lanes.map((l) => l.lane), ["playground"]);
+    const pid = (db.prepare("SELECT id FROM projects WHERE name = 'playground-messmenu'").get() as { id: number }).id;
+    assert.equal(laneFor(db, pid), "playground");
     pg.stop();
   });
 

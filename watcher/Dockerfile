@@ -19,7 +19,8 @@ COPY src ./src
 COPY scripts ./scripts
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=8787 JR_DATA_DIR=/data
 # The volume starts as a copy of this folder, so it must belong to the unprivileged user.
-RUN mkdir -p /data && chown node:node /data
+# /run/jr holds the unix socket to the isolated runner (a named volume starts as a copy of this folder).
+RUN mkdir -p /data /run/jr && chown node:node /data /run/jr
 VOLUME ["/data"]
 EXPOSE 8787
 USER node

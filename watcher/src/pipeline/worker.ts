@@ -31,7 +31,13 @@ const MAX_PINGS = 3;
 const CONCURRENCY = 4;
 const DAILY_SONNET = 80; // about $0.75 a day at the measured $0.009 per diagnosis
 /** Live diagnoses a day per lane, so the demo and outside apps can never use up Faurus's (ai/claude.ts has the $ caps). */
-export const DAILY_DIAGNOSES: Record<Lane, number> = { faurus: DAILY_SONNET, demo: envInt("JR_DEMO_DIAGNOSES_PER_DAY", 80, 0, 2000), outside: 40, paste: 0 };
+export const DAILY_DIAGNOSES: Record<Lane, number> = {
+  faurus: DAILY_SONNET,
+  demo: envInt("JR_DEMO_DIAGNOSES_PER_DAY", 80, 0, 2000),
+  outside: 40,
+  paste: 0,
+  playground: envInt("JR_PLAYGROUND_DIAGNOSES_PER_DAY", 150, 0, 5000),
+};
 const VOICE_REUSE_MS = 15 * 60 * 1000;
 const SANDBOX_LIVE_PER_FAULT = envInt("JR_DEMO_LIVE_PER_FAULT", 15, 0, 1000);
 const MAX_WAKES_PER_NIGHT = 3;
@@ -68,6 +74,7 @@ export function sourceFor(project: ProjectRow): SourceProvider | null {
 export function laneFor(db: DB, projectId: number): Lane {
   const p = db.prepare("SELECT kind, settings FROM projects WHERE id = ?").get(projectId) as { kind: string; settings: string } | undefined;
   if (!p) return "faurus";
+  if (p.settings.includes('"playground":true')) return "playground";
   if (p.kind === "sandbox") return "demo";
   return p.settings.includes('"outside":true') ? "outside" : "faurus";
 }

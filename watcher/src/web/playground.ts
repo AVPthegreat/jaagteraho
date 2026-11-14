@@ -7,15 +7,15 @@ import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import type { Playground } from "../playground/runner.js";
 import { playgroundBus, type PlaygroundEvent } from "../playground/events.js";
-import { Slots, Window } from "./limits.js";
-import { clientIp, FEEDS_MAX, FEEDS_PER_IP } from "./public.js";
+import { liveFeeds, Window } from "./limits.js";
+import { clientIp } from "./public.js";
 
 const SESSION = /^[A-Za-z0-9_-]{8,64}$/;
 
 export function playgroundRoutes(pg: Playground, allowedOrigins: string[]) {
   const app = new Hono();
   const limits = new Window();
-  const feeds = new Slots(FEEDS_PER_IP, FEEDS_MAX);
+  const feeds = liveFeeds;
   app.use("/public/playground/*", cors({ origin: allowedOrigins, allowMethods: ["GET", "POST"], allowHeaders: ["Content-Type"], maxAge: 600 }));
 
   const reads = (c: Parameters<typeof clientIp>[0]) => limits.allowAll([[`pr:${clientIp(c)}`, 240, 60_000], ["pr:global", 20_000, 60_000]]);

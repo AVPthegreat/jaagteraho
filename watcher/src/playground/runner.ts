@@ -5,15 +5,16 @@
 // Each step is streamed to viewers with its time and cost, and the finished run is stored with a scorecard.
 //
 // Safety: nothing a visitor sends reaches code, paths or the model except the app's name, checked against
-// the list. Runs are charged to the "demo" spend lane and respect its daily caps; when a cap is reached the
+// the list. Runs are charged to their own "playground" spend lane (its own daily $ cap and diagnosis count, fenced off so it can
+// never use up what Faurus or the exam portal demo may spend); when a cap is reached the
 // playground replays real past runs, clearly marked, and never makes up a result. The playground never
 // alerts anyone: it does not use the worker (which owns Telegram and phone calls), its queued job is removed
 // in the same synchronous step that stores the event, and the worker skips playground apps anyway.
 
 import { randomBytes, randomInt } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
-import { join, resolve, sep } from "node:path";
+import { readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, sep } from "node:path";
 import { spendContext, type AI } from "../ai/claude.js";
 import { getSettings, setSettings, type DB } from "../db/db.js";
 import type { CleanEvent } from "../intake/allowlist.js";
@@ -27,7 +28,9 @@ import { LocalSource } from "../source/source.js";
 import { parseTraceback } from "../web/paste.js";
 import { envInt } from "../envint.js";
 import { playgroundBus, type PlaygroundEvent, type PlaygroundStep } from "./events.js";
-import { benchDir, copyApp, crashReport, describeApps, isNodeApp, loadBench, removeDir, runHiddenTest, runTrigger, type AppInfo, type Bench, type BenchCase } from "./sandbox.js";
+import { runJob } from "../runner/client.js";
+import type { Base } from "../runner/exec.js";
+import { benchDir, copyApp, crashReport, describeApps, isNodeApp, loadBench, removeDir, type AppInfo, type Bench, type BenchCase } from "./sandbox.js";
 
 export const PLAYGROUND_SCHEMA = `
 CREATE TABLE IF NOT EXISTS playground_runs (
@@ -130,6 +133,12 @@ export class Playground {
     db.exec(PLAYGROUND_SCHEMA);
     // A crash mid-run leaves a 'running' row: it never finished, so it is not a result.
     db.prepare("UPDATE playground_runs SET status = 'failed' WHERE status = 'running'").run();
+    // Readable copies left by a crash mid-run.
+    try {
+      for (const name of readdirSync(tmpdir())) if (name.startsWith("jrplay-")) rmSync(join(tmpdir(), name), { recursive: true, force: true });
+    } catch {
+      // a temp folder we cannot list holds nothing of ours
+    }
     this.dir = opts.dir ?? benchDir();
     this.bench = loadBench(this.dir);
     this.apps = describeApps(this.bench, this.dir).filter((a) => a.bugs > 0);
@@ -153,9 +162,9 @@ export class Playground {
   canSpend(): boolean {
     if (this.canSpendOpt) return this.canSpendOpt();
     if (!this.ai) return false;
-    return spendContext.run({ projectId: 0, lane: "demo" }, () => {
+    return spendContext.run({ projectId: 0, lane: "playground" }, () => {
       const g = this.ai!.guard;
-      return g.pick(this.ai!.diagnosisModel, this.ai!.decisionModel) !== null && g.countToday("diagnosis", "demo") < DAILY_DIAGNOSES.demo;
+      return g.pick(this.ai!.diagnosisModel, this.ai!.decisionModel) !== null && g.countToday("diagnosis", "playground") < DAILY_DIAGNOSES.playground;
     });
   }
 
@@ -296,7 +305,7 @@ export class Playground {
     return cases[n % cases.length];
   }
 
-  /** The app's playground record: kind 'sandbox' (spend lane "demo"), never linked to an owner. */
+  /** The app's playground record: kind 'sandbox', spend lane "playground", never linked to an owner. */
   private projectFor(app: string): number {
     const name = `playground-${app}`;
     const row = this.db.prepare("SELECT id FROM projects WHERE name = ?").get(name) as { id: number } | undefined;
@@ -344,12 +353,16 @@ export class Playground {
     const projectId = this.projectFor(app);
     const dirs: string[] = [];
     try {
-      return await spendContext.run({ projectId, lane: "demo" }, async () => {
+      return await spendContext.run({ projectId, lane: "playground" }, async () => {
         emit("plant", { case_id: c.id, app, files: this.apps.find((a) => a.name === app)?.files ?? 0 });
+        // A readable copy here (for the diagnosis to read, never run); the crash itself happens in the isolated runner.
         const broken = await copyApp(this.dir, app, c.inject ?? []);
         dirs.push(broken);
-        const ran = await runTrigger(broken, c.trigger!);
-        const tb = crashReport(broken, ran.stderr);
+        const runFrom: Base = { kind: "bench", app, edits: c.inject ?? [], dir: this.dir };
+        const ran = await runJob({ kind: "trigger", base: runFrom, code: c.trigger! });
+        if (ran.kind !== "trigger") throw new Error("unexpected runner answer");
+        // The runner's paths, mapped onto the readable copy, so frames point at files the diagnosis can read.
+        const tb = crashReport(broken, ran.stderr.replaceAll(`${ran.dir}${sep}`, `${broken}${sep}`));
         const parsed = tb ? parseTraceback(tb) : null;
         if (ran.status === 0 || !parsed) throw new Error("the planted bug did not crash the app");
         const top = [...parsed.frames].reverse().find((f) => f.in_app && (f.abs_path ?? "").startsWith(broken + sep)) ?? null;
@@ -404,7 +417,9 @@ export class Playground {
         let hidden: Scorecard["hidden_test"] = "not_run";
         let tProved: number | null = null;
         if ("error" in out) {
-          emit("cause", { unavailable: `Diagnosis failed: ${out.error}` });
+          // The reason stays in our log; viewers get a plain sentence, never a raw SDK message.
+          console.error(`playground ${app} diagnosis:`, out.error);
+          emit("cause", { unavailable: "The diagnosis could not finish this time." });
         } else {
           const d = out.result;
           named = `${d.file}:${d.line}`;
@@ -435,7 +450,7 @@ export class Playground {
           });
           if (Object.keys(gate.patched).length) {
             // The model's own test: fails on the broken code, passes on the fixed code (Python only).
-            const proof = await proveFix(broken, gate.patched, d.regression_test);
+            const proof = await proveFix(broken, gate.patched, d.regression_test, runFrom);
             ownTest = proof.verdict;
             if (proof.verdict === "proved") tProved = Date.now();
             emit("own_test", { verdict: proof.verdict, before: proof.before ?? null, after: proof.after ?? null, note: proof.note });
@@ -444,14 +459,8 @@ export class Playground {
             if (outside) {
               emit("hidden_test", { result: "not_run", note: `Not run: the fix adds code that reaches outside the program (${outside.slice(0, 60)}).` });
             } else {
-              const patched = await copyApp(this.dir, app, c.inject ?? []);
-              dirs.push(patched);
-              for (const [p, text] of Object.entries(gate.patched)) {
-                const target = resolve(patched, p);
-                if (!target.startsWith(resolve(patched) + sep)) throw new Error("a fixed file is outside the app");
-                await writeFile(target, text);
-              }
-              const r = await runHiddenTest(patched, c.test!);
+              const ans = await runJob({ kind: "hidden", base: runFrom, patched: gate.patched, test: c.test! });
+              const r = ans.kind === "hidden" ? ans.outcome : "error";
               hidden = r === "passed" ? "passed" : r === "failed" ? "failed" : "not_run";
               emit("hidden_test", { result: hidden, note: r === "error" ? "Our hidden test could not run on the patched code." : null });
             }
