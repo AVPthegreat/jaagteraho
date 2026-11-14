@@ -1,0 +1,347 @@
+{
+  "measured_at": "2026-11-13",
+  "real_bugs": {
+    "before": {
+      "cases": 30,
+      "projects": 17,
+      "all": {
+        "cases": 29,
+        "right_file": 22,
+        "right_lines": 16
+      },
+      "in_trace": {
+        "cases": 20,
+        "right_file": 20,
+        "right_lines": 16
+      },
+      "elsewhere": {
+        "cases": 9,
+        "right_file": 2,
+        "right_lines": 0
+      },
+      "cost_usd": 0.841,
+      "median_seconds": 8
+    },
+    "after": null,
+    "elsewhere_with_imports": {
+      "cases": 9,
+      "right_file": 3,
+      "right_lines": 0
+    }
+  },
+  "jr_bench": {
+    "before": null,
+    "after": {
+      "bugs": 20,
+      "noise": 4,
+      "alerted": 20,
+      "noise_quiet": 4,
+      "exam_woke": 3,
+      "exam_cases": 3,
+      "right_file": 15,
+      "fix_works": 20,
+      "elsewhere": 7,
+      "elsewhere_fixed": 7,
+      "shown": 19,
+      "recommended": 14,
+      "caution": 5,
+      "shown_wrong": 0,
+      "withheld_working": 1,
+      "proved": 14,
+      "cost_usd": 0.319,
+      "cost_per_error_usd": 0.0133,
+      "median_decision_seconds": 1.6,
+      "median_fix_seconds": 11.7,
+      "rows": [
+        {
+          "id": "messmenu-missing-plates",
+          "kind": "bug",
+          "difficulty": "root_elsewhere",
+          "decision": "notify",
+          "decision_right": true,
+          "right_file": true,
+          "gate": "recommended",
+          "fix_works": true
+        },
+        {
+          "id": "ledgerly-gst-float",
+          "kind": "bug",
+          "difficulty": "in_trace",
+          "decision": "notify",
+          "decision_right": true,
+          "right_file": true,
+          "gate": "recommended",
+          "fix_works": true
+        },
+        {
+          "id": "ledgerly-empty-average",
+          "kind": "bug",
+          "difficulty": "in_trace",
+          "decision": "notify",
+          "decision_right": true,
+          "right_file": true,
+          "gate": "withheld",
+          "fix_works": true
+        },
+        {
+          "id": "ledgerly-date-format",
+          "kind": "bug",
+          "difficulty": "in_trace",
+          "decision": "notify",
+          "decision_right": true,
+          "right_file": true,
+          "gate": "caution",
+          "fix_works": true
+        },
+        {
+          "id": "fleetwise-config-rename",
+          "kind": "bug",
+          "difficulty": "root_elsewhere",
+          "decision": "notify",
+          "decision_right": true,
+          "right_file": false,
+          "gate": "recommended",
+          "fix_works": true
+        },
+        {
+          "id": "fleetwise-empty-string",
+          "kind": "bug",
+          "difficulty": "root_elsewhere",
+          "decision": "notify",
+          "decision_right": true,
+          "right_file": false,
+          "gate": "recommended",
+          "fix_works": true
+        },
+        {
+          "id": "fleetwise-overdue-datetime",
+          "kind": "bug",
+          "difficulty": "root_elsewhere",
+          "decision": "notify",
+          "decision_right": true,
+          "right_file": true,
+          "gate": "caution",
+          "fix_works": true
+        },
+        {
+          "id": "clinicq-store-keyerror",
+          "kind": "bug",
+          "difficulty": "in_trace",
+          "decision": "notify",
+          "decision_right": true,
+          "right_file": true,
+          "gate": "recommended",
+          "fix_works": true
+        },
+        {
+          "id": "clinicq-is-past-datetime",
+          "kind": "bug",
+          "difficulty": "in_trace",
+          "decision": "notify",
+          "decision_right": true,
+          "right_file": true,
+          "gate": "recommended",
+          "fix_works": true
+        },
+        {
+          "id": "clinicq-bill-describe",
+          "kind": "bug",
+          "difficulty": "in_trace",
+          "decision": "notify",
+          "decision_right": true,
+          "right_file": true,
+          "gate": "recommended",
+          "fix_works": true
+        },
+        {
+          "id": "campuskart-offer-typo",
+          "kind": "bug",
+          "difficulty": "in_trace",
+          "decision": "notify",
+          "decision_right": true,
+          "right_file": true,
+          "gate": "recommended",
+          "fix_works": true
+        },
+        {
+          "id": "campuskart-empty-page",
+          "kind": "bug",
+          "difficulty": "in_trace",
+          "decision": "notify",
+          "decision_right": true,
+          "right_file": true,
+          "gate": "recommended",
+          "fix_works": true
+        },
+        {
+          "id": "campuskart-order-total",
+          "kind": "bug",
+          "difficulty": "in_trace",
+          "decision": "notify",
+          "decision_right": true,
+          "right_file": true,
+          "gate": "caution",
+          "fix_works": true
+        },
+        {
+          "id": "examhall-answered-len",
+          "kind": "bug",
+          "difficulty": "in_trace",
+          "decision": "wake",
+          "decision_right": true,
+          "right_file": true,
+          "gate": "caution",
+          "fix_works": true
+        },
+        {
+          "id": "examhall-submission-average",
+          "kind": "bug",
+          "difficulty": "in_trace",
+          "decision": "wake",
+          "decision_right": true,
+          "right_file": true,
+          "gate": "recommended",
+          "fix_works": true
+        },
+        {
+          "id": "examhall-fee-gst",
+          "kind": "bug",
+          "difficulty": "root_elsewhere",
+          "decision": "wake",
+          "decision_right": true,
+          "right_file": false,
+          "gate": "caution",
+          "fix_works": true
+        },
+        {
+          "id": "tiffinbox-menu-undefined",
+          "kind": "bug",
+          "difficulty": "in_trace",
+          "decision": "notify",
+          "decision_right": true,
+          "right_file": true,
+          "gate": "recommended",
+          "fix_works": true
+        },
+        {
+          "id": "tiffinbox-empty-average",
+          "kind": "bug",
+          "difficulty": "in_trace",
+          "decision": "notify",
+          "decision_right": true,
+          "right_file": true,
+          "gate": "recommended",
+          "fix_works": true
+        },
+        {
+          "id": "tiffinbox-config-rename",
+          "kind": "bug",
+          "difficulty": "root_elsewhere",
+          "decision": "notify",
+          "decision_right": true,
+          "right_file": false,
+          "gate": "recommended",
+          "fix_works": true
+        },
+        {
+          "id": "tiffinbox-empty-string",
+          "kind": "bug",
+          "difficulty": "root_elsewhere",
+          "decision": "notify",
+          "decision_right": true,
+          "right_file": false,
+          "gate": "recommended",
+          "fix_works": true
+        },
+        {
+          "id": "noise-client-disconnect",
+          "kind": "noise",
+          "difficulty": null,
+          "decision": "ignore",
+          "decision_right": true,
+          "right_file": null,
+          "gate": null,
+          "fix_works": null
+        },
+        {
+          "id": "noise-favicon",
+          "kind": "noise",
+          "difficulty": null,
+          "decision": "ignore",
+          "decision_right": true,
+          "right_file": null,
+          "gate": null,
+          "fix_works": null
+        },
+        {
+          "id": "noise-scanner",
+          "kind": "noise",
+          "difficulty": null,
+          "decision": "ignore",
+          "decision_right": true,
+          "right_file": null,
+          "gate": null,
+          "fix_works": null
+        },
+        {
+          "id": "noise-shutdown",
+          "kind": "noise",
+          "difficulty": null,
+          "decision": "ignore",
+          "decision_right": true,
+          "right_file": null,
+          "gate": null,
+          "fix_works": null
+        }
+      ]
+    }
+  },
+  "gate_history": {
+    "one_level": {
+      "bugs": 16,
+      "noise": 4,
+      "alerted": 16,
+      "noise_quiet": 4,
+      "exam_woke": 3,
+      "exam_cases": 3,
+      "right_file": 13,
+      "fix_works": 16,
+      "elsewhere": 5,
+      "elsewhere_fixed": 5,
+      "shown": 6,
+      "recommended": 6,
+      "caution": 0,
+      "shown_wrong": 0,
+      "withheld_working": 10,
+      "proved": 14,
+      "cost_usd": 0.237,
+      "cost_per_error_usd": 0.0118,
+      "median_decision_seconds": 1.4,
+      "median_fix_seconds": 11.3,
+      "rows": []
+    },
+    "three_level": {
+      "bugs": 16,
+      "noise": 4,
+      "alerted": 16,
+      "noise_quiet": 4,
+      "exam_woke": 3,
+      "exam_cases": 3,
+      "right_file": 14,
+      "fix_works": 16,
+      "elsewhere": 5,
+      "elsewhere_fixed": 5,
+      "shown": 15,
+      "recommended": 7,
+      "caution": 8,
+      "shown_wrong": 0,
+      "withheld_working": 1,
+      "proved": 14,
+      "cost_usd": 0.256,
+      "cost_per_error_usd": 0.0128,
+      "median_decision_seconds": 1.7,
+      "median_fix_seconds": 11.7,
+      "rows": []
+    }
+  }
+}
