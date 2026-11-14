@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BENCH_ALL, benchBugsFor, benchCentsPerBug } from "../site";
 import { Lantern } from "../ui/lantern";
 
 export const metadata: Metadata = {
@@ -12,7 +13,7 @@ const SETUP = [
     t: "Name your app",
     d: (
       <>
-        On the <Link href="/connect">Connect page</Link>, type your app&apos;s name. Or open our Telegram bot and send <code>/new myapp</code>. You get a
+        On the <Link href="/connect">Connect page</Link>, type your app&rsquo;s name. Or open our Telegram bot and send <code>/new myapp</code>. You get a
         private address for your errors and <b>$5 of free AI credit</b>.
       </>
     ),
@@ -147,14 +148,45 @@ export default function How() {
   return (
     <>
       <section className="page-head" aria-labelledby="how-h">
-        <div className="frame">
-          <p className="eyebrow">How it works</p>
-          <h1 id="how-h" className="display" data-rv>
-            Connect once. <em>Sleep.</em>
-          </h1>
-          <p className="lead" data-rv style={{ "--d": 1 } as React.CSSProperties}>
-            Your phone tells you when it matters, with the cause and a checked fix. Every step, the bot&apos;s commands, the cost and the heal rules.
-          </p>
+        <div className="frame head-grid">
+          <div>
+            <p className="eyebrow">How it works</p>
+            <h1 id="how-h" className="display" data-rv>
+              Connect once. <em>Sleep.</em>
+            </h1>
+            <p className="lead" data-rv style={{ "--d": 1 } as React.CSSProperties}>
+              Your phone tells you when it matters, with the cause and a checked fix. Every step, the bot&rsquo;s commands, the cost and the heal rules.
+            </p>
+          </div>
+          {/* What the one command prints, in the CLI's own words (a Django app; the name prompt and data note left out). */}
+          <figure className="head-art term" data-ui data-rv style={{ "--d": 2 } as React.CSSProperties}>
+            <figcaption className="term-bar">
+              <span className="dots" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </span>
+              <span>terminal · your project</span>
+            </figcaption>
+            <pre>
+              <span className="term-cmd">$ npx jaagteraho init</span>
+              {"\n"}
+              <b>JaagteRaho</b>: connect this app to your AI night watchman
+              {"\n"}Found: <b>django</b> app (mysite/settings.py)
+              {"\n"}Connect? (Y/n) <span className="term-in">y</span>
+              {"\n"}Created <b>mysite</b>.{"\n"}
+              {"\n"}Changes:
+              {"\n"}update mysite/settings.py: start the error package (django)
+              {"\n"}
+              <span className="term-add">{"    + import sentry_sdk as _jr_sentry"}</span>
+              {"\n"}
+              <span className="term-add">{"    + _jr_sentry.init(dsn=…, send_default_pii=False)"}</span>
+              {"\n"}update requirements.txt: add sentry-sdk
+              {"\n"}Apply these changes? (Y/n) <span className="term-in">y</span>
+              {"\n"}Done.{"\n"}
+              {"\n"}Test error sent. <b>You should get a ✅ on Telegram</b> within a few seconds.
+            </pre>
+          </figure>
         </div>
       </section>
 
@@ -331,8 +363,8 @@ export default function How() {
                 Every Telegram account gets $5 of free AI credit.
               </p>
               <p data-rv>
-                Deciding about an error costs about $0.0001, so noise costs almost nothing. Finding the cause and checking a fix costs about 1.3 cents,
-                measured over our 20 test bugs, so $5 covers roughly 375 real problems.
+                Deciding about an error costs about $0.0001, so noise costs almost nothing. Finding the cause and checking a fix costs about {benchCentsPerBug()}{" "}
+                cents, measured over our {BENCH_ALL.bugs} planted bugs, so $5 covers roughly {benchBugsFor(5)} real problems.
               </p>
               <p className="soft" data-rv>
                 When the credit runs out, alerts and decisions continue with a daily limit; only new diagnoses stop. While we are a prototype each account
@@ -387,7 +419,7 @@ export default function How() {
                   for now. Without it you get the ready-to-apply diff.
                 </li>
                 <li>
-                  After your deploy (a new release reporting in, or 10 minutes after the merge if you don&apos;t tag releases) it watches the error for 30
+                  After your deploy (a new release reporting in, or 10 minutes after the merge if you don&rsquo;t tag releases) it watches the error for 30
                   minutes. If it comes back at least 3 times and is not down by half, the fix is rolled back, you are woken again and self-healing stops for 12
                   hours.
                 </li>
@@ -397,7 +429,7 @@ export default function How() {
                 </li>
               </ul>
               <p className="soft" data-rv>
-                On our exam portal, healing switches your session to the portal&apos;s fixed build and sends the failing request again to prove it works.
+                On our exam portal, healing switches your session to the portal&rsquo;s fixed build and sends the failing request again to prove it works.
               </p>
             </div>
           </div>
@@ -413,7 +445,7 @@ export default function How() {
                   required checks.
                 </li>
                 <li data-rv>Apply a fix you did not allow, a fix with open concerns, or a fix that failed its check.</li>
-                <li data-rv>Keep your users&apos; emails, passwords or cookies.</li>
+                <li data-rv>Keep your users&rsquo; emails, passwords or cookies.</li>
                 <li data-rv>Let the AI overrule the rules for exams, payments or login.</li>
               </ul>
             </div>
@@ -451,7 +483,7 @@ export default function How() {
               <li data-rv>
                 <strong>Check our numbers</strong>
                 <p>
-                  The <Link href="/evidence">Evidence page</Link> shows how it did on 20 planted bugs and 30 real bugs from GitHub, and how each number was
+                  The <Link href="/evidence">Evidence page</Link> shows how it did on {BENCH_ALL.bugs} planted bugs and 30 real bugs from GitHub, and how each number was
                   measured.
                 </p>
               </li>

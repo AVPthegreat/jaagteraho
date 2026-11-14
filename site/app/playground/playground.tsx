@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Diff } from "../ui/alert-card";
 import { WATCHER } from "../watcher";
-import { appTitle, loadSession, type AppInfo, type BugCase, type PlayEvent, type Scorecard } from "./play";
+import { appTitle, loadSession, TAGLINES, TITLES, type AppInfo, type BugCase, type PlayEvent, type Scorecard } from "./play";
 
 /*
   The Live playground, in three steps: pick an app, pick a bug, watch it fix. The stage shows the app as
@@ -146,6 +146,13 @@ const ICONS = {
 export function Playground() {
   const [apps, setApps] = useState<AppInfo[] | null>(null);
   const [appsDown, setAppsDown] = useState(false);
+  // The app list has not arrived after 10 s: say so instead of showing empty cards forever.
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (apps !== null) return;
+    const t = setTimeout(() => setSlow(true), 10_000);
+    return () => clearTimeout(t);
+  }, [apps]);
   const [app, setApp] = useState<string | null>(null);
   const [bug, setBug] = useState<string>("surprise");
   const [exam, setExam] = useState(false);
@@ -256,24 +263,16 @@ export function Playground() {
     };
   }, [session]);
 
-  // Gentle cross-fade between steps (GSAP, skipped with reduced motion).
-  useEffect(() => {
-    const el = panel.current;
-    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    let dead = false;
-    void import("gsap").then(({ gsap }) => {
-      if (dead) return;
-      gsap.fromTo(el, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out", clearProps: "transform" });
-      gsap.fromTo(el.querySelectorAll("[data-in]"), { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out", stagger: 0.04, delay: 0.08, clearProps: "transform" });
-    });
-    return () => {
-      dead = true;
-    };
-  }, [stage]);
+  // The step change animates in CSS (playground.css, .pg2-panel): it plays from the first paint, so no flash.
 
   const info = apps?.find((a) => a.name === app) ?? null;
   const cases = info?.cases ?? [];
   const working = run?.state === "running";
+
+  // A link to an app that is not live (?app=typo, or a retired app) goes back to the list, not a blank panel.
+  useEffect(() => {
+    if (apps && stage === 2 && !info) setStage(1);
+  }, [apps, stage, info]);
 
   const pickApp = (name: string) => {
     setApp(name);
@@ -443,7 +442,16 @@ export function Playground() {
     <div className="pg2">
       {conn === "reconnecting" || appsDown ? (
         <p className="pg2-reconnect" role="status">
-          <span className="pg2-pulse" aria-hidden="true" /> Reconnecting to the live server… everything here stays as it was.
+          <span className="pg2-pulse" aria-hidden="true" />
+          <span>
+            {apps === null ? (
+              <>
+                The live server is waking up; this page keeps trying on its own. Meanwhile, <a href="/#see">watch a whole run in under a minute</a>.
+              </>
+            ) : (
+              "Reconnecting to the live server… everything here stays as it was."
+            )}
+          </span>
         </p>
       ) : null}
 
@@ -478,11 +486,35 @@ export function Playground() {
       </p>
 
       <div className="pg2-panel" ref={panel} key={stage}>
-        {stage === 1 ? (
+        {/* A shared link (?app=…) opens on step 2; until the list arrives, show the apps waking up there too. */}
+        {stage === 1 || (stage === 2 && apps === null) ? (
           <ul className="pg2-apps" aria-label="Live apps">
             {apps === null
-              ? Array.from({ length: 7 }, (_, i) => <li key={i} className="pg2-app skeleton" aria-hidden="true" />)
-              : apps.map((a) => (
+              ? [
+                  ...(slow
+                    ? [
+                        <li key="wait" className="pg2-wait">
+                          The live apps open as soon as the server answers. You can also <a href="/#see">watch a recorded run</a>.
+                        </li>,
+                      ]
+                    : []),
+                  ...Object.keys(TITLES).map((name) => (
+                    <li key={name}>
+                      <button type="button" className="pg2-app waking" disabled>
+                        <span className="pg2-app-name">{TITLES[name]}</span>
+                        <span className="pg2-app-line">{TAGLINES[name]}</span>
+                        <span className="pg2-badge">waking up…</span>
+                      </button>
+                    </li>
+                  )),
+                ]
+              : apps.length === 0
+                ? [
+                    <li key="none" className="pg2-wait">
+                      No live app is open right now. <a href="/#see">Watch a recorded run</a> while they come back.
+                    </li>,
+                  ]
+                : apps.map((a) => (
                   <li key={a.name} data-in>
                     <button type="button" className="pg2-app" aria-pressed={a.name === app} onClick={() => pickApp(a.name)}>
                       <span className="pg2-app-name">{a.title}</span>
@@ -513,13 +545,13 @@ export function Playground() {
             </fieldset>
             <div className="pg2-side" data-in>
               <div className="pg2-opt">
-                <button type="button" role="switch" aria-checked={exam} className="pg2-switch" onClick={() => setExam((v) => !v)} aria-labelledby="pg2-exam-l">
+                <button type="button" role="switch" id="pg2-exam" aria-checked={exam} className="pg2-switch" onClick={() => setExam((v) => !v)} aria-labelledby="pg2-exam-l">
                   <i aria-hidden="true" />
                 </button>
-                <span>
+                <label htmlFor="pg2-exam" className="pg2-opt-l">
                   <b id="pg2-exam-l">Exam time / peak hour</b>
                   <small>A critical failure then wakes the owner.</small>
-                </span>
+                </label>
               </div>
               <div className="pg2-opt">
                 <div className="pg2-seg" role="radiogroup" aria-label="When a fix is ready">
@@ -708,7 +740,7 @@ export function Playground() {
                 {hidden?.note ? <p className="small">Our hidden test: {String(hidden.note)}</p> : null}
                 {runApp ? (
                   <>
-                    <h4>The app&apos;s files ({runApp.files})</h4>
+                    <h4>The app&rsquo;s files ({runApp.files})</h4>
                     <ul className="pg2-tree">
                       {runApp.tree.map((f) => (
                         <li key={f}>{f}</li>

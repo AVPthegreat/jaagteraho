@@ -6,9 +6,12 @@ import { GATE_SRC, HEAL_SRC } from "../site";
 
 /*
   "How safe is it": five layers a fix passes through, drawn as nested shields around your app.
-  Pick a layer (hover, focus or tap) and its ring lights up. Facts come from gate.ts, verify.ts and heal.ts.
+  Pick a layer (hover, focus or tap) and its ring lights up, and the layer's own output shows beside the shield,
+  for the demo portal's Submit fix. Facts come from gate.ts (the six checks, 3 review votes), verify.ts and heal.ts.
 */
-const LAYERS: Array<{ name: string; short: string; text: React.ReactNode }> = [
+const Tick = () => <i aria-hidden="true">✓</i>;
+
+const LAYERS: Array<{ name: string; short: string; text: React.ReactNode; out: React.ReactNode }> = [
   {
     name: "Code rules",
     short: "Hard checks, no AI",
@@ -18,11 +21,58 @@ const LAYERS: Array<{ name: string; short: string; text: React.ReactNode }> = [
         writes, and leaves valid code. Fail one and the fix is not shown at all.
       </>
     ),
+    out: (
+      <>
+        <p className="so-head">
+          <span>Submit fix · code checks</span>
+          <b>6 of 6</b>
+        </p>
+        <ul className="so-checks">
+          <li>
+            <Tick /> Applies cleanly
+          </li>
+          <li>
+            <Tick /> Small: 1 file, 4 lines
+          </li>
+          <li>
+            <Tick /> No protected area
+          </li>
+          <li>
+            <Tick /> No new import
+          </li>
+          <li>
+            <Tick /> No new web address
+          </li>
+          <li>
+            <Tick /> Still valid Python
+          </li>
+        </ul>
+      </>
+    ),
   },
   {
     name: "AI reviewer",
     short: "A second opinion",
     text: <>A separate Claude review grades the diff: does it remove the cause, does it touch anything sensitive, could it break something else. Every vote must agree before a fix may heal on its own.</>,
+    out: (
+      <>
+        <p className="so-head">
+          <span>Submit fix · review</span>
+          <b>3 votes</b>
+        </p>
+        <dl className="so-rows">
+          <dt>Removes the cause</dt>
+          <dd>3 of 3</dd>
+          <dt>Touches something sensitive</dt>
+          <dd>no</dd>
+          <dt>Could break something else</dt>
+          <dd>no</dd>
+        </dl>
+        <p className="so-foot">
+          <Tick /> Every vote agrees
+        </p>
+      </>
+    ),
   },
   {
     name: "Its own test",
@@ -33,6 +83,21 @@ const LAYERS: Array<{ name: string; short: string; text: React.ReactNode }> = [
         in a throwaway copy with no network or secrets.
       </>
     ),
+    out: (
+      <>
+        <p className="so-head">
+          <span>Regression test · throwaway copy</span>
+          <b>proved</b>
+        </p>
+        <dl className="so-rows">
+          <dt>Old code</dt>
+          <dd className="bad">fails · KeyError: &apos;language&apos;</dd>
+          <dt>Fixed code</dt>
+          <dd className="good">passes</dd>
+        </dl>
+        <p className="so-foot">No network, no secrets, deleted after the run</p>
+      </>
+    ),
   },
   {
     name: "Your rules",
@@ -41,14 +106,42 @@ const LAYERS: Array<{ name: string; short: string; text: React.ReactNode }> = [
       <>
         Small bugs: fixed on their own, you get a note in the morning. Big ones: it calls you; no answer in 3 minutes, it heals. <code>/heal minor off</code> and{" "}
         <code>/heal ask</code> make you approve them. At most 5 small and 2 big a night, never in login, payments, exams or settings, and only behind your
-        branch&apos;s own required checks.
+        branch&rsquo;s own required checks.
       </>
+    ),
+    out: (
+      <div className="tg">
+        <div className="tg-chat">
+          <span className="tg-reply">/heal auto 3m</span>
+          <div className="tg-msg">
+            <p>Big bugs: it calls you; no answer in 3 minutes, it heals.</p>
+            <p>Small ones are fixed on their own with a quiet note.</p>
+          </div>
+        </div>
+      </div>
     ),
   },
   {
     name: "Undo",
     short: "Rolled back if it does not help",
     text: <>After a heal it watches for 30 minutes. If errors are not down by half, it reverts, wakes you and pauses healing for 12 hours. Every heal has one-tap Undo.</>,
+    out: (
+      <>
+        <p className="so-head">
+          <span>exam-portal · after the heal</span>
+          <b>watching</b>
+        </p>
+        <dl className="so-rows">
+          <dt>Healed</dt>
+          <dd>02:10</dd>
+          <dt>Watching until</dt>
+          <dd>02:40</dd>
+          <dt>Errors not down by half</dt>
+          <dd>undone, you are woken</dd>
+        </dl>
+        <span className="so-undo">Undo</span>
+      </>
+    ),
   },
 ];
 
@@ -92,6 +185,9 @@ export function Shield() {
             <p id={`sh-${i}`} hidden={i !== on}>
               {l.text}
             </p>
+            <div className="shield-out" data-ui hidden={i !== on}>
+              {l.out}
+            </div>
           </li>
         ))}
       </ol>

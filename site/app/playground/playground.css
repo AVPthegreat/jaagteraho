@@ -22,7 +22,7 @@
 /* Reconnecting */
 .pg2-reconnect {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   margin-bottom: 16px;
   padding: 10px 14px;
@@ -32,6 +32,8 @@
   font-size: 0.92rem;
 }
 .pg2-pulse {
+  flex: none;
+  margin-top: 0.45em;
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -60,13 +62,15 @@
   background: rgba(214, 224, 255, 0.03);
   color: var(--faint);
   cursor: pointer;
-  transition: background 0.25s, color 0.25s, border-color 0.25s;
+  transition: background 0.25s, color 0.25s, border-color 0.25s, scale 0.16s var(--ease);
 }
 .pg2-steps button:disabled {
   cursor: default;
 }
-.pg2-steps button:not(:disabled):hover {
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .pg2-steps button:not(:disabled):hover {
+    color: var(--text);
+  }
 }
 .pg2-steps li.on button {
   color: var(--text);
@@ -136,15 +140,26 @@
   background: linear-gradient(180deg, rgba(26, 34, 51, 0.5), rgba(14, 19, 30, 0.4));
   color: var(--text);
   cursor: pointer;
-  transition: border-color 0.25s, transform 0.25s var(--ease), background 0.25s;
+  transition: border-color 0.25s, transform 0.25s var(--ease), background 0.25s, scale 0.16s var(--ease);
 }
-.pg2-app:hover {
-  border-color: rgba(122, 167, 255, 0.45);
-  transform: translateY(-2px);
+@media (hover: hover) and (pointer: fine) {
+  .pg2-app:not(:disabled):hover {
+    border-color: rgba(122, 167, 255, 0.45);
+    transform: translateY(-2px);
+  }
 }
 .pg2-app[aria-pressed="true"] {
   border-color: rgba(122, 167, 255, 0.7);
   background: rgba(60, 100, 200, 0.16);
+}
+/* Cold start: the real apps, shown but not yet open. */
+.pg2-app.waking {
+  cursor: default;
+  opacity: 0.72;
+}
+.pg2-app.waking .pg2-badge {
+  background: rgba(245, 181, 68, 0.1);
+  color: var(--amber-2, #ffd27a);
 }
 .pg2-app.skeleton {
   min-height: 132px;
@@ -174,6 +189,7 @@
 /* Step 2: bugs and options */
 .pg2-choose {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
 }
 @media (min-width: 960px) {
@@ -199,10 +215,12 @@
   border: 1px solid transparent;
   background: rgba(214, 224, 255, 0.03);
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
+  transition: background 0.2s, border-color 0.2s, scale 0.16s var(--ease);
 }
-.pg2-bug:hover {
-  background: rgba(214, 224, 255, 0.06);
+@media (hover: hover) and (pointer: fine) {
+  .pg2-bug:hover {
+    background: rgba(214, 224, 255, 0.06);
+  }
 }
 .pg2-bug.on {
   border-color: rgba(122, 167, 255, 0.55);
@@ -227,11 +245,16 @@
   opacity: 0;
   transition: max-height 0.3s var(--ease), opacity 0.25s;
 }
-.pg2-bug:hover small,
 .pg2-bug:focus-within small,
 .pg2-bug.on small {
-  max-height: 3em;
+  max-height: 6em;
   opacity: 1;
+}
+@media (hover: hover) and (pointer: fine) {
+  .pg2-bug:hover small {
+    max-height: 6em;
+    opacity: 1;
+  }
 }
 .pg2-bug.surprise b {
   color: var(--lantern-2);
@@ -256,8 +279,12 @@
   align-items: center;
   gap: 8px 14px;
 }
-.pg2-opt span {
+.pg2-opt span,
+.pg2-opt-l {
   display: grid;
+}
+.pg2-opt-l {
+  cursor: pointer;
 }
 .pg2-opt small {
   color: var(--faint);
@@ -272,7 +299,7 @@
   background: rgba(214, 224, 255, 0.08);
   position: relative;
   cursor: pointer;
-  transition: background 0.25s;
+  transition: background 0.25s, scale 0.16s var(--ease);
 }
 .pg2-switch i {
   position: absolute;
@@ -308,7 +335,12 @@
   color: var(--soft);
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s;
+  transition: background 0.2s, color 0.2s, scale 0.16s var(--ease);
+}
+@media (pointer: coarse) {
+  .pg2-seg button {
+    min-height: 44px;
+  }
 }
 .pg2-seg button[aria-checked="true"] {
   background: var(--lantern);
@@ -329,6 +361,7 @@
 /* Step 3: the stage */
 .pg2-grid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
 }
 @media (min-width: 960px) {
@@ -414,6 +447,10 @@
 .pg2-action {
   justify-self: start;
   margin-top: 6px;
+  /* Real labels run long ("Book for a patient who does not exist"): wrap rather than overflow a 360px phone. */
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
 }
 .pg2-out {
   min-height: 72px;
@@ -681,8 +718,10 @@
   font-size: 0.92rem;
   width: max-content;
 }
-.pg2-drawer summary:hover {
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .pg2-drawer summary:hover {
+    color: var(--text);
+  }
 }
 .pg2-drawer-body {
   display: grid;
@@ -707,12 +746,22 @@
 
 /* Phone */
 @media (max-width: 640px) {
+  /* The three steps stay one row (they took ~150px stacked); number over label, no summary chips. */
   .pg2-steps ol {
-    grid-template-columns: 1fr;
     gap: 6px;
   }
   .pg2-steps button {
     min-height: 48px;
+    grid-template-columns: 1fr;
+    row-gap: 4px;
+    padding: 8px 10px;
+  }
+  .pg2-steps .pg2-sum {
+    display: none;
+  }
+  /* Step 2: the Plant button and its two switches come before the list of bugs (Surprise is already picked). */
+  .pg2-side {
+    order: -1;
   }
   .pg2-apps {
     grid-template-columns: 1fr 1fr;
@@ -729,6 +778,13 @@
     columns: 1;
   }
 }
+.pg2-wait {
+  grid-column: 1 / -1;
+  padding: 20px;
+  border-radius: 16px;
+  border: 1px dashed var(--line-2);
+  color: var(--soft);
+}
 @media (prefers-reduced-motion: reduce) {
   .pg2-flow li.now .pg2-ico,
   .pg2-pulse,
@@ -736,3 +792,26 @@
     animation: none;
   }
 }
+
+/* Each step rises in as it mounts (the panel remounts per step). */
+@media (prefers-reduced-motion: no-preference) {
+  .pg2-panel {
+    animation: pg-rise 0.4s var(--ease) both;
+  }
+  .pg2-panel [data-in] {
+    animation: pg-rise-sm 0.45s var(--ease) 80ms both;
+  }
+}
+@keyframes pg-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+@keyframes pg-rise-sm {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+/* Press states: one shared rule in globals.css ("Press feedback"). */

@@ -40,7 +40,7 @@ export function DemoSection({ ev, country, headingId, level = 2 }: { ev: Evidenc
             </li>
             <li>
               <b>Wake-up</b>
-              <span>the owner&apos;s voice note; press play</span>
+              <span>the owner&rsquo;s voice note; press play</span>
             </li>
             <li>
               <b>Cause</b>

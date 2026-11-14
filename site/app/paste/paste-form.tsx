@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Diff, SUBMIT_DIFF } from "../ui/alert-card";
 import { WATCHER } from "../watcher";
 
@@ -44,6 +44,7 @@ export function PasteForm({ initialId, intro }: { initialId: string | null; intr
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [copied, setCopied] = useState(false);
+  const log = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!initialId) return;
@@ -57,6 +58,8 @@ export function PasteForm({ initialId, intro }: { initialId: string | null; intr
     setBusy(true);
     setError(null);
     setResult(null);
+    // On a phone or tablet the answer panel is a screen below the button: bring it into view.
+    if (window.matchMedia("(max-width: 979px)").matches) log.current?.scrollIntoView({ block: "start", behavior: "smooth" });
     try {
       const res = await fetch(`${WATCHER}/public/paste`, {
         method: "POST",
@@ -80,6 +83,7 @@ export function PasteForm({ initialId, intro }: { initialId: string | null; intr
     try {
       await navigator.clipboard.writeText(location.href);
       setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
     } catch {
       setCopied(false);
     }
@@ -89,13 +93,20 @@ export function PasteForm({ initialId, intro }: { initialId: string | null; intr
     <div className="split">
       <div className="side">
         {intro}
-        <form action={submit} className="form panel" data-rv>
+        <form
+          className="form panel"
+          data-rv
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit(new FormData(e.currentTarget));
+          }}
+        >
           <label htmlFor="repo">Public GitHub repository</label>
-          <input className="input" id="repo" name="repo" type="url" required placeholder="https://github.com/you/your-app" />
+          <input className="input" id="repo" name="repo" type="url" required placeholder="https://github.com/you/your-app" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="next" />
           <label htmlFor="tb" className="gap">
             Traceback or stack trace (Python, Node.js or browser)
           </label>
-          <textarea className="input" id="tb" name="tb" required rows={12} placeholder={SAMPLE} />
+          <textarea className="input" id="tb" name="tb" required rows={12} placeholder={SAMPLE} autoCapitalize="none" autoCorrect="off" spellCheck={false} />
           <p className="soft">
             We read only the files your traceback names, from the public repository. Nothing is written to it. Emails, tokens and keys in the traceback
             are masked before the AI sees it. 3 diagnoses per person per day.
@@ -109,7 +120,7 @@ export function PasteForm({ initialId, intro }: { initialId: string | null; intr
       </div>
 
       <div className="main" data-rv style={{ "--d": 1 } as React.CSSProperties}>
-        <div className="log" data-ui aria-live="polite">
+        <div className="log" data-ui aria-live="polite" ref={log} style={{ scrollMarginTop: 96 }}>
           <div className="log-head">
             <span className="dots" aria-hidden="true">
               <i />
@@ -118,12 +129,18 @@ export function PasteForm({ initialId, intro }: { initialId: string | null; intr
             </span>
             <span className="label">{result ? result.repo : "Diagnosis"}</span>
             {result && (
-              <button type="button" className="btn quiet" onClick={share}>
-                {copied ? "Link copied" : "Copy share link"}
+              <button type="button" className="btn quiet copy-btn" onClick={share}>
+                <span key={copied ? "d" : "c"} className="swap">
+                  {copied ? "Link copied" : "Copy share link"}
+                </span>
               </button>
             )}
           </div>
-          {error && <p className="empty" style={{ paddingBottom: 22 }}>{error}</p>}
+          {error && (
+            <p className="form-error log-error" role="alert">
+              {error}
+            </p>
+          )}
           {!error && !result && busy && (
             <p className="empty" style={{ paddingBottom: 22 }}>
               Reading the files your traceback names and working out the cause. This takes about 10 seconds.

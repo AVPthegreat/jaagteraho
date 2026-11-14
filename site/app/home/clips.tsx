@@ -55,6 +55,7 @@ export function Clips({ clips }: { clips: Clip[] }) {
   const [visible, setVisible] = useState(false);
   const [still, setStill] = useState(false);
   const [narrow, setNarrow] = useState(false);
+  const [rolling, setRolling] = useState(false); // the video is really playing (autoplay can be refused, e.g. Low Power Mode)
 
   useEffect(() => {
     setStill(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -78,8 +79,9 @@ export function Clips({ clips }: { clips: Clip[] }) {
   const f = FILES[clip.id] ?? { base: clip.id, secs: 10 };
   const hasSound = Boolean(f.sound);
   const anySound = clips.some((c) => FILES[c.id]?.sound);
-  const tall = narrow && !f.sound && Boolean(f.tall);
-  const src = f.sound ?? (tall ? f.tall! : f.base);
+  // Phones play the 9:16 cut while muted (its text is readable at phone width); sound switches to the 16:9 file with audio.
+  const tall = narrow && (muted || !f.sound) && Boolean(f.tall);
+  const src = tall ? f.tall! : (f.sound ?? f.base);
   const poster = `/clips/${tall ? f.tall : f.base}.jpg`;
   const shouldPlay = visible && !paused && !still;
 
@@ -91,17 +93,24 @@ export function Clips({ clips }: { clips: Clip[] }) {
     else v.pause();
   }, [shouldPlay, idx, muted, src]);
 
-  // Smooth progress while playing.
+  // Smooth progress while playing: the two active bars are written directly each frame (a React render
+  // per frame cost ~0.5 s of main thread per second on a phone); the text and state follow timeupdate.
   useEffect(() => {
-    if (!shouldPlay) return;
+    // Only while the video really rolls: autoplay can be refused, and then there is nothing to follow.
+    if (!shouldPlay || !rolling) return;
     let raf = 0;
+    const bars = root.current?.querySelectorAll<HTMLElement>('[aria-current="step"] .ps-fill i, .pl-seg.on i');
     const loop = () => {
-      if (video.current) setCur(video.current.currentTime);
+      const v = video.current;
+      if (v && bars) {
+        const t = `scaleX(${Math.min(1, v.currentTime / durs[idx])})`;
+        bars.forEach((b) => (b.style.transform = t));
+      }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [shouldPlay, idx]);
+  }, [shouldPlay, rolling, idx, durs]);
 
   // Keep the active step in view inside the phone strip (scrolls the strip only, never the page).
   useEffect(() => {
@@ -164,7 +173,13 @@ export function Clips({ clips }: { clips: Clip[] }) {
     }
   };
 
-  const playing = shouldPlay;
+  // Turning sound on or off can swap the file on phones: carry the position over.
+  const setSound = (on: boolean) => {
+    if (narrow && f.tall && f.sound && video.current) seekTo.current = video.current.currentTime;
+    setMuted(!on);
+  };
+
+  const playing = rolling;
   const togglePlay = () => {
     const v = video.current;
     if (still && v) {
@@ -173,7 +188,12 @@ export function Clips({ clips }: { clips: Clip[] }) {
       else v.pause();
       return;
     }
-    setPaused(playing);
+    if (playing) setPaused(true);
+    else {
+      setPaused(false);
+      // Inside the tap, so a browser that refused autoplay lets this one through.
+      v?.play().catch(() => undefined);
+    }
   };
 
   return (
@@ -219,8 +239,10 @@ export function Clips({ clips }: { clips: Clip[] }) {
                 onMeta();
               }}
               onEnded={() => go(idx + 1)}
+              onPlay={() => setRolling(true)}
+              onPause={() => setRolling(false)}
               onTimeUpdate={(e) => {
-                if (!shouldPlay) setCur(e.currentTarget.currentTime);
+                setCur(e.currentTarget.currentTime);
               }}
             >
               <source src={`/clips/${src}.webm`} type="video/webm" />
@@ -236,8 +258,10 @@ export function Clips({ clips }: { clips: Clip[] }) {
               />
             </video>
             {anySound && muted && (
-              <button type="button" className="pl-sound-cta" onClick={() => setMuted(false)}>
-                <SpeakerIcon on /> Tap for sound
+              <button type="button" className="pl-sound-cta" onClick={() => setSound(true)} aria-label="Turn sound on">
+                <SpeakerIcon on />
+                <span className="pl-sound-label t-touch">Tap for sound</span>
+                <span className="pl-sound-label t-mouse">Click for sound</span>
               </button>
             )}
           </div>
@@ -258,7 +282,7 @@ export function Clips({ clips }: { clips: Clip[] }) {
             aria-valuemax={Math.round(total)}
             aria-valuenow={Math.round(elapsed)}
             aria-valuetext={`Step ${idx + 1} of ${n}, ${mmss(elapsed)} of ${mmss(total)}`}
-            onPointerDown={onBar}
+            onPointerUp={onBar}
             onKeyDown={onBarKey}
           >
             {durs.map((d, k) => (
@@ -268,7 +292,7 @@ export function Clips({ clips }: { clips: Clip[] }) {
             ))}
           </div>
           {anySound && (
-            <button type="button" className="pl-btn" onClick={() => setMuted((m) => !m)} aria-pressed={!muted} aria-label="Sound">
+            <button type="button" className="pl-btn" onClick={() => setSound(muted)} aria-pressed={!muted} aria-label="Sound">
               <SpeakerIcon on={!muted} />
             </button>
           )}
@@ -285,6 +309,7 @@ export function Clips({ clips }: { clips: Clip[] }) {
             {mmss(elapsed)} / {mmss(total)}
           </span>
         </p>
+        <p className="pl-cap">{clip.caption}</p>
       </div>
     </div>
   );

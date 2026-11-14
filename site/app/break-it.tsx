@@ -210,7 +210,7 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
             ))}
           </div>
           <p className="demo-step">
-            <span aria-hidden="true">2</span> Set the owner&apos;s rules
+            <span aria-hidden="true">2</span> Set the owner&rsquo;s rules
           </p>
           <div className="switches">
             <label className="switch" htmlFor="exam">
@@ -326,7 +326,7 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
       </div>
 
       <section className="sign-band" aria-labelledby="sign-h">
-        <h3 id="sign-h">Tried it? Sign the logbook</h3>
+        <h2 id="sign-h">Tried it? Sign the logbook</h2>
         <div className="sign-wrap">
           {signed ? (
             <p>Thank you. You are in the logbook.</p>
@@ -334,11 +334,11 @@ export function BreakIt({ country, see }: { country: string | null; see?: React.
             <form className="sign" action={sign}>
               <div className="field">
                 <label htmlFor="who">Name or handle</label>
-                <input className="input" id="who" name="who" type="text" placeholder="e.g. @riya_codes" required maxLength={40} />
+                <input className="input" id="who" name="who" type="text" placeholder="e.g. @riya_codes" required maxLength={40} autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="next" />
               </div>
               <div className="field">
                 <label htmlFor="country">Country</label>
-                <input className="input" id="country" name="country" type="text" defaultValue={country ?? ""} required maxLength={40} />
+                <input className="input" id="country" name="country" type="text" defaultValue={country ?? ""} required maxLength={40} autoComplete="country-name" enterKeyHint="done" />
               </div>
               <label className="check" htmlFor="live">
                 <input id="live" name="live" type="checkbox" /> I run a live app
@@ -423,7 +423,7 @@ function EntryBody({
               <path d="M4 2.5v11l9-5.5-9-5.5Z" fill="#f2b441" />
             </svg>
           </button>
-          <span className="title">Wake-up call sent to the owner&apos;s phone</span>
+          <span className="title">Wake-up call sent to the owner&rsquo;s phone</span>
         </div>
       );
     case "cause":

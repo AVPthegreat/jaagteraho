@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { WATCHER } from "../watcher";
 
 type Result = { project: string; dsn: string; logs_url?: string; telegram: string | null; link_code: string; heal?: "ask" | "auto-after" };
@@ -24,17 +24,28 @@ function Copy({ text }: { text: string }) {
   return (
     <button
       type="button"
-      className="btn quiet"
-      onClick={async () => {
+      className="btn quiet copy-btn"
+      onClick={async (e) => {
+        const pre = e.currentTarget.previousElementSibling;
         try {
           await navigator.clipboard.writeText(text);
           setDone(true);
+          window.setTimeout(() => setDone(false), 1600);
         } catch {
-          setDone(false);
+          // No clipboard access (an embedded browser, an old Safari): select the text so a long-press copies it.
+          if (pre) {
+            const range = document.createRange();
+            range.selectNodeContents(pre);
+            const sel = window.getSelection();
+            sel?.removeAllRanges();
+            sel?.addRange(range);
+          }
         }
       }}
     >
-      {done ? "Copied" : "Copy"}
+      <span key={done ? "d" : "c"} className="swap">
+        {done ? "Copied" : "Copy"}
+      </span>
     </button>
   );
 }
@@ -43,6 +54,12 @@ export function ConnectForm({ initialName = "" }: { initialName?: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
+  const resultHead = useRef<HTMLHeadingElement>(null);
+
+  // The form is replaced by the result: move focus to its heading so keyboard and screen-reader users land there.
+  useEffect(() => {
+    if (result) resultHead.current?.focus();
+  }, [result]);
 
   const submit = async (form: FormData) => {
     setBusy(true);
@@ -75,7 +92,9 @@ export function ConnectForm({ initialName = "" }: { initialName?: string }) {
     );
     return (
       <div className="result" aria-live="polite">
-        <h2 className="lead">Connected: {result.project}, with $5 of free AI credit</h2>
+        <h2 className="lead" ref={resultHead} tabIndex={-1}>
+          Connected: {result.project}, with $5 of free AI credit
+        </h2>
         <div className="step">
           <h3>Get alerts on Telegram</h3>
           {result.telegram ? (
@@ -135,14 +154,20 @@ export function ConnectForm({ initialName = "" }: { initialName?: string }) {
   }
 
   return (
-    <form action={submit} className="form result">
+    <form
+      className="form result"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit(new FormData(e.currentTarget));
+      }}
+    >
       <h2 className="lead">Name your app</h2>
       <label htmlFor="name">App name</label>
-      <input className="input" id="name" name="name" type="text" required minLength={2} maxLength={40} placeholder="e.g. college-fest-site" defaultValue={initialName} />
+      <input className="input" id="name" name="name" type="text" required minLength={2} maxLength={40} placeholder="e.g. college-fest-site" defaultValue={initialName} autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="next" />
       <label htmlFor="repo" className="gap">
         Its public GitHub repository <span className="soft">(optional: lets it read the code to explain causes)</span>
       </label>
-      <input className="input" id="repo" name="repo" type="url" placeholder="https://github.com/you/your-app" />
+      <input className="input" id="repo" name="repo" type="url" placeholder="https://github.com/you/your-app" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
       <fieldset>
         <legend>If a wake-up goes unanswered</legend>
         <p className="small soft">
@@ -159,7 +184,7 @@ export function ConnectForm({ initialName = "" }: { initialName?: string }) {
           <input id="heal-auto" name="heal" type="radio" value="auto-after" />
           <span>
             <b>Heal on its own after 3 minutes.</b> <span className="soft">Only fully checked fixes, never in login, payments, exams, config or CI, at most 2 a night,
-            merged only behind your required checks, rolled back and you are woken again if the errors don&apos;t drop. Needs your server-only
+            merged only behind your required checks, rolled back and you are woken again if the errors don&rsquo;t drop. Needs your server-only
             secret on errors and write access to your repository; without it you get the diff.</span>
           </span>
         </label>
@@ -171,7 +196,11 @@ export function ConnectForm({ initialName = "" }: { initialName?: string }) {
           and by Claude (Anthropic, United States). This is a hackathon prototype with no warranty.
         </span>
       </label>
-      {error && <p className="form-error">{error}</p>}
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
       <span className="actions gap">
         <button className="btn" type="submit" disabled={busy}>
           {busy ? "Connecting…" : "Connect my app"} <span className="arrow">→</span>

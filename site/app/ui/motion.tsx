@@ -28,12 +28,24 @@ export function Motion() {
       },
       { rootMargin: "0px 0px -6% 0px", threshold: 0.01 },
     );
+    // Sections out of view (with a margin) pause their looping animations: see [data-idle] in globals.css.
+    const idle = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) e.target.toggleAttribute("data-idle", !e.isIntersecting);
+      },
+      { rootMargin: "200px 0px" },
+    );
     const seen = new WeakSet<Element>();
     const scan = () => {
       document.querySelectorAll(SELECTOR).forEach((el) => {
         if (seen.has(el)) return;
         seen.add(el);
         io.observe(el);
+      });
+      document.querySelectorAll("main section").forEach((el) => {
+        if (seen.has(el)) return;
+        seen.add(el);
+        idle.observe(el);
       });
     };
     // The page streams in after the layout mounts, so keep watching for parts that arrive later.
@@ -42,6 +54,7 @@ export function Motion() {
     scan();
     return () => {
       io.disconnect();
+      idle.disconnect();
       mo.disconnect();
     };
   }, [path]);

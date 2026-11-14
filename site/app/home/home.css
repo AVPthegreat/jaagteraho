@@ -47,9 +47,15 @@
   max-width: 640px;
 }
 .hero4-title {
-  font-size: clamp(2.6rem, 1.3rem + 4.6vw, 5.4rem);
+  /* Each sentence on one line at every width: 2 lines, not 4 at 1440 or 3 on a 390 phone. */
+  font-size: clamp(2.25rem, 1.3rem + 4.6vw, 5.4rem);
   line-height: 1;
   margin-bottom: 26px;
+}
+@media (min-width: 980px) {
+  .hero4-title {
+    font-size: min(4.1rem, 5vw);
+  }
 }
 .hero4-title em {
   display: block;
@@ -140,7 +146,7 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  min-width: 15.5em;
+  min-width: 21em;
   justify-content: center;
   padding: 6px 14px;
   border-radius: 999px;
@@ -185,24 +191,27 @@
   }
 }
 
-/* Hero entrance: hidden only when script runs and motion is allowed; GSAP reveals it. A fallback
-   animation reveals it anyway after 2.5 s in case the motion script never loads. */
+/* Hero entrance, in CSS so it runs during hydration: the headline was invisible until GSAP loaded
+   (2.8 s on a slow phone). The words settle in one after another, then the radar opens. */
 @media (prefers-reduced-motion: no-preference) {
   .js [data-h] {
-    opacity: 0;
-    transform: translateY(18px);
-    animation: h-fallback 0.6s 2.5s forwards;
+    animation: h-in 0.9s var(--ease) backwards;
+    animation-delay: calc(60ms + var(--d, 0) * 90ms);
   }
   .js .hero4 .radar {
-    opacity: 0;
-    transform: scale(0.94);
-    animation: h-fallback 0.6s 2.5s forwards;
+    animation: r-in 1.3s var(--ease) 0.15s backwards;
   }
 }
-@keyframes h-fallback {
-  to {
-    opacity: 1;
-    transform: none;
+@keyframes h-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+@keyframes r-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
   }
 }
 
@@ -235,6 +244,11 @@
   color: var(--lantern-2);
   text-shadow: 0 0 40px rgba(122, 167, 255, 0.35);
 }
+.story-clock [data-clock] {
+  display: inline-block;
+  min-width: 3.75em;
+  text-align: right;
+}
 .story-clock small {
   font-family: var(--font-m);
   font-size: 0.9rem;
@@ -249,13 +263,15 @@
 }
 .story-steps > li {
   display: grid;
+  /* One column that never grows past the screen: an auto column took the width of the longest code line (426px on a 390px phone). */
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   padding: 22px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--line);
   background: rgba(14, 19, 30, 0.55);
 }
-@media (min-width: 760px) {
+@media (min-width: 960px) {
   .story-steps > li {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
     align-items: center;
@@ -308,11 +324,14 @@
   padding: 12px 0;
   border: 0;
   background: none;
-  opacity: 0.32;
-  transition: opacity 0.4s var(--ease);
 }
-.story-pin[data-pinned] .story-steps > li.on {
-  opacity: 1;
+.story-pin[data-pinned] .story-steps > li:not(.on) .st-text time,
+.story-pin[data-pinned] .story-steps > li:not(.on) .st-text h3 {
+  color: var(--faint);
+}
+.story-pin[data-pinned] .st-text time,
+.story-pin[data-pinned] .st-text h3 {
+  transition: color 0.4s var(--ease);
 }
 .story-pin[data-pinned] .st-text h3 {
   font-size: 1.25rem;
@@ -322,11 +341,12 @@
   max-height: 0;
   overflow: hidden;
   opacity: 0;
-  transition: max-height 0.5s var(--ease), opacity 0.4s;
+  margin-top: 0;
+  transition: max-height 0.5s var(--ease), margin-top 0.5s var(--ease), opacity 0.4s var(--ease);
   font-size: 0.95rem;
 }
 .story-pin[data-pinned] li.on .st-text p {
-  max-height: 8em;
+  max-height: 5em;
   opacity: 1;
   margin-top: 6px;
 }
@@ -337,19 +357,24 @@
   width: 50%;
   opacity: 0;
   transform: translateY(-46%) scale(0.97);
-  transition: opacity 0.5s var(--ease), transform 0.6s var(--ease);
+  transition: opacity 0.2s var(--ease), transform 0.6s var(--ease);
   pointer-events: none;
 }
 .story-pin[data-pinned] li.on .st-scene {
   opacity: 1;
   transform: translateY(-50%);
+  transition: opacity 0.5s var(--ease) 0.1s, transform 0.6s var(--ease);
+}
+.story-track {
+  position: relative;
 }
 .story-pin[data-pinned] .story-bar {
   display: block;
   position: absolute;
   left: 0;
-  top: calc(50% - 120px);
-  height: 300px;
+  /* The track runs the length of the list, so the last moment is on it too. */
+  top: 8px;
+  bottom: 8px;
   width: 2px;
   background: var(--line-2);
   border-radius: 2px;
@@ -398,43 +423,129 @@
   border-radius: 6px;
   padding: 0 6px;
 }
-.sc-call {
-  display: grid;
-  justify-items: center;
-  text-align: center;
-  gap: 8px;
-  padding: 30px 20px;
-  background: radial-gradient(300px 200px at 50% 0%, rgba(122, 167, 255, 0.18), transparent 70%), var(--surface);
+/* Each scene is a product screen at full size. */
+.sc-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 340px;
 }
-.call-ring {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  border: 2px solid var(--lantern);
-  box-shadow: 0 0 0 10px rgba(122, 167, 255, 0.1), 0 0 0 22px rgba(122, 167, 255, 0.05);
-  animation: pulse 1.6s ease-in-out infinite;
-  margin-bottom: 6px;
+.sc-screen > .sc-bar {
+  margin-bottom: 0;
+  gap: 4px 12px;
+  flex-wrap: wrap;
 }
-.call-who {
-  font-family: var(--font-d);
-  font-size: 1.5rem;
+.sc-ok {
+  color: var(--ok);
+  border: 1px solid rgba(95, 214, 160, 0.4);
+  border-radius: 6px;
+  padding: 0 6px;
 }
-.call-what {
+.sc-foot {
+  margin-top: auto;
+  font-size: 0.8rem;
   color: var(--soft);
-  max-width: 24em;
 }
-.call-key {
+/* 1. The event as it arrives: what is kept and what never leaves the app */
+.sc-fields {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
   font-family: var(--font-m);
   font-size: 0.78rem;
-  color: var(--lantern-2);
-  margin-bottom: 6px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--line);
 }
-.sc-call .pill {
+.sc-fields dt {
+  color: var(--faint);
+}
+.sc-fields dd {
+  color: var(--text);
+}
+/* 2. The call over the Telegram alert */
+.sc-callbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: radial-gradient(240px 120px at 0% 50%, rgba(255, 122, 107, 0.16), transparent 70%), rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 122, 107, 0.3);
+}
+.call-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--wake);
+  box-shadow: 0 0 0 5px rgba(255, 122, 107, 0.16), 0 0 14px var(--wake);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.call-key {
+  margin-left: auto;
+  font-family: var(--font-m);
+  font-size: 0.76rem;
+  color: var(--lantern-2);
+}
+.sc-wake .pill {
   white-space: normal;
+  align-self: flex-start;
+}
+.sc .tg {
+  border-radius: 16px;
+  border: 1px solid var(--line);
+}
+.sc .tg-keys span {
+  cursor: default;
+}
+.ok-word {
+  color: var(--ok);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+/* 3. The code it read, the failing line marked */
+.sc pre.sc-code {
+  font-size: 0.74rem;
+  line-height: 1.75;
+  padding: 10px 0;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--line);
+}
+.sc-code span {
+  display: block;
+  padding: 0 12px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding-left: 3.4em;
+  text-indent: -3.4em;
+}
+.sc-code b {
+  display: inline-block;
+  width: 3.4em;
+  padding-right: 1em;
+  text-align: right;
+  text-indent: 0;
+  font-weight: 400;
+  color: var(--faint);
+}
+.sc-code .hit {
+  background: rgba(255, 122, 107, 0.12);
+  box-shadow: inset 2px 0 0 var(--wake);
+}
+.sc-code .hit b {
+  color: var(--wake);
+}
+/* On a phone the failing line and the next one are enough; the rest wrapped into a wall. */
+@media (max-width: 640px) {
+  .sc-code span:not(.hit):not(.near) {
+    display: none;
+  }
 }
 .sc-cause {
-  display: grid;
-  gap: 10px;
+  min-width: 0;
 }
 .sc-k {
   font-family: var(--font-m);
@@ -449,49 +560,59 @@
   line-height: 1.35;
 }
 .sc-cause code {
-  justify-self: start;
+  align-self: flex-start;
+  max-width: 100%;
 }
 .sc-fix .diff {
   margin-bottom: 12px;
 }
-.sc-checks {
-  display: flex;
-  flex-wrap: wrap;
+/* The fix's diff wraps inside its card instead of hiding the end of each line behind a sideways scroll
+   (a third of each line on a phone; `data.get("language"` was cut at 768). Where it fits, nothing changes. */
+.sc .diff span {
+  white-space: pre-wrap;
+  width: auto;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .sc .diff {
+    font-size: 0.7rem;
+  }
+}
+/* 4. The three checks, each with what it found */
+.sc-verdicts {
+  display: grid;
   gap: 6px;
 }
-.sc-checks span {
-  font-size: 0.76rem;
-  color: var(--ok);
-  border: 1px solid rgba(95, 214, 160, 0.35);
-  background: rgba(95, 214, 160, 0.06);
-  border-radius: 999px;
-  padding: 2px 10px;
-}
-.sc-healed {
+.sc-verdicts li {
   display: grid;
-  gap: 12px;
-  justify-items: start;
-}
-.sc-healed .stamp {
-  font-size: 1rem;
-  padding: 4px 12px;
-}
-.sc-row {
-  display: flex;
-  justify-content: space-between;
+  grid-template-columns: 8.5em minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
-  width: 100%;
-  flex-wrap: wrap;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(95, 214, 160, 0.28);
+  background: rgba(95, 214, 160, 0.05);
+  font-size: 0.85rem;
 }
-.fake-btn {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid var(--line-2);
-  border-radius: 8px;
-  padding: 3px 12px;
-  font-size: 0.82rem;
-  color: var(--text);
+.sc-verdicts span {
+  color: var(--soft);
+}
+.sc-verdicts i {
+  font-style: normal;
+  color: var(--ok);
+  font-weight: 700;
+}
+@media (max-width: 420px) {
+  .sc-verdicts li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .sc-verdicts span {
+    grid-row: 2;
+  }
+}
+/* 5. The morning message: healed, watched, one tap to undo */
+.sc-healed .tg-msg {
+  max-width: 100%;
 }
 
 /* ------- What it watches ------- */
@@ -518,11 +639,13 @@
   color: var(--text);
   cursor: pointer;
   overflow: hidden;
-  transition: border-color 0.25s, transform 0.25s var(--ease), background 0.25s;
+  transition: border-color 0.25s, transform 0.25s var(--ease), background 0.25s, scale 0.16s var(--ease);
 }
-.watch-card:hover {
-  border-color: var(--line-2);
-  transform: translateY(-2px);
+@media (hover: hover) and (pointer: fine) {
+  .watch-card:hover {
+    border-color: var(--line-2);
+    transform: translateY(-2px);
+  }
 }
 .watch-card[aria-selected="true"] {
   border-color: rgba(122, 167, 255, 0.6);
@@ -545,7 +668,7 @@
 }
 .wc-sub {
   color: var(--faint);
-  font-size: 0.86rem;
+  font-size: 0.875rem;
 }
 .wc-pulse {
   position: absolute;
@@ -589,7 +712,13 @@
   border-radius: var(--radius-lg);
   border: 1px solid var(--line-2);
   background: var(--surface);
-  animation: rise 0.45s var(--ease);
+  animation: panel-in 0.25s var(--ease);
+}
+@keyframes panel-in {
+  from {
+    opacity: 0.5;
+    transform: translateY(4px);
+  }
 }
 @media (min-width: 900px) {
   .watch-panel {
@@ -617,6 +746,8 @@
 }
 .wp-pills .pill {
   white-space: normal;
+  /* These pills carry the rule itself ("wake you if it fails 3 times in 10 minutes"): readable size. */
+  font-size: 0.875rem;
 }
 .wp-why {
   color: var(--soft);
@@ -664,11 +795,13 @@
   color: var(--soft);
   cursor: pointer;
   overflow: hidden;
-  transition: border-color 0.25s, background 0.25s, box-shadow 0.25s, color 0.25s;
+  transition: border-color 0.25s, background 0.25s, box-shadow 0.25s, color 0.25s, scale 0.16s var(--ease);
 }
-.pl-steps button:hover {
-  border-color: var(--line-2);
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .pl-steps button:hover {
+    border-color: var(--line-2);
+    color: var(--text);
+  }
 }
 .ps-n {
   grid-row: span 2;
@@ -689,7 +822,7 @@
 }
 .ps-c {
   display: none;
-  font-size: 0.84rem;
+  font-size: 0.875rem;
   color: var(--faint);
   margin-top: 2px;
 }
@@ -727,6 +860,7 @@
     display: flex;
     gap: 8px;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
     scroll-snap-type: x proximity;
     scrollbar-width: none;
     margin-inline: calc(-1 * var(--gutter));
@@ -820,10 +954,51 @@
   font-weight: 600;
   font-size: 0.88rem;
   cursor: pointer;
-  backdrop-filter: blur(6px);
+  /* no backdrop blur: it was recomputed on every video frame, and the 82% fill already separates it */
 }
-.pl-sound-cta:hover {
-  border-color: var(--lantern-2);
+@media (hover: hover) and (pointer: fine) {
+  .pl-sound-cta:hover {
+    border-color: var(--lantern-2);
+  }
+}
+.pl-sound-cta .t-mouse {
+  display: none;
+}
+@media (pointer: fine) {
+  .pl-sound-cta .t-mouse {
+    display: inline;
+  }
+  .pl-sound-cta .t-touch {
+    display: none;
+  }
+}
+/* Phones: the label covered a third of the frame; the speaker alone says it, at a thumb's size. */
+@media (max-width: 640px) {
+  .pl-sound-cta {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    justify-content: center;
+    right: 8px;
+    bottom: 8px;
+  }
+  .pl-sound-cta .pl-sound-label {
+    display: none;
+  }
+}
+/* Below 980px the step strip shows titles only, so the current step's caption sits under the player. */
+.pl-cap {
+  display: none;
+}
+@media (max-width: 979px) {
+  .pl-cap {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.92rem;
+    color: var(--soft);
+    max-width: 60ch;
+  }
 }
 .pl-bar {
   display: flex;
@@ -843,8 +1018,17 @@
   color: var(--text);
   cursor: pointer;
 }
-.pl-btn:hover {
-  border-color: var(--lantern);
+/* The player's round buttons reach 44px on touch screens. */
+@media (pointer: coarse) {
+  .pl-btn {
+    width: 44px;
+    height: 44px;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .pl-btn:hover {
+    border-color: var(--lantern);
+  }
 }
 .pl-btn[aria-pressed="true"] {
   color: var(--lantern-2);
@@ -856,7 +1040,8 @@
   height: 28px;
   align-items: center;
   cursor: pointer;
-  touch-action: none;
+  /* The page can still scroll through the bar on phones; a tap (pointer up) seeks. */
+  touch-action: pan-y;
   border-radius: 6px;
 }
 .pl-seg {
@@ -866,10 +1051,20 @@
   background: rgba(214, 224, 255, 0.12);
   overflow: hidden;
   pointer-events: none;
-  transition: height 0.2s;
+  transition: transform 0.15s var(--ease);
 }
 .pl-seg.on {
-  height: 8px;
+  transform: scaleY(1.33);
+}
+@media (hover: hover) and (pointer: fine) {
+  .pl-seek:hover .pl-seg {
+    transform: scaleY(1.33);
+  }
+}
+@media (pointer: coarse) {
+  .pl-seek {
+    height: 44px;
+  }
 }
 .pl-seg i {
   display: block;
@@ -913,6 +1108,12 @@
   width: min(100%, 420px);
   margin: 0 auto;
 }
+/* On phones the shield took a whole screen before the layers it illustrates. */
+@media (max-width: 760px) {
+  .shield-art {
+    width: min(46vw, 180px);
+  }
+}
 .shield-art svg {
   width: 100%;
   height: auto;
@@ -942,12 +1143,12 @@
   display: grid;
   gap: 8px;
 }
-.shield-list li {
+.shield-list > li {
   border-radius: 14px;
   border: 1px solid var(--line);
   background: rgba(14, 19, 30, 0.5);
 }
-.shield-list li:has(button[aria-expanded="true"]) {
+.shield-list > li:has(button[aria-expanded="true"]) {
   border-color: rgba(122, 167, 255, 0.5);
   background: rgba(40, 70, 150, 0.14);
 }
@@ -980,17 +1181,118 @@
   font-weight: 600;
 }
 .sl-short {
-  font-size: 0.84rem;
+  font-size: 0.875rem;
   color: var(--faint);
   text-align: right;
 }
-.shield-list p {
+.shield-list > li > p {
   padding: 0 18px 16px 60px;
   color: var(--soft);
   animation: rise 0.35s var(--ease);
 }
 .shield-src {
   grid-column: 1 / -1;
+}
+/* Each layer's own output for the Submit fix. Under the open layer on phones and tablets; on wide screens it
+   sits over the foot of the shield, so every step changes the picture. */
+.shield-out {
+  display: grid;
+  gap: 10px;
+  margin: 0 16px 16px 60px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line-2);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  box-shadow: 0 24px 60px -30px rgba(50, 100, 255, 0.5);
+  font-size: 0.84rem;
+  animation: rise 0.35s var(--ease);
+}
+.shield-out[hidden] {
+  display: none;
+}
+.shield-out .tg {
+  margin: -14px -16px;
+  border-radius: 14px;
+}
+.shield-out .tg-msg p + p {
+  margin-top: 4px;
+}
+.so-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--font-m);
+  font-size: 0.72rem;
+  color: var(--faint);
+}
+.so-head b {
+  font-weight: 500;
+  color: var(--ok);
+}
+.so-checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 14px;
+}
+.so-checks i,
+.so-foot i {
+  font-style: normal;
+  color: var(--ok);
+  margin-right: 6px;
+}
+.so-rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 14px;
+}
+.so-rows dt {
+  color: var(--soft);
+}
+.so-rows dd {
+  font-family: var(--font-m);
+  font-size: 0.78rem;
+  text-align: right;
+  color: var(--text);
+}
+.so-rows dd.bad {
+  color: var(--wake);
+}
+.so-rows dd.good {
+  color: var(--ok);
+}
+.so-foot {
+  font-size: 0.8rem;
+  color: var(--soft);
+}
+.so-undo {
+  justify-self: start;
+  padding: 6px 18px;
+  border-radius: 8px;
+  background: #1f2f40;
+  color: #e9eef4;
+  font-size: 0.82rem;
+}
+@media (max-width: 560px) {
+  .shield-out {
+    margin-left: 16px;
+  }
+  .so-checks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (min-width: 980px) {
+  .shield {
+    position: relative;
+  }
+  /* The left column is 0.9 / 2 of the row after the 64px gap. */
+  .shield-out {
+    position: absolute;
+    left: calc(((100% - 64px) * 0.45 - min(400px, (100% - 64px) * 0.45)) / 2);
+    width: min(400px, (100% - 64px) * 0.45);
+    bottom: 2.6rem;
+    margin: 0;
+    z-index: 1;
+  }
 }
 @media (max-width: 560px) {
   .shield-list button {
@@ -1000,7 +1302,7 @@
     grid-column: 2;
     text-align: left;
   }
-  .shield-list p {
+  .shield-list > li > p {
     padding-left: 18px;
   }
 }
@@ -1031,8 +1333,10 @@
   font-size: 0.95rem;
   cursor: pointer;
 }
-.try-tabs button:hover {
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .try-tabs button:hover {
+    color: var(--text);
+  }
 }
 .try-tabs button[aria-selected="true"] {
   background: var(--lantern);
@@ -1106,11 +1410,16 @@
 }
 
 /* ------- Close ------- */
+/* The numbers and the closing line are short: they size to their content, not to the screen. */
+.screen.proof4,
+.screen.close4 {
+  min-height: 0;
+}
 .close4 {
   position: relative;
   overflow: hidden;
   isolation: isolate;
-  padding-block: clamp(96px, 12vw, 180px);
+  padding-block: clamp(88px, 12vh, 140px);
   text-align: center;
   border-top: 1px solid var(--line);
 }
@@ -1159,6 +1468,12 @@
   margin-top: 18px;
 }
 
+@media (orientation: landscape) and (max-height: 500px) {
+  .pl-main {
+    width: min(100%, calc((100svh - 120px) * 1.78 + 20px));
+    margin-inline: auto;
+  }
+}
 @media (min-width: 980px) {
   /* On short screens, keep the player and its bar inside one screen with the steps beside it. */
   .pl-main {
@@ -1175,7 +1490,8 @@
 .section.screen {
   padding-block: clamp(48px, 7vh, 80px);
 }
-@media (min-width: 760px) {
+/* A full screen per section only where screens are wide: a portrait tablet got 500px of empty night above and below the closing line. */
+@media (min-width: 760px) and (min-aspect-ratio: 1/1) {
   .screen {
     min-height: 100svh;
     display: flex;
@@ -1218,7 +1534,7 @@
 
 /* Pinned scroll steps: show which step the scroll is on */
 .screen[data-pinned] .watch-card[aria-selected="true"],
-.screen[data-pinned] .shield-list li:has(button[aria-expanded="true"]) {
+.screen[data-pinned] .shield-list > li:has(button[aria-expanded="true"]) {
   transition: border-color 0.3s, background 0.3s, box-shadow 0.3s;
 }
 .shield-list {
@@ -1238,6 +1554,10 @@
 .nums li {
   padding: 0;
 }
+.nums a:focus-visible {
+  outline-offset: -4px;
+  border-radius: 14px;
+}
 .nums a {
   display: grid;
   gap: 10px;
@@ -1248,9 +1568,11 @@
   color: inherit;
   transition: background 0.2s;
 }
-.nums a:hover {
-  background: rgba(40, 70, 150, 0.14);
-  color: inherit;
+@media (hover: hover) and (pointer: fine) {
+  .nums a:hover {
+    background: rgba(40, 70, 150, 0.14);
+    color: inherit;
+  }
 }
 .nums a > span {
   color: var(--soft);
@@ -1302,9 +1624,11 @@
   color: var(--soft);
   text-decoration: none;
 }
-.hero4-proof a:hover {
-  border-color: var(--lantern);
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .hero4-proof a:hover {
+    border-color: var(--lantern);
+    color: var(--text);
+  }
 }
 .hero4-proof b {
   font-weight: 600;
@@ -1350,3 +1674,13 @@
     grid-column: 1 / -1;
   }
 }
+
+/* Pinned sections hold still: anchored from the top instead of re-centring every time the active text changes height. */
+@media (min-width: 960px) {
+  .screen[data-pinned] {
+    justify-content: flex-start;
+    padding-top: max(clamp(24px, 4vh, 72px), calc(50vh - 22rem));
+  }
+}
+
+/* Press states: one shared rule in globals.css ("Press feedback"). */

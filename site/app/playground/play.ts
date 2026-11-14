@@ -80,6 +80,18 @@ export const TITLES: Record<string, string> = {
   tiffinbox: "TiffinBox",
 };
 
+/* The same lines the live server shows (watcher/src/playground/sandbox.ts, APP_LOOK), so a cold start
+   can show the real apps instead of empty boxes. */
+export const TAGLINES: Record<string, string> = {
+  campuskart: "Buy and sell anything on campus",
+  clinicq: "Queues, prescriptions and bills for small clinics",
+  examhall: "Online exams and code submissions for colleges",
+  fleetwise: "Bus routes, trips and fuel for college fleets",
+  ledgerly: "Invoices, payments and GST for small shops",
+  messmenu: "Hostel meals, bookings and monthly bills",
+  tiffinbox: "Tiffin orders, kitchens and delivery riders",
+};
+
 export const appTitle = (name: string) => TITLES[name] ?? name;
 export const baseName = (path: string | null) => (path ? path.split("/").pop() ?? path : "");
 

@@ -58,7 +58,7 @@ export const BENCH_ALL = {
   cases: 74,
   reached: 70,
   fix_works: 62,
-  right_file: 61,
+  right_file: 59, // bench/RESULTS-extra.md: 59 of 70 (15 + 44), corrected in fee7285
   shown: 64,
   shown_wrong: 5,
   median_decision_s: 1.7,
@@ -69,4 +69,7 @@ export const BENCH_ALL = {
 };
 export const benchInr = () => Math.round(BENCH_ALL.cost_usd * BENCH_ALL.inr_per_usd);
 export const benchInrPerBug = () => (Math.round(((BENCH_ALL.cost_usd * BENCH_ALL.inr_per_usd) / BENCH_ALL.bugs) * 10) / 10).toFixed(1);
+/* What one bug costs in AI, and how many bugs the free $5 credit covers, from the same totals. */
+export const benchCentsPerBug = () => ((BENCH_ALL.cost_usd / BENCH_ALL.bugs) * 100).toFixed(1);
+export const benchBugsFor = (usd: number) => Math.floor((usd * BENCH_ALL.bugs) / BENCH_ALL.cost_usd / 10) * 10;
 export const benchFixPct = () => Math.round((BENCH_ALL.fix_works / BENCH_ALL.bugs) * 100);

@@ -13,9 +13,9 @@ export default function SiteError({ error, reset }: { error: Error & { digest?: 
       <div className="frame">
         <div className="section-head">
           <h1 id="err-h" className="h-section">
-            Something went wrong on this page. <em>Let&apos;s try that again.</em>
+            Something went wrong on this page. <em>Let&rsquo;s try that again.</em>
           </h1>
-          <p className="lead">It is usually a moment&apos;s blip while the live server restarts.</p>
+          <p className="lead">It is usually a moment&rsquo;s blip while the live server restarts.</p>
         </div>
         <div className="actions">
           <button type="button" className="btn btn-lg" onClick={() => reset()}>

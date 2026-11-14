@@ -189,14 +189,44 @@ export default async function Evidence() {
   return (
     <>
       <section className="page-head" aria-labelledby="evidence-h">
-        <div className="frame">
-          <p className="eyebrow">Evidence</p>
-          <h1 id="evidence-h" className="display" data-rv>
-            Measured, <em>not claimed.</em>
-          </h1>
-          <p className="lead" data-rv style={{ "--d": 1 } as React.CSSProperties}>
-            Every number on the home page, with how it was measured. Produced by scripts in the repository; mistakes are counted, not only hits.
-          </p>
+        <div className="frame head-grid">
+          <div>
+            <p className="eyebrow">Evidence</p>
+            <h1 id="evidence-h" className="display" data-rv>
+              Measured, <em>not claimed.</em>
+            </h1>
+            <p className="lead" data-rv style={{ "--d": 1 } as React.CSSProperties}>
+              Every number on the home page, with how it was measured. Produced by scripts in the repository; mistakes are counted, not only hits.
+            </p>
+          </div>
+          <figure className="head-art ev-card" data-ui data-rv style={{ "--d": 2 } as React.CSSProperties}>
+            <figcaption className="term-bar">
+              <span>bench · {BENCH_ALL.cases} cases · 7 apps</span>
+              <a href={BENCH_ALL.extra_md}>RESULTS.md →</a>
+            </figcaption>
+            <dl>
+              <dt>Reached the owner</dt>
+              <dd>
+                {BENCH_ALL.reached} <small>/ {BENCH_ALL.bugs}</small>
+              </dd>
+              <dt>Named the right file</dt>
+              <dd>
+                {BENCH_ALL.right_file} <small>/ {BENCH_ALL.bugs}</small>
+              </dd>
+              <dt>Fixed, proved by a hidden test</dt>
+              <dd>
+                {BENCH_ALL.fix_works} <small>/ {BENCH_ALL.bugs}</small>
+              </dd>
+              <dt>Median time to decide</dt>
+              <dd>
+                {BENCH_ALL.median_decision_s} <small>s</small>
+              </dd>
+              <dt>AI cost, every case</dt>
+              <dd>
+                ${BENCH_ALL.cost_usd.toFixed(2)} <small>≈ ₹{benchInr()}</small>
+              </dd>
+            </dl>
+          </figure>
         </div>
       </section>
 
@@ -220,13 +250,13 @@ export default async function Evidence() {
             <div className="body">
               <p className="soft" data-rv>
                 Counted by the watcher itself from people using the <a href="/demo">exam portal</a>. The benchmark tables below come from scripts in the
-                repository, run against real bugs and planted ones. Model vote shares are not probabilities. Faurus&apos;s own failure counts stay
+                repository, run against real bugs and planted ones. Model vote shares are not probabilities. Faurus&rsquo;s own failure counts stay
                 private.
               </p>
               {!ev ? (
-                <p className="form-error" data-rv>
-                  The watcher is not reachable right now, so the live counts can&apos;t be shown. The benchmarks below come from the repository and
-                  don&apos;t need it.
+                <p className="notice" role="status" data-rv>
+                  The watcher is not reachable right now, so the live counts can&rsquo;t be shown. The benchmarks below come from the repository and
+                  don&rsquo;t need it.
                 </p>
               ) : (
                 <>

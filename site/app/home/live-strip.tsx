@@ -58,9 +58,15 @@ function LiveStripInner() {
   }, []);
 
   const r = runs?.[0];
-  if (!r && !planting) return null;
+  // The row is reserved before the data arrives, so the hero never jumps down when it does.
+  if (!r && !planting) return <span className="live-strip live-strip-slot" aria-hidden="true" />;
+  // Screen readers hear what happened, not the "12 s ago" that ticks every second.
+  const said = planting ? `A bug was just planted in ${appTitle(planting)}.` : r ? `${appTitle(r.app)}: ${outcome(r)}.` : "";
   return (
-    <Link className="live-strip" href={`/playground${r ? `?app=${r.app}` : ""}`} aria-live="polite">
+    <Link className="live-strip" href={`/playground${r ? `?app=${r.app}` : ""}`}>
+      <span className="sr-only" aria-live="polite">
+        {said}
+      </span>
       <span className="live-strip-tag">
         <i aria-hidden="true" /> LIVE
       </span>

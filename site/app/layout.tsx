@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
-import { BUILT_WITH, HACKATHON, HACKATHON_ABOUT, HACKATHON_LOGO, HACKATHON_TRACK, HOSTED_ON, LINKEDIN_URL, REPO, TEAM } from "./site";
+import { BENCH_ALL, benchInr, BUILT_WITH, HACKATHON, HACKATHON_ABOUT, HACKATHON_LOGO, HACKATHON_TRACK, HOSTED_ON, LINKEDIN_URL, REPO, TEAM } from "./site";
 import { Headroom } from "./ui/headroom";
 import { Lantern } from "./ui/lantern";
 import { Motion } from "./ui/motion";
@@ -16,14 +16,14 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")),
   title: "JaagteRaho: the AI night watchman for your live app",
   description:
-    "Your app breaks at night. JaagteRaho stays awake: it wakes you only when it matters (Telegram, a phone call), finds the cause with file and line, and brings a fix checked by code rules, an AI reviewer and its own test. You approve, or let it heal under your rules. 20 of 20 planted bugs reached the owner, 0 wrong fixes among 19 shown.",
+    `Your app breaks at night. JaagteRaho stays awake: it wakes you only when it matters (Telegram, a phone call), finds the cause with file and line, and brings a fix checked by code rules, an AI reviewer and its own test. You approve, or let it heal under your rules. All ${BENCH_ALL.reached} of ${BENCH_ALL.bugs} planted bugs reached the owner; ${BENCH_ALL.fix_works} were fixed and proved by a hidden test, for about ₹${benchInr()} of AI in total.`,
 };
 
-export const viewport: Viewport = { themeColor: "#06080d", viewportFit: "cover" };
+export const viewport: Viewport = { themeColor: "#06080d" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`} data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         {/* Entrance animations only hide content once script is known to run. */}
         <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js')" }} />
@@ -50,7 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <Lantern size={26} />
                   <span>JaagteRaho</span>
                 </Link>
-                <p>Hindi for &ldquo;stay awake&rdquo;, the night watchman&apos;s call. An AI on-call agent for people who run a live app alone.</p>
+                <p>Hindi for &ldquo;stay awake&rdquo;, the night watchman&rsquo;s call. An AI on-call agent for people who run a live app alone.</p>
               </div>
               <nav aria-label="Footer" className="footer-nav">
                 <div>

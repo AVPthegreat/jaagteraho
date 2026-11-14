@@ -18,14 +18,7 @@ export function HomeMotion() {
       const mm = gsap.matchMedia();
 
       mm.add("(prefers-reduced-motion: no-preference)", () => {
-        // Hero: the words settle in, then the radar opens.
-        const hero = document.querySelector<HTMLElement>("[data-hero]");
-        if (hero) {
-          gsap
-            .timeline({ defaults: { ease: "power3.out" } })
-            .to(hero.querySelectorAll("[data-h]"), { opacity: 1, y: 0, duration: 1, stagger: 0.12 })
-            .to(hero.querySelector(".radar"), { opacity: 1, scale: 1, duration: 1.4, ease: "expo.out" }, 0.15);
-        }
+        // The hero's entrance is pure CSS (home.css, "Hero entrance"): it must not wait for this script.
 
         // Shield: the rings draw themselves as the section arrives.
         const rings = gsap.utils.toArray<SVGPathElement>("[data-shield] .sh-ring");
@@ -38,26 +31,47 @@ export function HomeMotion() {
               duration: 1.6,
               ease: "power2.inOut",
               stagger: 0.14,
-              scrollTrigger: { trigger: "[data-shield]", start: "top 75%", once: true },
+              autoRound: false,
+              // Created before the pins below: refresh after them, or the trigger ignores the pin spacing.
+              scrollTrigger: { trigger: "[data-shield]", start: "top 75%", once: true, refreshPriority: -1 },
             },
           );
         }
 
         // Proof: the numbers count up once.
-        gsap.utils.toArray<HTMLElement>("[data-count]").forEach((el) => {
+        const counts = gsap.utils.toArray<HTMLElement>("[data-count]");
+        counts.forEach((el) => {
           const end = Number(el.dataset.count);
           const dec = ((el.dataset.count ?? "").split(".")[1] ?? "").length;
           const o = { v: 0 };
+          // Fraunces has no tabular figures: reserve the width of the widest digits ("0") at the final length,
+          // right-aligned, so "/70", "%" and "a bug" stay put while the number counts.
+          const shown = el.textContent ?? "";
+          el.textContent = shown.replace(/[0-9]/g, "0");
+          const w = el.getBoundingClientRect().width;
+          el.textContent = shown;
+          Object.assign(el.style, { display: "inline-block", minWidth: `${Math.ceil(w)}px`, textAlign: "right" });
+          // Below the fold, start from 0, or the card fades in showing the final number and then resets.
+          if (el.getBoundingClientRect().top > window.innerHeight) el.textContent = (0).toFixed(dec);
           gsap.to(o, {
             v: end,
             duration: 1.4,
             ease: "power2.out",
-            scrollTrigger: { trigger: el, start: "top 88%", once: true },
+            // The same line the card's reveal uses (motion.tsx: 6% above the bottom).
+            scrollTrigger: { trigger: el, start: "top 94%", once: true, refreshPriority: -1 },
             onUpdate: () => {
               el.textContent = o.v.toFixed(dec);
             },
           });
         });
+        return () => {
+          counts.forEach((el) => {
+            el.textContent = el.dataset.count ?? el.textContent;
+            el.style.removeProperty("display");
+            el.style.removeProperty("min-width");
+            el.style.removeProperty("text-align");
+          });
+        };
       });
 
       // The night story: pinned and scrubbed on wide screens only.
@@ -77,11 +91,12 @@ export function HomeMotion() {
         };
         show(0);
         const section = pin.closest<HTMLElement>("section") ?? pin;
+        section.dataset.pinned = "";
         const st = ScrollTrigger.create({
           trigger: section,
           pin: true,
           start: "top top",
-          end: () => `+=${window.innerHeight * 2.4}`,
+          end: () => `+=${window.innerHeight * 1.8}`,
           scrub: 0.4,
           anticipatePin: 1,
           onUpdate: (self) => {
@@ -92,13 +107,14 @@ export function HomeMotion() {
         return () => {
           st.kill();
           delete pin.dataset.pinned;
+          delete section.dataset.pinned;
           steps.forEach((s, k) => s.classList.toggle("on", k === 0));
           if (bar) bar.style.transform = "";
         };
       });
 
       // "What it watches" and "How safe is it": pinned, and scroll walks through the cards / layers.
-      mm.add("(min-width: 960px) and (min-height: 640px) and (prefers-reduced-motion: no-preference)", () => {
+      mm.add("(min-width: 960px) and (min-height: 760px) and (prefers-reduced-motion: no-preference)", () => {
         const made = gsap.utils.toArray<HTMLElement>("[data-pin-steps]").map((sec) => {
           const n = Number(sec.dataset.pinSteps) || 1;
           let cur = -1;
@@ -107,7 +123,7 @@ export function HomeMotion() {
             trigger: sec,
             pin: true,
             start: "top top",
-            end: () => `+=${window.innerHeight * 0.55 * n}`,
+            end: () => `+=${window.innerHeight * 0.4 * n}`,
             scrub: 0.3,
             anticipatePin: 1,
             onUpdate: (self) => {
@@ -126,6 +142,15 @@ export function HomeMotion() {
       });
 
       cleanup = () => mm.revert();
+
+      // A deep link (/#safety, or a header link from another page) was resolved before the pins added
+      // their scroll length, so it landed short. Measure again and go there.
+      const id = location.hash ? decodeURIComponent(location.hash.slice(1)) : "";
+      const target = id ? document.getElementById(id) : null;
+      if (target) {
+        ScrollTrigger.refresh();
+        requestAnimationFrame(() => target.scrollIntoView({ behavior: "instant", block: "start" }));
+      }
     })();
     return () => {
       dead = true;

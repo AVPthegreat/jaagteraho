@@ -21,21 +21,21 @@ export default function Home() {
         <div className="frame hero4-grid">
           <div className="hero4-copy">
             <LiveStrip />
-            <p className="eyebrow" data-h>
+            <p className="eyebrow" data-h style={d(0)}>
               <span className="eyebrow-dot" aria-hidden="true" /> The AI night watchman for your app
             </p>
-            <h1 id="hero-h" className="display hero4-title" data-h>
+            <h1 id="hero-h" className="display hero4-title" data-h style={d(1)}>
               Your app breaks at night. <em>JaagteRaho stays awake.</em>
             </h1>
-            <p className="hero4-sub" data-h>
+            <p className="hero4-sub" data-h style={d(2)}>
               It wakes you only when it matters, finds the cause and brings a checked fix. You approve, or let it heal under your rules.
             </p>
-            <p className="hero4-proof" data-h>
+            <p className="hero4-proof" data-h style={d(3)}>
               <Link href="/evidence#extended-h">
                 <b>{BENCH_ALL.bugs} bugs.</b> <b>{BENCH_ALL.fix_works} fixed and proved by a hidden test.</b> <em>₹{benchInr()} in total.</em>
               </Link>
             </p>
-            <div className="actions" data-h>
+            <div className="actions" data-h style={d(4)}>
               <Link className="btn btn-lg" href="/playground">
                 Open the playground <span className="arrow" aria-hidden="true">→</span>
               </Link>
@@ -48,11 +48,16 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 2. One night, scroll by scroll */}
-      <NightStory />
+      {/* 2. One night, scroll by scroll. Pinned sections sit in a React-owned host: GSAP wraps the
+          section itself in a pin spacer, and React must still find its own child when it leaves the page. */}
+      <div className="pin-host" id="night">
+        <NightStory />
+      </div>
 
       {/* 3. What it watches */}
-      <section className="section screen watch-band" id="watches" aria-labelledby="watch-h" data-pin-steps="4">
+      {/* The anchor id sits on the host: while pinned, the section itself is fixed and its offset is wrong. */}
+      <div className="pin-host" id="watches">
+      <section className="section screen watch-band" aria-labelledby="watch-h" data-pin-steps="4">
         <div className="frame">
           <div className="section-head">
             <p className="eyebrow" data-rv>
@@ -62,12 +67,13 @@ export default function Home() {
               Not every error deserves your night. <em>These might.</em>
             </h2>
             <p className="lead" data-rv style={d(2)}>
-              Scroll, or pick a part of your app: what JaagteRaho does when it fails, and which written rule decides.
+              Pick a part of your app: what JaagteRaho does when it fails, and which written rule decides.
             </p>
           </div>
           <Watches />
         </div>
       </section>
+      </div>
 
       {/* 4. See it work */}
       <section className="section screen clips-band" id="see" aria-labelledby="see-h">
@@ -85,7 +91,8 @@ export default function Home() {
       </section>
 
       {/* 5. How safe is it */}
-      <section className="section screen safe-band" id="safety" aria-labelledby="safe-h" data-pin-steps="5">
+      <div className="pin-host" id="safety">
+      <section className="section screen safe-band" aria-labelledby="safe-h" data-pin-steps="5">
         <div className="frame">
           <div className="section-head">
             <p className="eyebrow" data-rv>
@@ -101,6 +108,7 @@ export default function Home() {
           <Shield />
         </div>
       </section>
+      </div>
 
       {/* 7. Proof */}
       <section className="section screen proof4" id="proof" aria-labelledby="proof-h">
@@ -170,13 +178,13 @@ export default function Home() {
         <div className="close4-glow" aria-hidden="true" />
         <form className="frame close4-inner" action="/connect" method="get">
           <h2 id="close-h" className="h-section" data-rv>
-            Sleep tonight. <em>We&apos;ll keep watch.</em>
+            Sleep tonight. <em>We&rsquo;ll keep watch.</em>
           </h2>
           <div className="close4-row" data-rv style={d(1)}>
             <label htmlFor="close-name" className="sr-only">
-              Your app&apos;s name
+              Your app&rsquo;s name
             </label>
-            <input id="close-name" name="name" type="text" placeholder="your app's name" maxLength={40} autoComplete="off" />
+            <input id="close-name" name="name" type="text" placeholder="your app’s name" maxLength={40} autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="go" />
             <button type="submit" className="btn btn-lg">
               Put a watchman on it <span className="arrow" aria-hidden="true">→</span>
             </button>
