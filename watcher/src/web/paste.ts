@@ -15,11 +15,12 @@ import { GitHubSource } from "../source/source.js";
 import { isPublicRepo } from "../projects.js";
 import { clientIp, Window } from "./public.js";
 import { parseV8Stack } from "../selfwatch.js";
+import { envInt } from "../envint.js";
 
 const ipLimits = new Window();
 
 export const PER_VISITOR_PER_DAY = 3;
-export const PER_DAY = 30;
+export const PER_DAY = envInt("JR_PASTE_PER_DAY", 30, 1, 1000);
 const MAX_TRACEBACK = 20_000;
 
 export const PASTE_SCHEMA = `

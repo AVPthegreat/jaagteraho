@@ -2,8 +2,9 @@
 
 import { randomBytes, randomInt } from "node:crypto";
 import type { DB } from "./db/db.js";
+import { envInt } from "./envint.js";
 
-export const NEW_APPS_PER_DAY = 10;
+export const NEW_APPS_PER_DAY = envInt("JR_NEW_APPS_PER_DAY", 10, 4, 500);
 /** Of today's new-app slots, this many are kept for the website and the setup command (Connect): Telegram /new cannot take them. */
 export const CONNECT_RESERVE = 3;
 export const APPS_PER_OWNER = 3;
