@@ -239,7 +239,7 @@ export default async function Home() {
         <div className="prose muted">
           <p>
             This is a small exam portal (a Django app) that we run for you to break. Each button below triggers one real bug we planted on purpose.
-            The crash goes to JaagteRaho exactly as it would from your app, and the logbook on the right shows what the owner gets, step by step,
+            The crash goes to JaagteRaho exactly as it would from your app, and the logbook next to the buttons shows what the owner gets, step by step,
             with a timer. Nothing is pre-recorded unless it is marked &ldquo;replayed&rdquo;.
           </p>
         </div>
@@ -273,7 +273,7 @@ export default async function Home() {
         <h2 id="proof-h">Measured, not claimed</h2>
         <div className="prose muted">
           <p>
-            Every number here comes from a script in the <a href={REPO}>repository</a>, measured on {benchmarks.measured_at}. The sample apps are
+            Every number here comes from a script in the <a href={REPO}>repository</a>, measured on {new Date(benchmarks.measured_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}. The sample apps are
             small and generated, and the real-bug set is 30 cases. These numbers claim nothing beyond those runs.
           </p>
         </div>
