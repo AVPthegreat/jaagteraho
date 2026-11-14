@@ -1,5 +1,5 @@
 > **Extended set (14 Nov 2026):** the 50 bugs added for the live playground (`bench/playground-cases.json`), run once with the same pipeline as JR-Bench.
-> The published JR-Bench numbers (`RESULTS.md`, 24 cases) are unchanged. Combined with them: **70 of 70 real bugs reached the owner**, the proposed fix passed our hidden test in **62 of 70 (89%)**, the right file was named in **61 of 70 (87%)**, and **5 of 64 shown fixes were wrong** (all 5 in this extended set). Of the fixes that could heal on their own here (rated "recommended" *and* proved by their own test), **19 of 20 were right**; the 1 wrong one is why Undo exists.
+> The published JR-Bench numbers (`RESULTS.md`, 24 cases) are unchanged. Combined with them: **70 of 70 real bugs reached the owner**, the proposed fix passed our hidden test in **62 of 70 (89%)**, the right file was named in **59 of 70 (84%)**, and **5 of 64 shown fixes were wrong** (all 5 in this extended set). Of the fixes that could heal on their own here (rated "recommended" *and* proved by their own test), **19 of 20 were right**; the 1 wrong one is why Undo exists.
 > The "exam window" row below reads 0 of 7 because this case file carries no app settings (no critical routes, no open exam window), so every decision here was "notify" by design; wake decisions are measured in `RESULTS.md`.
 
 # JR-Bench results
