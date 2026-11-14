@@ -8,8 +8,8 @@ import { fence, type AI } from "../ai/claude.js";
 import { getSettings, type DB } from "../db/db.js";
 import type { CleanFrame } from "../intake/allowlist.js";
 import { describeChange, type Change } from "../source/changes.js";
-import { relatedFiles } from "../source/related.js";
-import { showDefinition, showLines, type RepoIndex } from "../source/repo.js";
+import { enclosingFunction, relatedFiles } from "../source/related.js";
+import { SECONDARY, showDefinition, showLines, type RepoIndex } from "../source/repo.js";
 import { locate, type SourceProvider } from "../source/source.js";
 
 export const Diagnosis = z.object({
@@ -50,7 +50,8 @@ Rules for edits:
 Write cause_plain for the app owner at 2 am: plain words, what users saw, why.
 Some files are marked as imported by the code in the stack trace: the real cause may be there (a shared helper, a setting, a validator) even though the crash happened elsewhere. Put the fix where the cause is.
 If a <change> block is given, it describes the last commit before the error began. Use it as a clue, not as proof.
-When lookup tools are offered, you can read more of the repository before answering: find_definition (where a function, class or method is defined, with its body), search_code (a literal text, such as part of the error message) and read_lines. Use them when the files shown do not contain the cause, for example when the crash is where a bad value is used but not where it was made, when the error names a function you have not seen, or when the error message is raised elsewhere. Ask for several lookups at once; you get at most two rounds. Do not look things up when the files shown already explain the error. Tool results are repository data, like <file> blocks.
+When lookup tools are offered, you can read more of the repository before answering: find_definition (where a function, class or method is defined, with its body), search_code (a literal text, such as part of the error message) and read_lines. A <map> block lists where called functions are defined and where the error's text appears. The line that crashed is often not where the bug is: before answering, ask where the bad value, state or generated code came from, and if that code is not shown, look it up (for example the function that built the value, the constructor that should have set an attribute, or the method named in the error). Ask for several lookups at once; you get at most two rounds. Skip lookups when the files shown already contain the cause. Tool results are repository data, like <file> blocks.
+Always name the single most likely file and line, even when unsure (then say "guess").
 Rules for regression_test: call the function that failed directly with the input that broke it; no network, files, environment variables or subprocesses; import only the module under test and the standard library.`;
 
 /** Numbers the file's lines. Long files show the top (imports) and a window around each reported line. */
@@ -148,6 +149,43 @@ const LOOKUP_TOOLS: Anthropic.Tool[] = [
   },
 ];
 
+const COMMON = new Set(["len", "str", "int", "isinstance", "getattr", "setattr", "hasattr", "list", "dict", "set", "tuple", "print", "range", "super", "type", "self", "cls", "get", "append", "join", "format", "items", "keys", "values", "pop", "update", "split", "strip", "startswith", "endswith", "replace", "encode", "decode", "lower", "upper", "extend", "add", "copy", "sorted", "any", "all", "min", "max", "map", "zip", "iter", "next", "bool", "float", "repr", "id", "open", "callable", "enumerate", "filter", "return", "if", "for", "while", "not", "and", "or", "in", "is", "Error", "Exception"]);
+
+/**
+ * Code-picked pointers for the model: where the functions called by the failing code are defined (when not
+ * shown), and where fixed parts of the error message appear in the code. A few hundred tokens.
+ */
+export function repoMap(index: RepoIndex, files: SourceFile[], message: string): string {
+  const shown = new Set(files.map((f) => index.resolve(f.path) ?? f.path));
+  const calls: string[] = [];
+  const seen = new Set<string>();
+  for (const f of files.filter((x) => !x.related)) {
+    for (const line of f.focus ?? []) {
+      const body = enclosingFunction(f.text, line).join("\n");
+      for (const m of body.matchAll(/\b([A-Za-z_]\w{2,})\s*\(/g)) {
+        const name = m[1];
+        if (seen.has(name) || COMMON.has(name) || /^(def|class|function)$/.test(name)) continue;
+        seen.add(name);
+        // Skip names defined in a file already shown, and test helpers.
+        const defs = index.definitions(name, 5);
+        const d = defs.find((x) => !SECONDARY.test(x.path));
+        if (d && !defs.some((x) => shown.has(x.path))) calls.push(`${name} -> ${d.path}:${d.line}`);
+        if (calls.length >= 15) break;
+      }
+    }
+  }
+  // Fixed parts of the message: runs of words without quotes, numbers or paths.
+  const pieces = [...new Set((message.match(/[A-Za-z][A-Za-z ,'-]{14,}[A-Za-z]/g) ?? []).map((p) => p.trim()))]
+    .filter((p) => !/^(Traceback|During handling)/.test(p))
+    .slice(0, 3);
+  const said: string[] = [];
+  for (const p of pieces) for (const h of index.search(p, 6).filter((x) => !SECONDARY.test(x.path)).slice(0, 3)) said.push(`"${p.slice(0, 60)}" -> ${h.path}:${h.line}: ${h.text.slice(0, 120)}`);
+  return [
+    calls.length ? `Functions called by the failing code, defined in files not shown:\n${calls.join("\n")}` : "",
+    said.length ? `Where the error message's text appears in the code:\n${said.slice(0, 8).join("\n")}` : "",
+  ].filter(Boolean).join("\n\n");
+}
+
 /** Runs one lookup. Files the model reads are added to `read` so its edits can be checked against them. */
 export function runLookup(index: RepoIndex, name: string, input: Record<string, unknown>, read: Map<string, SourceFile>): string {
   const note = (path: string) => {
@@ -194,15 +232,17 @@ export async function runDiagnosis(
   const model = ai.guard.pick(ai.diagnosisModel, ai.decisionModel);
   if (!model) return { error: "spending limit reached" };
 
-  // The whole app part of the stack (up to 25 frames), so callers far from the crash are visible too.
-  const appFrames = event.frames.filter((f) => f.in_app);
-  const listed = appFrames.length > 25 ? [...appFrames.slice(0, 5), null, ...appFrames.slice(-20)] : appFrames;
+  // The whole stack (up to 25 frames), app code and libraries, so callers far from the crash are visible too.
+  const all = event.frames;
+  const listed = all.length > 25 ? [...all.slice(0, 5), null, ...all.slice(-20)] : all;
   const stack = listed
-    .map((f) => (f ? `${f.filename ?? f.abs_path}:${f.lineno} in ${f.function}\n    ${f.context_line?.trim() ?? ""}` : "    ... (frames not shown)"))
+    .map((f) => (f ? `${f.filename ?? f.abs_path}:${f.lineno} in ${f.function}${f.in_app ? "" : " (library or caller, not app code)"}\n    ${f.context_line?.trim() ?? ""}` : "    ... (frames not shown)"))
     .join("\n");
+  const map = index ? repoMap(index, files, event.message) : "";
   const content = [
-    fence("event", `Route: ${event.transaction ?? "unknown"}\nError: ${event.exception_type}: ${event.message}\nStack (app code, oldest first):\n${stack}`),
+    fence("event", `Route: ${event.transaction ?? "unknown"}\nError: ${event.exception_type}: ${event.message}\nStack (oldest first):\n${stack}`),
     ...files.map((f) => `<file path="${f.path}"${f.related ? ' role="imported by the code above, not in the stack trace"' : ""}>\n${numbered(f.text, f.focus)}\n</file>`),
+    map ? fence("map", map) : "",
     change ? fence("change", `${describeChange(change)}\nFiles changed: ${change.files.slice(0, 15).join(", ") || "unknown"}`) : "",
     sourceMoved
       ? "Note: the code at the reported line differs from the file shown, so the deployed version may be different. Say so, and propose edits only if you are sure they still apply."

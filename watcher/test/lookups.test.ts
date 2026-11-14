@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { SpendGuard, type AI } from "../src/ai/claude.js";
 import { openDb } from "../src/db/db.js";
-import { anchorLine, runDiagnosis, runLookup, type SourceFile } from "../src/pipeline/diagnose.js";
+import { anchorLine, repoMap, runDiagnosis, runLookup, type SourceFile } from "../src/pipeline/diagnose.js";
 import { indexFromFolder, indexFromTarball, RepoIndex } from "../src/source/repo.js";
 
 const APP = `class Helper:
@@ -95,6 +95,23 @@ describe("lookups", () => {
     assert.match(runLookup(repo(), "search_code", { text: "multiple values" }, read), /^src\/flask\/app.py:8:/);
     assert.match(runLookup(repo(), "read_lines", { path: "flask/__init__.py", start: 1, end: 400 }, read), /1\| from .app import Flask/);
     assert.match(runLookup(repo(), "read_lines", { path: "../../etc/passwd", start: 1, end: 2 }, read), /No such file/);
+  });
+});
+
+describe("repository map", () => {
+  it("points at called functions defined elsewhere and at the error's text, not at tests", () => {
+    const ix = new RepoIndex(
+      new Map([
+        ["pkg/a.py", "from .b import build\n\n\ndef run(x):\n    v = build(x)\n    return local(v)\n\n\ndef local(v):\n    return v\n"],
+        ["pkg/b.py", "def build(x):\n    raise ValueError('Field may not be null.')\n"],
+        ["tests/test_b.py", "def build():\n    pass\n# Field may not be null.\n"],
+      ]),
+    );
+    const map = repoMap(ix, [{ path: "pkg/a.py", text: ix.files.get("pkg/a.py")!, focus: [5] }], "{'x': ['Field may not be null.']}");
+    assert.match(map, /build -> pkg\/b.py:1/);
+    assert.doesNotMatch(map, /local ->/, "defined in the file already shown");
+    assert.match(map, /"Field may not be null" -> pkg\/b.py:2/);
+    assert.doesNotMatch(map, /tests\//);
   });
 });
 

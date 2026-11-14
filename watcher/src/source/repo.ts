@@ -14,7 +14,7 @@ const MAX_TOTAL = 40_000_000;
 const MAX_FILES = 20_000;
 const MAX_DOWNLOAD = 80_000_000;
 /** Tests, docs and examples rarely hold the cause; they rank after the app's own code. */
-const SECONDARY = /(^|\/)(tests?|testing|docs?|examples?|benchmarks?|scripts)(\/|$)|(^|\/)(test_[^/]*|[^/]*_test)\.py$|\.(test|spec)\.\w+$/;
+export const SECONDARY = /(^|\/)(tests?|testing|docs?|examples?|benchmarks?|scripts)(\/|$)|(^|\/)(test_[^/]*|[^/]*_test)\.py$|\.(test|spec)\.\w+$/;
 
 export class RepoIndex {
   constructor(readonly files: Map<string, string>) {}

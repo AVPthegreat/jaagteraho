@@ -112,6 +112,9 @@ async function main() {
         continue;
       }
       if (process.env.JR_RELATED_FILES !== "0") for (const r of await relatedFiles(src, files)) files.push({ ...r, related: true });
+      // RawSource also finds "x.py" at "src/x.py"; name every file by its real repository path, once.
+      for (const f of files) f.path = index?.resolve(f.path) ?? f.path;
+      for (let i = files.length - 1; i > 0; i--) if (files.findIndex((g) => g.path === files[i].path) < i) files.splice(i, 1);
       const t0 = Date.now();
       const out = await runDiagnosis(ai, { exception_type: parsed.exception_type, message: parsed.message, transaction: null, frames }, files, false, null, index);
       if ("error" in out) {
