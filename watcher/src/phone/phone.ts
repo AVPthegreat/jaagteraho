@@ -7,7 +7,7 @@
 // token is signed, single use and short-lived (never a guessable id).
 
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { getSettings, type DB } from "../db/db.js";
 
 export type PhoneConfig = {
@@ -171,12 +171,12 @@ export class Phone {
         .run(incidentId, projectId, attempt, sha256(nonce), JSON.stringify(info), new Date().toISOString()).lastInsertRowid,
     );
     const ackUrl = this.cfg.publicBase ? `${this.cfg.publicBase}/twilio/ack/${this.signToken(rowId, nonce)}` : null;
-    const body = new URLSearchParams({
-      To: this.cfg.to,
-      From: this.cfg.from,
-      Twiml: callTwiml(callText(info, attempt, this.cfg.repeats), this.cfg.voice, ackUrl),
-      Timeout: "30",
-    });
+    // With a public URL, Twilio fetches the call script from us (signed, per call). Trial accounts refuse an
+    // inline Twiml parameter ("trial accounts have limited parameter access"); a script URL works on both.
+    const script: Record<string, string> = this.cfg.publicBase
+      ? { Url: `${this.cfg.publicBase}/twilio/twiml/${this.signToken(rowId, nonce)}` }
+      : { Twiml: callTwiml(callText(info, attempt, this.cfg.repeats), this.cfg.voice, ackUrl) };
+    const body = new URLSearchParams({ To: this.cfg.to, From: this.cfg.from, ...script, Timeout: "30" });
     try {
       const res = await this.fetchImpl(`${API}/Accounts/${encodeURIComponent(this.cfg.sid)}/Calls.json`, {
         method: "POST",
@@ -208,6 +208,18 @@ export class Phone {
     return `${payload}.${createHmac("sha256", this.tokenKey()).update(payload).digest("base64url").slice(0, 32)}`;
   }
 
+  /** The call row a token names, if the signature is ours and the token is not expired. Does not spend it. */
+  peek(token: string): { id: number; info: CallInfo; attempt: number } | null {
+    const m = /^(\d{1,12})\.([A-Za-z0-9_-]{24})\.([A-Za-z0-9_-]{32})$/.exec(token);
+    if (!m || !safeEqual(this.signToken(Number(m[1]), m[2]), token)) return null;
+    const row = this.db.prepare("SELECT token_hash, info, attempt, created_at FROM phone_calls WHERE id = ?").get(Number(m[1])) as
+      | { token_hash: string | null; info: string | null; attempt: number; created_at: string }
+      | undefined;
+    if (!row?.info || !row.token_hash || !safeEqual(row.token_hash, sha256(m[2]))) return null;
+    if (Date.now() - Date.parse(row.created_at) > TOKEN_TTL_MS) return null;
+    return { id: Number(m[1]), info: JSON.parse(row.info) as CallInfo, attempt: row.attempt };
+  }
+
   /** Checks and spends a one-time token. Returns the incident id, or null if forged, used or expired. */
   redeem(token: string): number | null {
     const m = /^(\d{1,12})\.([A-Za-z0-9_-]{24})\.([A-Za-z0-9_-]{32})$/.exec(token);
@@ -229,6 +241,25 @@ export class Phone {
     const twiml = (body: string, status: 200 | 403 = 200) =>
       new Response(`<?xml version="1.0" encoding="UTF-8"?><Response>${body}</Response>`, { status, headers: { "content-type": "text/xml" } });
     const say = (t: string) => `<Say voice="${xml(this.cfg.voice)}" language="en-IN">${xml(t)}</Say>`;
+    const signed = async (c: Context): Promise<Record<string, string> | null> => {
+      const form = await c.req.parseBody().catch(() => ({}) as Record<string, unknown>);
+      const params: Record<string, string> = {};
+      for (const [k, v] of Object.entries(form)) if (typeof v === "string") params[k] = v;
+      const sig = c.req.header("x-twilio-signature") ?? "";
+      const url = `${this.cfg.publicBase}${c.req.path}`;
+      return sig && safeEqual(twilioSignature(this.cfg.token, url, params), sig) ? params : null;
+    };
+    // POST /twilio/twiml/:token: Twilio fetches the call script for a call we placed.
+    app.post("/twilio/twiml/:token", async (c) => {
+      if (!this.cfg.publicBase) return c.text("forbidden", 403);
+      if (!(await signed(c))) return c.text("forbidden", 403);
+      const call = this.peek(c.req.param("token"));
+      if (!call) return twiml(say("This JaagteRaho alert has expired. Goodbye."));
+      const ackUrl = `${this.cfg.publicBase}/twilio/ack/${c.req.param("token")}`;
+      return new Response(`<?xml version="1.0" encoding="UTF-8"?>${callTwiml(callText(call.info, call.attempt, this.cfg.repeats), this.cfg.voice, ackUrl)}`, {
+        headers: { "content-type": "text/xml" },
+      });
+    });
     app.post("/twilio/ack/:token", async (c) => {
       if (!this.cfg.publicBase) return c.text("forbidden", 403);
       const form = await c.req.parseBody().catch(() => ({}) as Record<string, unknown>);
