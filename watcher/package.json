@@ -9,14 +9,15 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "node --import tsx src/server.ts",
-    "test": "tsx --test test/*.test.ts",
+    "test": "JR_RUNNER=inprocess tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
     "project:add": "tsx scripts/project-add.ts",
     "check:keys": "tsx scripts/check-keys.ts",
     "project:dsn": "tsx scripts/project-dsn.ts",
     "eval:real": "tsx scripts/eval-real.ts",
     "bench": "tsx scripts/bench.ts",
-    "bench:publish": "tsx scripts/publish-benchmarks.ts"
+    "bench:publish": "tsx scripts/publish-benchmarks.ts",
+    "runner": "node --import tsx src/runner/server.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",

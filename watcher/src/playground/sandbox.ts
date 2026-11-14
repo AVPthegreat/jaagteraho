@@ -1,15 +1,11 @@
-// The playground's sample apps: copying one with a planted bench bug, running it so it crashes for real,
-// and running our hidden test on the patched copy. Every run is confined the way proofs are (verify.ts):
-// a throwaway copy, a clean environment, a time limit, and for Python the same audit hook and resource
-// limits as the regression-test runner (no processes, no sockets, no reading /proc or secrets). Node.js
-// apps run under Node's permission model (reads only inside the copy, no child processes, no workers).
+// The playground's live apps: the list, their file trees, and readable copies with a planted bench bug
+// (for the diagnosis to READ). Nothing here runs app code: crashes, hidden tests and proofs run in the
+// isolated runner (runner/exec.ts via runner/client.ts).
 
-import { spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
-import { readOutcome, RUNNER } from "../pipeline/verify.js";
 
 export type Edit = { file: string; find: string; replace: string };
 export type BenchCase = {
@@ -110,49 +106,6 @@ export async function copyApp(dir: string, app: string, edits: Edit[] = []): Pro
 export const removeDir = (d: string) => rm(d, { recursive: true, force: true });
 export const isNodeApp = (dir: string) => existsSync(join(dir, "package.json"));
 
-type Ran = { status: number | null; signal: string | null; stdout: string; stderr: string };
-
-/** Spawns without blocking the server; SIGKILL at the limit; at most 256 KB of each stream kept. */
-function run(cmd: string, args: string[], cwd: string, env: Record<string, string>, timeoutMs: number): Promise<Ran> {
-  return new Promise((done) => {
-    let stdout = "";
-    let stderr = "";
-    let settled = false;
-    const child = spawn(cmd, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
-    const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
-    const finish = (r: Ran) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      done(r);
-    };
-    child.stdout.setEncoding("utf8").on("data", (d: string) => void (stdout.length < 1 << 18 && (stdout += d)));
-    child.stderr.setEncoding("utf8").on("data", (d: string) => void (stderr.length < 1 << 18 && (stderr += d)));
-    child.on("error", () => finish({ status: null, signal: "error", stdout, stderr }));
-    child.on("close", (status, signal) => finish({ status, signal, stdout, stderr }));
-  });
-}
-
-// The Python confinement is the regression-test runner's, minus its last line (which starts unittest).
-const PY_PRELUDE = RUNNER.slice(0, RUNNER.lastIndexOf("unittest.main("));
-const cleanEnv = (): Record<string, string> => ({ PATH: process.env.PATH ?? "/usr/bin:/bin", PYTHONDONTWRITEBYTECODE: "1", LANG: "C.UTF-8" });
-const nodeArgs = (dir: string) => ["--permission", `--allow-fs-read=${dir}`, "--max-old-space-size=256"];
-const PY = () => process.env.JR_BENCH_PYTHON ?? "python3";
-export const RUN_TIMEOUT_MS = 20_000;
-
-/** Runs the case's trigger in the app copy (our code, from cases.json). */
-export async function runTrigger(dir: string, code: string): Promise<Ran> {
-  if (isNodeApp(dir)) return run(process.execPath, [...nodeArgs(dir), "-e", code], dir, cleanEnv(), RUN_TIMEOUT_MS);
-  // The confinement is imported from a file, so the trigger's own line numbers stay close to what it says.
-  const guard = join(dir, "jr_sandbox.py");
-  await writeFile(guard, PY_PRELUDE);
-  try {
-    return await run(PY(), ["-E", "-s", "-c", `import jr_sandbox\n${code}`], dir, cleanEnv(), RUN_TIMEOUT_MS);
-  } finally {
-    await rm(guard, { force: true });
-  }
-}
-
 /** The error report as the app prints it: a Python traceback, or a Node.js error and its stack. */
 export function crashReport(dir: string, stderr: string): string {
   if (!isNodeApp(dir)) {
@@ -162,23 +115,4 @@ export function crashReport(dir: string, stderr: string): string {
   const lines = stderr.split("\n");
   const head = lines.findIndex((l) => /^(?:[A-Z]\w*)?(?:Error|Exception)\b/.test(l));
   return head >= 0 ? lines.slice(head).filter((l) => !/^Node\.js v/.test(l)).join("\n").trim() : "";
-}
-
-/** Our hidden test (from cases.json; the model never sees it) on a copy of the app. */
-export async function runHiddenTest(dir: string, test: string): Promise<"passed" | "failed" | "error"> {
-  const node = isNodeApp(dir);
-  const file = join(dir, node ? "jr_hidden_test.js" : "jr_hidden_test.py");
-  await writeFile(file, test);
-  try {
-    if (node) {
-      const r = await run(process.execPath, [...nodeArgs(dir), file], dir, cleanEnv(), RUN_TIMEOUT_MS);
-      if (r.signal || r.status === null) return "error";
-      const out = r.stdout;
-      return r.status === 0 && /^# pass [1-9]/m.test(out) ? "passed" : /^# fail [1-9]/m.test(out) ? "failed" : "error";
-    }
-    const r = await run(PY(), ["-E", "-s", "-c", `${PY_PRELUDE}\nunittest.main(module="jr_hidden_test", argv=["jr"], exit=True)\n`], dir, cleanEnv(), RUN_TIMEOUT_MS);
-    return readOutcome(r.status, r.signal, `${r.stdout}\n${r.stderr}`);
-  } finally {
-    await rm(file, { force: true });
-  }
 }

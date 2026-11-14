@@ -22,6 +22,11 @@ The watcher, the two demo-portal builds and a backup job run on one Vultr Comput
    curl https://$JR_API_DOMAIN/health
    ```
 
+The `runner` service is the only place app code and AI-written code runs (fix proofs, the Live playground's
+crashes and hidden tests). It has no network, no `.env`, a read-only root and its own limits, and the watcher
+reaches it only through the `runner_sock` volume. Without it, fix proofs are skipped and the playground stays off.
+Check it after a deploy: `docker compose exec runner node -e "fetch('http://1.1.1.1').catch(e=>console.log('no network:', e.cause?.code))"`.
+
 ## 2. Website (Vercel)
 
 Import the repository in Vercel with **Root Directory** set to `site`, and set `NEXT_PUBLIC_WATCHER_URL=https://<JR_API_DOMAIN>`.
