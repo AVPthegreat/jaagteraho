@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { SpendGuard, type AI } from "../src/ai/claude.js";
 import { openDb } from "../src/db/db.js";
-import { anchorLine, repoMap, runDiagnosis, runLookup, type SourceFile } from "../src/pipeline/diagnose.js";
+import { anchorLine, namedFile, repoMap, runDiagnosis, runLookup, valueTrail, type SourceFile } from "../src/pipeline/diagnose.js";
 import { indexFromFolder, indexFromTarball, RepoIndex, untar } from "../src/source/repo.js";
 import { GitHubSource, safeRef } from "../src/source/source.js";
 
@@ -192,14 +192,16 @@ describe("diagnosis with lookups", () => {
     db.close();
   });
 
-  it("stops after three rounds of lookups and asks for the answer", async () => {
-    const { ai, reqs } = fake(["tool", "tool", "tool", "tool", "tool"]);
+  it("stops after five rounds of lookups and asks for the answer", async () => {
+    const { ai, reqs } = fake(["tool", "tool", "tool", "tool", "tool", "tool", "tool"]);
     const out = await runDiagnosis(ai, event, shown, false, null, repo());
     assert.ok(!("error" in out), JSON.stringify(out));
-    assert.equal(reqs.length, 4);
-    assert.equal(reqs[3].tool_choice?.type, "none");
-    assert.match(JSON.stringify(reqs[3].messages.at(-1)), /No more lookups/);
-    assert.doesNotMatch(JSON.stringify(reqs[2].messages.at(-1)), /No more lookups/);
+    assert.equal(reqs.length, 6);
+    assert.equal(reqs[5].tool_choice?.type, "none");
+    assert.match(JSON.stringify(reqs[5].messages.at(-1)), /No more lookups/);
+    assert.doesNotMatch(JSON.stringify(reqs[4].messages.at(-1)), /No more lookups/);
+    // At most 4 cache breakpoints per request (the API refuses more).
+    for (const r of reqs) assert.ok((JSON.stringify(r.messages).match(/cache_control/g) ?? []).length <= 2);
   });
 
   it("offers no tools without a repository index", async () => {
@@ -343,5 +345,95 @@ describe("public paste page", () => {
     assert.match(rows[0].id, /^failed-/);
     assert.equal((await app.request(`/public/paste/${rows[0].id}`)).status, 404, "a failed attempt is never shown");
     db.close();
+  });
+});
+
+describe("value trail and writers", () => {
+  const ROUTE = `class Route:
+    def __init__(
+        self,
+        endpoint,
+        response_model: Any = None,
+        status_code: int = 200,
+    ) -> None:
+        if response_model is None:
+            return_annotation = get_return_annotation(endpoint)
+            response_model = return_annotation
+        self.response_model = response_model
+        self.status_code = status_code
+        if self.response_model:
+            assert allowed(status_code), (
+                f"Status code {status_code} must not have a response body"
+            )
+`;
+  const UTILS = `def get_return_annotation(call):
+    return call.__annotations__.get("return")
+`;
+  const TREE = `class Leaf:
+    depth: int
+
+    def __init__(self, value):
+        self.value = value
+`;
+  const USE = `def short(line):
+    for leaf in line.leaves:
+        if leaf.depth + 1 > 3:
+            return False
+`;
+  const ix = () =>
+    new RepoIndex(
+      new Map([
+        ["pkg/routing.py", ROUTE],
+        ["pkg/utils.py", UTILS],
+        ["pkg/tree.py", TREE],
+        ["pkg/lines.py", USE],
+        ["pkg/brackets.py", "def mark(leaf, d):\n    leaf.depth = d\n"],
+      ]),
+    );
+
+  it("finds assignments, declarations and loop targets but not parameters or comparisons", async () => {
+    const w = await ix().writers("response_model");
+    assert.deepEqual(w.map((x) => x.line), [10, 11]);
+    const attr = await ix().writers("depth", 15, true);
+    assert.deepEqual(attr.map((x) => `${x.path}:${x.line}`).sort(), ["pkg/brackets.py:2", "pkg/tree.py:2"]);
+    assert.ok((await ix().writers("leaf")).some((x) => x.path === "pkg/lines.py" && x.line === 2));
+    assert.deepEqual(await ix().writers("x y"), [], "only names");
+  });
+
+  it("follows the failing value back through the function to the helper that produced it", async () => {
+    const files: SourceFile[] = [{ path: "pkg/routing.py", text: ROUTE, focus: [14] }];
+    const trail = await valueTrail(ix(), files, "Status code 204 must not have a response body");
+    assert.ok(trail.includes(".response_model <- pkg/routing.py:11: self.response_model = response_model"), trail.join("\n"));
+    assert.ok(trail.some((t) => t.includes("return_annotation <- pkg/routing.py:9")));
+    assert.ok(trail.some((t) => t.includes("get_return_annotation -> defined at pkg/utils.py:1")));
+    assert.ok(!trail.some((t) => t.includes("routing.py:5")), "a parameter is not an assignment");
+  });
+
+  it("for a missing attribute, points at the class and where the attribute is set", async () => {
+    const files: SourceFile[] = [{ path: "pkg/lines.py", text: USE, focus: [3] }];
+    const trail = await valueTrail(ix(), files, "'Leaf' object has no attribute 'depth'");
+    assert.ok(trail.includes("class Leaf -> pkg/tree.py:1"), trail.join("\n"));
+    assert.ok(trail.some((t) => t.startsWith("depth set at pkg/brackets.py:2")));
+    assert.ok(trail.some((t) => t.startsWith("leaf <- pkg/lines.py:2")));
+  });
+
+  it("re-anchors a statement whose arguments were reformatted onto its first line", () => {
+    assert.deepEqual(anchorLine(ROUTE, 3, "assert allowed(", "__init__"), { line: 14, moved: true });
+  });
+
+  it("find_writers is offered as a lookup", async () => {
+    const out = await runLookup(ix(), "find_writers", { name: "depth" }, new Map());
+    assert.match(out, /pkg\/brackets\.py:2: leaf\.depth = d/);
+  });
+});
+
+describe("named file", () => {
+  const base = { cause_plain: "", cause_technical: "In httpx/middleware.py the headers are kept.", file: "", line: 91, confidence_words: "likely" as const, edits: [], test_hint: "", regression_test: { file: "", code: "" } };
+  const known: SourceFile[] = [{ path: "httpx/middleware.py", text: "" }, { path: "httpx/models.py", text: "" }];
+  it("fills an empty or loose file from the files shown, the edits or the cause", () => {
+    assert.equal(namedFile({ ...base, file: "middleware.py" }, known, null).file, "httpx/middleware.py");
+    assert.equal(namedFile({ ...base, edits: [{ file: "httpx/models.py", find: "a", replace: "b" }] }, known, null).file, "httpx/models.py");
+    assert.equal(namedFile(base, known, null).file, "httpx/middleware.py");
+    assert.equal(namedFile({ ...base, cause_technical: "" }, known, null).file, "", "nothing to go on");
   });
 });
