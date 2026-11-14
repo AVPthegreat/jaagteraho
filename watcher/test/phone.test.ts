@@ -181,8 +181,14 @@ describe("phone wake-up call", () => {
     const path = new URL(body.get("Url")!).pathname;
     const forged = await phone.routes(async () => undefined).request(path, { method: "POST", headers: { "x-twilio-signature": "nope" }, body: "" });
     assert.equal(forged.status, 403);
+    // Unsigned (Twilio may omit the signature) with a guessed token: nothing about the call is revealed.
     const wrongToken = await phone.routes(async () => undefined).request(path.replace(/\.[^.]+$/, ".AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"), { method: "POST" });
-    assert.equal(wrongToken.status, 403);
+    const wrongText = await wrongToken.text();
+    assert.match(wrongText, /has expired/);
+    assert.doesNotMatch(wrongText, /exam portal|Press 1/);
+    // Unsigned with the real per-call link: served (seen live: Twilio sent no X-Twilio-Signature).
+    const unsignedReal = await phone.routes(async () => undefined).request(path, { method: "POST", body: new URLSearchParams({ CallSid: "CA1" }) });
+    assert.match(await unsignedReal.text(), /Press 1 to acknowledge/);
     assert.match(await scriptOf(phone, body), /Press 1 to acknowledge/);
   });
 
@@ -253,7 +259,7 @@ describe("phone wake-up call", () => {
     assert.equal(f.calls.length, 4, "first call + 3 repeats");
   });
 
-  it("rejects a bad signature (403) and a forged token", async () => {
+  it("rejects a bad signature (403) and a forged token; the real link works without a signature", async () => {
     const db = setup();
     const f = fakeFetch();
     const phone = new Phone(db, phoneConfig(ENV)!, f.impl);
@@ -261,13 +267,17 @@ describe("phone wake-up call", () => {
     const url = ackUrlOf((await scriptOf(phone, f.calls[0].body)));
     const bad = await press(phone, url, "1", "wrong-token");
     assert.equal(bad.status, 403);
-    const unsigned = await phone.routes(async () => undefined).request(new URL(url).pathname, { method: "POST", body: new URLSearchParams({ Digits: "1" }) });
-    assert.equal(unsigned.status, 403);
-    // A guessed token (right shape, wrong signature) acknowledges nothing.
+    // A guessed token (right shape, wrong signature) acknowledges nothing, signed or not.
     const forged = url.replace(/\.[A-Za-z0-9_-]{32}$/, `.${"A".repeat(32)}`);
     const r = await press(phone, forged, "1");
     assert.match(await r.text(), /already acknowledged or has expired/);
+    const unsignedForged = await phone.routes(async () => undefined).request(new URL(forged).pathname, { method: "POST", body: new URLSearchParams({ Digits: "1" }) });
+    assert.match(await unsignedForged.text(), /already acknowledged or has expired/);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM phone_calls WHERE used_at IS NOT NULL").get() as { n: number }).n, 0);
+    // The real link without a signature (Twilio may omit it) acknowledges once.
+    const unsigned = await phone.routes(async () => undefined).request(new URL(url).pathname, { method: "POST", body: new URLSearchParams({ Digits: "1" }) });
+    assert.match(await unsigned.text(), /Acknowledged/);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM phone_calls WHERE used_at IS NOT NULL").get() as { n: number }).n, 1);
   });
 
   it("holds calls past 3 wakes in 12 hours per app, and logs a Twilio error without throwing", async () => {
