@@ -106,6 +106,7 @@ function narrate(ev: PlayEvent | undefined, app: string): string {
       return d.verdict === "proved" ? "Its own test proved the fix." : "Its own test could not prove the fix.";
     case "ready":
       if (!d.approvable) return String(d.reason ?? "This fix was not applied.");
+      if (d.care_note) return "Fix ready, but the AI reviewer had concerns. Read them, then approve it to try it in your copy.";
       if (d.protected_note) return "Fix ready. It touches a protected area, so it waits for your tap. Approve it to apply it in your copy.";
       return d.heal === "auto" ? "Fix ready. Healing on its own…" : "Fix ready. Approve it to apply it.";
     case "note":
@@ -431,7 +432,7 @@ export function Playground() {
           <span className="soft">{String(cause.unavailable)}</span>
         ) : (
           <>
-            {String(cause.cause_plain ?? "")} <span className="mono soft">{`${String(cause.file ?? "")}:${String(cause.line ?? "")}`}</span>
+            <Typed text={String(cause.cause_plain ?? "")} /> <span className="mono soft">{`${String(cause.file ?? "")}:${String(cause.line ?? "")}`}</span>
           </>
         )
       ) : null,
@@ -459,8 +460,9 @@ export function Playground() {
       t: by.hidden_test?.t,
       body: fixed ? (
         <span>{by.applied?.data.by === "healed" ? "Healed on its own." : "Applied after you approved it."}</span>
-      ) : canApprove && (run?.heal === "ask" || ready?.protected_note) ? (
+      ) : canApprove && (run?.heal === "ask" || ready?.protected_note || ready?.care_note) ? (
         <>
+          {ready?.care_note ? <span className="pg2-care">{String(ready.care_note)} </span> : null}
           {ready?.protected_note ? <span className="soft pg2-protected">{String(ready.protected_note)} </span> : null}
           <button type="button" className="btn btn-sm" onClick={() => act("approve")} disabled={busy !== null}>
             {busy === "approve" ? "Applying…" : "Approve fix"}
@@ -476,7 +478,21 @@ export function Playground() {
           ) : null}
         </span>
       ) : ready && !ready.approvable ? (
-        <span className="soft">{String(ready.reason ?? "This fix was not applied.")}</span>
+        <span className="soft">
+          {String(ready.reason ?? "This fix was not applied.")}{" "}
+          {ready.no_edit ? (
+            <button
+              type="button"
+              className="linkish"
+              onClick={() => {
+                setBug("surprise");
+                document.querySelector(".pg2-bugs")?.scrollIntoView({ behavior: "smooth", block: "center" });
+              }}
+            >
+              Try another bug
+            </button>
+          ) : null}
+        </span>
       ) : by.applied ? (
         <span className="soft">Our hidden test is checking it…</span>
       ) : by.failed ? (
@@ -485,6 +501,9 @@ export function Playground() {
     },
   ];
   const current = steps.findIndex((s) => !s.done);
+  // The live line under the active step: the latest real progress event since the last step event.
+  const lastEv = run?.events.at(-1);
+  const live = working && lastEv?.step === "progress" ? String(lastEv.data.text ?? "") : null;
   const hiddenResult = hidden ? String(hidden.result) : null;
   const fixSecs = card?.seconds_to_proved_fix ?? card?.total_seconds ?? null;
   const ended = !!run && !working && (fixed || !run.approvable || !!by.failed);
@@ -654,6 +673,11 @@ export function Playground() {
                           <span className="pg2-t">{secs(s.t)}</span>
                         </p>
                         {s.body ? <div className="pg2-step-b">{s.body}</div> : null}
+                        {i === current && live ? (
+                          <p className="pg2-live">
+                            <span className="pg2-live-dot" aria-hidden="true" /> {live}
+                          </p>
+                        ) : null}
                       </div>
                     </li>
                   ))}
@@ -780,5 +804,33 @@ export function Playground() {
         ) : null}
       </div>
     </div>
+  );
+}
+
+/**
+ * Reveals real text as if typed (the cause arrives in one piece from the model; this only paces its display).
+ * Shows it at once for reduced motion and to screen readers.
+ */
+function Typed({ text }: { text: string }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      const t0 = setTimeout(() => setN(text.length), 0);
+      return () => clearTimeout(t0);
+    }
+    let i = 0;
+    const t = setInterval(() => {
+      i = Math.min(text.length, i + 3);
+      setN(i);
+      if (i >= text.length) clearInterval(t);
+    }, 18);
+    return () => clearInterval(t);
+  }, [text]);
+  return (
+    <>
+      <span aria-hidden="true">{text.slice(0, n)}</span>
+      <span className="sr-only">{text}</span>
+    </>
   );
 }

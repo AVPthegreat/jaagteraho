@@ -1017,3 +1017,50 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+.pg2-care {
+  display: block;
+  margin-bottom: 6px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--amber);
+  border-radius: 6px;
+  background: rgba(245, 181, 68, 0.08);
+  color: var(--amber-2);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+/* Live progress under the active step, and the fix's diff revealed line by line. */
+.pg2-live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0;
+  font-family: var(--font-m);
+  font-size: 0.76rem;
+  color: var(--lantern-2);
+  overflow-wrap: anywhere;
+}
+.pg2-live-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--lantern);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.pg2 .diff span {
+  animation: rise 0.3s var(--ease) both;
+}
+.pg2 .diff span:nth-child(2) { animation-delay: 0.08s; }
+.pg2 .diff span:nth-child(3) { animation-delay: 0.16s; }
+.pg2 .diff span:nth-child(4) { animation-delay: 0.24s; }
+.pg2 .diff span:nth-child(5) { animation-delay: 0.32s; }
+.pg2 .diff span:nth-child(6) { animation-delay: 0.4s; }
+.pg2 .diff span:nth-child(7) { animation-delay: 0.48s; }
+.pg2 .diff span:nth-child(8) { animation-delay: 0.56s; }
+.pg2 .diff span:nth-child(n + 9) { animation-delay: 0.64s; }
+@media (prefers-reduced-motion: reduce) {
+  .pg2-live-dot,
+  .pg2 .diff span {
+    animation: none;
+  }
+}
