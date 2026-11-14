@@ -1,6 +1,6 @@
 # JaagteRaho
 
-**The on-call engineer you can't afford.**
+**The on-call engineer you can afford.**
 
 **Your app breaks at 2 am. Small bugs fix themselves. Serious ones ring your phone. You approve, or let it heal under your rules.**
 
