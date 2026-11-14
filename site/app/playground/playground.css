@@ -749,3 +749,9 @@
   border: 1px solid var(--line);
   color: var(--soft);
 }
+.pg2-protected {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
