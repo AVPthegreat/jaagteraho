@@ -16,6 +16,7 @@ import { decide, saveDecision, severityWord, type Decision } from "./decide.js";
 import { gatherFiles, runDiagnosis, type DiagnosisResult } from "./diagnose.js";
 import { runGate } from "./gate.js";
 import { proveFix } from "./verify.js";
+import type { Healer } from "./heal.js";
 import { lastChange, loadChange, saveChange, type Change } from "../source/changes.js";
 
 type Job = { id: number; kind: string; incident_id: number; payload: string; attempts: number };
@@ -61,6 +62,8 @@ export function sourceFor(project: ProjectRow): SourceProvider | null {
 export class Worker {
   private running = 0;
   private timers: NodeJS.Timeout[] = [];
+  /** Self-healing under the owner's rules (heal.ts); set by the server. */
+  healer: Healer | null = null;
 
   constructor(private db: DB, private ai: AI | null, private tg: Telegram | null, private voice: Voice | null) {}
 
@@ -244,6 +247,7 @@ export class Worker {
 
     if (owner?.paused !== 1) {
       await this.diagnoseAndGate(project, inc.id, event, ev.release, feed);
+      await this.healer?.onFix(inc.id, { session, action: decision.action }).catch((e) => console.error("heal:", e));
       await this.refreshCard(inc.id, false);
     }
     await voiceDone;

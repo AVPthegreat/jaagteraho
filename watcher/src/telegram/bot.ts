@@ -6,6 +6,7 @@ import { installUrl } from "../github/app.js";
 import { openFixPullRequest } from "../github/pr.js";
 import { getSettings, kvGet, kvSet, setSettings, type DB } from "../db/db.js";
 import type { Worker } from "../pipeline/worker.js";
+import { describePolicy, parseHealArgs, policyOf, savePolicy, writeTokenFor } from "../pipeline/heal.js";
 import { esc, type Telegram, type TgCallback, type TgMessage, type TgUpdate } from "./api.js";
 import { renderWhy } from "./card.js";
 import { buildDigest, istNow } from "./digest.js";
@@ -27,6 +28,7 @@ const HELP = [
   "Every morning at 8 (India time) you get a short summary of the night, if anything happened.",
   "/pause and /resume: stop or restart model calls, fixes and wakes",
   "/critical /api/checkout checkout: mark a route as critical (failures there always reach you); /critical alone lists them",
+  "/heal: your self-healing rule. /heal ask (you approve every fix, the default), /heal auto 10m (heal on its own if you don't acknowledge a wake-up in 10 min), /heal now (heal right away), /heal off, /heal max 2",
 ].join("\n");
 
 export function parseDuration(s: string | undefined): number | null {
@@ -277,6 +279,28 @@ export class Bot {
         }
         return reply(`Marked <b>${esc(name)}</b> (${esc(match)}) as critical. Failures there now always reach you.`);
       }
+      case "/heal": {
+        const editable = owned.filter((o) => o.kind !== "sandbox");
+        if (editable.length === 0) return reply("On the demo portal, each visitor picks their own heal rule on the website.");
+        const parsed = parseHealArgs(m.text.trim().split(/\s+/).slice(1));
+        if (typeof parsed === "object" && "error" in parsed) return reply(parsed.error);
+        if (parsed !== "show") for (const o of editable) savePolicy(this.db, o.project_id, parsed.patch);
+        const lines = editable.map((o) => {
+          const p = this.db.prepare("SELECT id, kind, repo FROM projects WHERE id = ?").get(o.project_id) as { id: number; kind: string; repo: string | null };
+          const write = writeTokenFor(p) ? "write access set: heals open a pull request with auto-merge" : "no write access: heals arrive as a ready-to-apply diff and paging goes on";
+          return `<b>${esc(o.name)}</b>: ${esc(describePolicy(policyOf(this.db, o.project_id)))}\n${write}`;
+        });
+        return reply(
+          [
+            parsed === "show" ? "<b>Self-healing</b>" : "<b>Saved.</b>",
+            ...lines,
+            "",
+            "Rules that always hold: only fixes that passed all six code checks and the review heal on their own; never in login, payments, grading, migrations, settings or CI; if the errors don't drop after a heal, it is undone, you are woken again and self-healing pauses for 12 hours. Every heal comes with one-tap Undo.",
+            "",
+            "/heal ask · /heal auto 10m · /heal now · /heal now /api/submit · /heal off · /heal max 2",
+          ].join("\n"),
+        );
+      }
       case "/pause":
         setOwners("UPDATE owners SET paused = 1 WHERE project_id = ?");
         return reply("Paused: no model calls, no fixes, no wakes. /resume to restart.");
@@ -334,7 +358,18 @@ export class Bot {
       }
       // A fix with open concerns is shown, never approvable with one tap.
       if (caution) return this.tg.answer(q.id, "This fix has open concerns, so it cannot be approved here. Apply it by hand if you agree.");
-      if (fix.kind !== "sandbox") return this.tg.answer(q.id, "On this app fixes are diffs only. Apply it yourself.");
+      if (fix.kind !== "sandbox") {
+        // A real app: Approve opens a pull request with auto-merge, only where write access was given.
+        const healer = this.worker.healer;
+        const p = this.db.prepare("SELECT p.id, p.kind, p.repo FROM projects p JOIN incidents i ON i.project_id = p.id WHERE i.id = ?").get(fix.incident_id) as { id: number; kind: string; repo: string | null };
+        if (!healer || !writeTokenFor(p) || policyOf(this.db, p.id).mode === "off") return this.tg.answer(q.id, "On this app fixes are diffs only. Apply it yourself.");
+        const { blocker } = healer.check(fix.id, "owner", null);
+        if (blocker) return this.tg.answer(q.id, `Cannot apply: ${blocker}.`);
+        await this.tg.answer(q.id, "Approved. Opening a pull request…");
+        await healer.healReal(fix.id, "owner");
+        await this.worker.refreshCard(fix.incident_id, false);
+        return;
+      }
       if (fix.status !== "shown") return this.tg.answer(q.id, `Already ${fix.status}.`);
       // Claim the fix first so a double tap cannot open two pull requests.
       const claimed = this.db.prepare("UPDATE fixes SET status = 'approved' WHERE id = ? AND status = 'shown'").run(fix.id).changes === 1;
@@ -351,6 +386,16 @@ export class Bot {
             : `Approved and recorded. ${pr?.error ? `No pull request: ${esc(pr.error)}` : "No pull request: the sandbox repository is not connected."}`,
         );
       }
+      return;
+    }
+
+    if (kind === "u") {
+      const h = this.worker.healer?.get(id);
+      if (!h || h.session_id || !this.ownsIncident(q.from.id, h.incident_id)) return this.tg.answer(q.id, "Not found.");
+      await this.tg.answer(q.id, "Undoing…");
+      const msg = await this.worker.healer!.undo(id, "owner");
+      if (q.message) await this.tg.send(q.message.chat.id, `<b>Undo</b>: ${esc(msg)}`);
+      await this.worker.refreshCard(h.incident_id, false);
       return;
     }
 

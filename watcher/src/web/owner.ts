@@ -92,6 +92,19 @@ export function renderOwnerPage(db: DB, incidentId: number): string | null {
   const vote = (k: keyof Decision["votes"], fmt: (v: string) => string = (v) => v) =>
     votes[k] ? `${esc(fmt(votes[k]!.value))} <span class="dim">${votes[k]!.count}/${votes[k]!.of}</span>` : '<span class="dim">not asked</span>';
   const what = facts?.critical ? `${facts.critical} failing` : `${inc.exception_type} on ${inc.transaction_name ?? "unknown route"}`;
+  // Self-healing audit trail: every step of every heal for this incident (heal.ts).
+  const hasHeals = !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'heals'").get();
+  const heals = hasHeals
+    ? (db.prepare("SELECT id, trigger, status, pr_url, log FROM heals WHERE incident_id = ? AND session_id IS NULL ORDER BY id").all(incidentId) as Array<{ id: number; trigger: string; status: string; pr_url: string | null; log: string }>)
+    : [];
+  const healHtml = heals.length
+    ? `<section class="card"><h2>Self-healing log</h2>${heals
+        .map(
+          (h) =>
+            `<p style="margin:0"><b>Heal ${h.id}</b> · ${esc(h.trigger === "owner" ? "approved by you" : h.trigger === "auto-after" ? "on its own, after an unanswered wake-up" : "on its own, by your rule")} · now ${esc(h.status.replace("_", " "))}${h.pr_url ? ` · <a href="${esc(h.pr_url)}" style="color:var(--lantern)">pull request</a>` : ""}</p><ul>${(JSON.parse(h.log) as Array<{ at: string; what: string }>).map((l) => `<li><span class="mono dim">${esc(time(l.at))}</span> ${esc(l.what)}</li>`).join("")}</ul>`,
+        )
+        .join("")}</section>`
+    : "";
 
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -146,16 +159,18 @@ ul{margin:0;padding-left:18px}footer{font-size:13px;color:var(--muted);border-to
 <div class="grid">
 <section class="card"><h2>Cause</h2>${r ? `<p style="margin:0">${esc(r.cause_plain)}</p><p class="dim" style="margin:0;font-size:14px">${esc(r.cause_technical)}</p><span class="mono dim" style="font-size:13px">${esc(r.file)} · line ${r.line} · ${esc(r.confidence_words)} · ${esc(diag!.model)}${diag!.cost_usd ? ` · $${diag!.cost_usd.toFixed(4)}` : ""}</span>` : '<p class="dim" style="margin:0">No diagnosis yet.</p>'}</section>
 <section class="card"><h2>What the AI was not allowed to do</h2><ul>
-<li>Merge, deploy, restart or roll back anything</li><li>Touch login, payments, grading, exams or settings</li>
+<li>Apply a fix unless you approved it or your heal rule allows it, and then only through a pull request your repository's checks must pass</li><li>Touch login, payments, grading, exams or settings</li>
 <li>See request bodies, cookies, user details or local variables</li><li>Run any tool or command</li></ul></section>
 </div>
 
 ${fix ? `<section class="card"><h2>${g?.passed ? (caution ? "Proposed fix · use with care · AI-written" : "Proposed fix · all checks passed · AI-written") : "Fix withheld"}</h2>${g?.passed ? `${caution ? `<p style="margin:0">The reviewer flagged: ${esc(g.reasons.join("; "))}. Read it carefully before applying.</p>` : ""}<pre>${diffHtml(fix.diff)}</pre>${proof}${r?.test_hint ? `<p class="dim" style="margin:0;font-size:14px">Check: ${esc(r.test_hint)}</p>` : ""}${testCode}` : `<p style="margin:0">${esc(g?.reasons.join("; "))}. Review this one by hand.</p>`}</section>` : ""}
 
+${healHtml}
+
 <section class="card"><h2>Where it failed · app code, newest last</h2><pre>${frames.map((f) => `${esc(f.filename ?? f.abs_path)}:${f.lineno} in ${esc(f.function)}\n    ${esc(f.context_line?.trim() ?? "")}`).join("\n") || "no app frames"}</pre>
 <p class="mono dim" style="margin:0;font-size:13px">${esc(inc.exception_type)}: ${esc(ev?.message_masked ?? "")}</p></section>
 
-<footer>Read-only page. Act from Telegram: Acknowledge, Approve, Right or Wrong. This link expires 30 minutes after it was sent.</footer>
+<footer>Read-only page. Act from Telegram: Acknowledge, Approve, Undo, Right or Wrong. This link expires 30 minutes after it was sent.</footer>
 </main></body></html>`;
 }
 

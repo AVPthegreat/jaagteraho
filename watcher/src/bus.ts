@@ -3,7 +3,7 @@
 import { EventEmitter } from "node:events";
 
 export type FeedEvent = {
-  type: "error" | "decision" | "voice" | "cause" | "fix" | "fixed" | "change";
+  type: "error" | "decision" | "voice" | "cause" | "fix" | "fixed" | "change" | "heal";
   at: string;
   incident_id: number;
   data: Record<string, unknown>;

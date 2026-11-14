@@ -50,14 +50,14 @@ export function logsUrlFor(key: string, id: number): string {
 export type NewApp = { id: number; name: string; dsn: string; logs_url: string; link_code: string };
 
 /** Creates an outside app (repo may be null: then diagnosis works from the stack trace alone). */
-export function createOutsideApp(db: DB, name: string, repo: string | null): NewApp {
+export function createOutsideApp(db: DB, name: string, repo: string | null, heal: "ask" | "auto-after" = "ask"): NewApp {
   const id = randomInt(100_000, 999_999);
   const key = randomBytes(16).toString("hex");
   const now = new Date().toISOString();
   const uniqueName = `${name}-${randomBytes(2).toString("hex")}`;
   db.prepare(
     "INSERT INTO projects (id, name, public_key, kind, repo, repo_access, settings, created_at) VALUES (?, ?, ?, 'faurus', ?, 'read', ?, ?)",
-  ).run(id, uniqueName, key, repo, JSON.stringify({ outside: true, critical: [] }), now);
+  ).run(id, uniqueName, key, repo, JSON.stringify({ outside: true, critical: [], heal: { mode: heal, after_min: 10, max_per_night: 2, flows: [] } }), now);
   const code = randomBytes(6).toString("hex");
   db.prepare("INSERT INTO link_codes (code, project_id, expires_at) VALUES (?, ?, ?)").run(code, id, new Date(Date.now() + 7 * 86_400_000).toISOString());
   return { id, name: uniqueName, dsn: dsnFor(key, id), logs_url: logsUrlFor(key, id), link_code: code };
