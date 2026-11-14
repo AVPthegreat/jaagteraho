@@ -95,6 +95,21 @@ async function press(phone: Phone, ackUrl: string, digits: string, token = ENV.J
 
 const ackUrlOf = (twiml: string) => /action="([^"]+)"/.exec(twiml)![1].replace(/&amp;/g, "&");
 
+/** The call script Twilio would play: fetched from our signed script URL the way Twilio does it. */
+async function scriptOf(phone: Phone, body: URLSearchParams, token = ENV.JR_TWILIO_AUTH_TOKEN!): Promise<string> {
+  const inline = body.get("Twiml");
+  if (inline) return inline;
+  const url = body.get("Url")!;
+  const params = { CallSid: "CA1", From: "+15005550006" };
+  const res = await phone.routes(async () => undefined).request(new URL(url).pathname, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded", "x-twilio-signature": twilioSignature(token, url, params) },
+    body: new URLSearchParams(params).toString(),
+  });
+  assert.equal(res.status, 200, "the call script is served to a signed request");
+  return res.text();
+}
+
 describe("phone wake-up call", () => {
   it("is off unless all four Twilio settings are present", () => {
     assert.equal(phoneConfig({}), null);
@@ -147,10 +162,28 @@ describe("phone wake-up call", () => {
     assert.match(c.url, /\/Accounts\/AC0000000000000000000000000000test\/Calls\.json$/);
     assert.equal(c.auth, `Basic ${Buffer.from(`${ENV.JR_TWILIO_ACCOUNT_SID}:${ENV.JR_TWILIO_AUTH_TOKEN}`).toString("base64")}`);
     assert.equal(c.body.get("To"), ENV.JR_TWILIO_TO);
-    const twiml = c.body.get("Twiml")!;
+    const twiml = await scriptOf(phone, c.body);
     assert.match(twiml, /JaagteRaho alert for exam portal\. Critical: code submission is failing during an exam\./);
     assert.match(twiml, /<Gather numDigits="1"[^>]*action="https:\/\/jr-api\.example\.test\/twilio\/ack\//);
     assert.doesNotMatch(twiml, /'language'|KeyError/);
+  });
+
+  it("serves the call script only to Twilio-signed requests, and sends a script URL (trial accounts refuse inline Twiml)", async () => {
+    const db = setup();
+    const f = fakeFetch();
+    const phone = new Phone(db, phoneConfig(ENV)!, f.impl);
+    const { tg } = fakeTelegram();
+    storeEvent(db, 1, event("on"));
+    await drain(db, new Worker(db, null, tg, null, phone));
+    const body = f.calls[0].body;
+    assert.equal(body.get("Twiml"), null);
+    assert.match(body.get("Url")!, /^https:\/\/jr-api\.example\.test\/twilio\/twiml\//);
+    const path = new URL(body.get("Url")!).pathname;
+    const forged = await phone.routes(async () => undefined).request(path, { method: "POST", headers: { "x-twilio-signature": "nope" }, body: "" });
+    assert.equal(forged.status, 403);
+    const wrongToken = await phone.routes(async () => undefined).request(path.replace(/\.[^.]+$/, ".AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"), { method: "POST" });
+    assert.equal(wrongToken.status, 403);
+    assert.match(await scriptOf(phone, body), /Press 1 to acknowledge/);
   });
 
   it("does not call on notify or log", async () => {
@@ -188,9 +221,9 @@ describe("phone wake-up call", () => {
     // A repeat is placed while unacknowledged.
     assert.ok(await phone.repeat(incident, 1));
     assert.equal(f.calls.length, 2);
-    assert.match(f.calls[1].body.get("Twiml")!, /Repeat call 1 of 3\./);
+    assert.match((await scriptOf(phone, f.calls[1].body)), /Repeat call 1 of 3\./);
 
-    const res = await press(phone, ackUrlOf(f.calls[0].body.get("Twiml")!), "1");
+    const res = await press(phone, ackUrlOf((await scriptOf(phone, f.calls[0].body))), "1");
     assert.equal(res.status, 200);
     assert.match(await res.text(), /Acknowledged/);
     assert.equal((db.prepare("SELECT acked FROM alerts WHERE incident_id = ?").get(incident) as { acked: number }).acked, 1);
@@ -201,7 +234,7 @@ describe("phone wake-up call", () => {
     assert.equal(f.calls.length, 2);
 
     // The same link cannot be used twice.
-    const again = await press(phone, ackUrlOf(f.calls[0].body.get("Twiml")!), "1");
+    const again = await press(phone, ackUrlOf((await scriptOf(phone, f.calls[0].body))), "1");
     assert.match(await again.text(), /already acknowledged or has expired/);
   });
 
@@ -225,7 +258,7 @@ describe("phone wake-up call", () => {
     const f = fakeFetch();
     const phone = new Phone(db, phoneConfig(ENV)!, f.impl);
     await phone.wake(5, 1, { project: "exam portal", flow: "code submission", hits: 2, exam: true });
-    const url = ackUrlOf(f.calls[0].body.get("Twiml")!);
+    const url = ackUrlOf((await scriptOf(phone, f.calls[0].body)));
     const bad = await press(phone, url, "1", "wrong-token");
     assert.equal(bad.status, 403);
     const unsigned = await phone.routes(async () => undefined).request(new URL(url).pathname, { method: "POST", body: new URLSearchParams({ Digits: "1" }) });
