@@ -17,7 +17,8 @@ const RULES: Array<[RegExp, string | ((...m: string[]) => string)]> = [
   // Query strings on URLs
   [/(https?:\/\/[^\s?#'"<>]+)\?[^\s#'"<>]*/g, (_m, base) => `${base}?[query]`],
   // Email addresses
-  [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[email]"],
+  // (starts only where a run of name characters starts, so a long run without "@" is scanned once, not once per position)
+  [/(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[email]"],
   // Long hex runs (hashes, tokens) and long base64-ish runs without dots or slashes
   [/\b[A-Fa-f0-9]{32,}\b/g, "[hex]"],
   [/\b[A-Za-z0-9+_-]{40,}={0,2}/g, "[token]"],
@@ -27,8 +28,12 @@ const RULES: Array<[RegExp, string | ((...m: string[]) => string)]> = [
   [/(?<![\w.])\+?\d(?:[\s-]?\d){9,14}(?![\w.])/g, "[phone]"],
 ];
 
+// Every caller clips the result to 500 characters or less, so nothing past this point is ever shown.
+// Masking only this much keeps one huge string in an error event from stalling the server.
+const MASK_WINDOW = 4096;
+
 export function mask(input: string): string {
-  let out = input;
+  let out = input.length > MASK_WINDOW ? input.slice(0, MASK_WINDOW) : input;
   for (const [re, rep] of RULES) out = out.replace(re, rep as never);
   return out;
 }
