@@ -1,21 +1,74 @@
 # JaagteRaho
 
-**Your app breaks at 2 am. If you don't wake up, JaagteRaho heals it.**
+**Your app breaks at 2 am. JaagteRaho stays awake: it wakes you, or heals it under your rules.**
 
-**You approve every fix, or let it heal on its own under rules you set.**
+**You approve, or let it heal under your rules.**
 
-An AI on-call agent for people who run a live app alone. It reads every error from your app, wakes you only when real users are hurt, tells you the cause in plain words with the file and line, and writes a fix that must pass six code checks and a review. If you sleep through the wake-up and your rule allows it, the fix goes in on its own as a pull request that merges only behind your required checks; if the errors don't drop after your deploy, it is rolled back and you are woken again.
+An AI night watchman for people who run a live app alone. It reads every error from your app, wakes you only when real users are hurt (Telegram alert, voice note, and a real phone call when you turn it on), tells you the cause in plain words with the file and line, and proposes a fix that must pass six code checks and a Claude review. You approve every fix, or let it heal while you sleep: at most 2 heals a night, never in login, payment or grading code, rolled back if the errors don't drop, one-tap undo.
 
 **Measured on 13 Nov 2026, by scripts in this repository, mistakes included:** 20 of 20 planted bugs reached the owner · 0 wrong fixes among the 19 shown · 4 of 4 harmless errors kept quiet · 1.6 s median to a decision, 11.7 s to a checked fix · about $0.013 per error. [How each number was measured](#measured).
 
-- **Live demo:** _link added at deployment_. Break a demo exam portal (no sign-up) and watch the whole loop with a timer.
-- **Demo video (2:45):** _link added at submission_
-- **Paste your error:** _link added at deployment_. Diagnose a Python or JavaScript error from your own public repository.
-- **Connect your app:** _link added at deployment_. Run one command, or send `/new` in Telegram.
-- **Evidence:** _link added at deployment_. Every number below, with how it was measured.
-- **System design:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+It already watches [Faurus](https://faurus.app) (code.faurus.app, about 11,000 accounts), connected for real in learn mode since 14 Nov 2026.
 
-Built for HackGlobal 2026 (Track 01, Agentic and GenAI apps) by Anant Vardhan Pandey.
+| | |
+|---|---|
+| **Live demo** | [jaagteraho.139-84-156-94.sslip.io](https://jaagteraho.139-84-156-94.sslip.io): break a demo exam portal (no sign-up) and watch the whole loop with a timer |
+| **Paste your error** | [/paste](https://jaagteraho.139-84-156-94.sslip.io/paste): diagnose a Python or JavaScript error from your own public repository |
+| **Connect your app** | [/connect](https://jaagteraho.139-84-156-94.sslip.io/connect), or send `/new myapp` to [the Telegram bot](https://t.me/hackglobal_jaagte_raho_bot) |
+| **Evidence** | [/evidence](https://jaagteraho.139-84-156-94.sslip.io/evidence): every number, with how it was measured |
+| **API** | [jr-api.139-84-156-94.sslip.io](https://jr-api.139-84-156-94.sslip.io/health) |
+| **Demo video (2:45)** | _link added at submission_ |
+| **System design** | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+
+Hosted on Vultr (Bangalore). Built for HackGlobal 2026 (Track 01, Agentic and GenAI apps) by Anant Vardhan Pandey.
+
+<!-- Demo GIF: replace with docs/images/demo.gif once recorded (break-it run: Submit, WOKE OWNER, cause, fix, Approve, works again). -->
+![Demo GIF placeholder: a visitor breaks Submit code on the demo exam portal, JaagteRaho wakes the owner, explains the cause and the approved fix makes it work again](docs/images/break-it-run.png)
+
+## Quickstart (60 seconds)
+
+The `npx jaagteraho` installer is not on npm yet, so run it from this repository (Node 18.17+):
+
+```bash
+git clone https://github.com/AVPthegreat/jaagteraho
+npm install --prefix jaagteraho/cli
+
+cd your-app                                   # Django, Flask, FastAPI, Express or Next.js
+node ../jaagteraho/cli/bin/jaagteraho.mjs init
+```
+
+1. `init` registers your app with the hosted API, finds your framework, **shows every change before writing it**, adds the free open-source Sentry SDK and two lines, and sends a test error.
+2. Open the Telegram link it prints (or scan the QR code): a ✅ arrives. Deploy as usual.
+3. Optional: send `/heal` to the bot to choose your rule (`ask` is the default: you approve every fix), and `/exam 2h` when an exam or launch is running.
+
+Already made the app with `/new myapp` in Telegram? Use `init --dsn <the address it gave you>`. No code at all? Point your host's log drain at the logs address on the Connect page.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  A["Your app<br/>(Sentry SDK or log drain)"] --> B["Intake<br/>allowlist + masking"]
+  B --> C["Group repeats<br/>into incidents"]
+  C --> D["Claude Haiku<br/>fixed questions, 5 votes"]
+  D --> E{"Readable rules<br/>decide"}
+  E -- "log" --> F["Logbook +<br/>08:00 summary"]
+  E -- "notify / wake" --> G["Telegram + voice note<br/>+ phone call (Twilio)"]
+  G --> H["Claude Sonnet<br/>cause, file, line, commit"]
+  H --> I["Fix gate<br/>6 code checks + Claude review"]
+  I --> J{"Owner's /heal rule"}
+  J -- "ask" --> K["Owner approves"]
+  J -- "auto / now" --> L["PR auto-merges behind<br/>required checks"]
+  L --> M["Watch 30 min:<br/>proved, or rolled back + wake"]
+  subgraph V["Vultr, Bangalore (2 vCPU / 8 GB)"]
+    B
+    C
+    E
+    F
+    I
+  end
+```
+
+More detail, including the high- and low-level design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Why: I am the person it wakes
 
@@ -141,11 +194,11 @@ Sentry, PostHog and others diagnose errors for paying teams; Reticle and similar
 
 ## What it runs on
 
-- **Vultr (hackathon sponsor):** the backend (intake, worker, Telegram bot, database and the demo portal) runs on a Vultr Compute instance.
+- **Vultr (hackathon sponsor):** everything runs on one Vultr Cloud Compute instance in Bangalore (2 vCPU, 8 GB): intake, worker, Telegram bot, database, the demo portal and the website, behind Caddy with Docker Compose.
 - **Claude through Anthropic's API:** decisions and fix review (Claude Haiku 5.5) and diagnosis (Claude Sonnet 5.5).
 - **Gnani:** speaks the wake-up call in Hindi or English (Timbre text-to-speech), sent as a Telegram voice note.
 - **Twilio (optional):** places the real phone call on a wake, when it is set up (`JR_TWILIO_*` in `watcher/.env`).
-- **Telegram** for alerts, **Vercel** for the website.
+- **Telegram** for alerts.
 
 ## Repository
 
@@ -155,7 +208,7 @@ Sentry, PostHog and others diagnose errors for paying teams; Reticle and similar
 | [`cli/`](cli) | `npx jaagteraho init` and `test`: connects an app in one command |
 | [`sandbox/`](sandbox) | The demo exam portal with three faults planted on purpose (Django, sentry-sdk 2.71.0) |
 | [`bench/`](bench) | JR-Bench: 7 generated sample apps (6 Python, 1 Node.js), planted bugs with hidden tests, results |
-| [`site/`](site) | The public website: break-it page, paste-your-error, connect, evidence (Next.js, Vercel) |
+| [`site/`](site) | The public website: break-it page, paste-your-error, connect, evidence (Next.js) |
 | [`deploy/`](deploy) | Docker Compose and Caddy for the Vultr server, the deployment guide and a 20-check smoke test |
 | [`docs/`](docs) | Architecture (high- and low-level design) |
 
@@ -195,7 +248,7 @@ Send `/start <link code>` to your Telegram bot to receive alerts. Deployment: [d
 
 ## What we do not claim
 
-JaagteRaho is not the first tool to diagnose errors or propose fixes. It is tested end to end on Django and Flask with sentry-sdk 2.71.0 and on Express with @sentry/node 11.12, and its setup command on sample Django, Flask, FastAPI, Express and Next.js apps; Next.js and FastAPI have not been run end to end with a live error yet. Model vote shares are not calibrated probabilities. The benchmark apps are generated and small; the real-bug set is 30 cases. The accuracy figures above are what these runs measured, nothing more. Self-healing runs for real on the demo portal; on a connected app it has been tested against a stand-in GitHub in the unit tests, not yet on a live repository.
+JaagteRaho is not the first tool to diagnose errors or propose fixes. It is tested end to end on Django and Flask with sentry-sdk 2.71.0 and on Express with @sentry/node 11.12, and its setup command on sample Django, Flask, FastAPI, Express and Next.js apps; Next.js and FastAPI have not been run end to end with a live error yet. Model vote shares are not calibrated probabilities. The benchmark apps are generated and small; the real-bug set is 42 cases. The accuracy figures above are what these runs measured, nothing more. Self-healing runs for real on the demo portal; on a connected app it has been tested against a stand-in GitHub in the unit tests, not yet on a live repository.
 
 ## How this was built
 
