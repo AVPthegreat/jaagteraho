@@ -1,6 +1,6 @@
 // Runs queued jobs: decide, alert, diagnose, gate. One job per incident event.
 
-import { spendContext, type AI } from "../ai/claude.js";
+import { spendContext, type AI, type Lane } from "../ai/claude.js";
 import { creditLeftForProject } from "../projects.js";
 import { bus } from "../bus.js";
 import { getSettings, kvGet, kvSet, type DB } from "../db/db.js";
@@ -29,6 +29,9 @@ const PING_EVERY_MS = 2 * 60 * 1000;
 const MAX_PINGS = 3;
 const CONCURRENCY = 4;
 const DAILY_SONNET = 80; // about $0.75 a day at the measured $0.009 per diagnosis
+/** Live diagnoses a day per lane, so the demo and outside apps can never use up Faurus's (ai/claude.ts has the $ caps). */
+export const DAILY_DIAGNOSES: Record<Lane, number> = { faurus: DAILY_SONNET, demo: 80, outside: 40, paste: 0 };
+const VOICE_REUSE_MS = 15 * 60 * 1000;
 const SANDBOX_LIVE_PER_FAULT = 15;
 const MAX_WAKES_PER_NIGHT = 3;
 const OUTSIDE_PER_DAY = 5;
@@ -58,6 +61,22 @@ export function sourceFor(project: ProjectRow): SourceProvider | null {
   if (!project.repo) return null;
   if (project.repo.startsWith("local:")) return new LocalSource(project.repo.slice(6));
   return new GitHubSource(project.repo, tokenFor(project), `project:${project.id}`);
+}
+
+/** The daily budget an app's model calls are charged to: the demo, an outside developer's app, or our own. */
+export function laneFor(db: DB, projectId: number): Lane {
+  const p = db.prepare("SELECT kind, settings FROM projects WHERE id = ?").get(projectId) as { kind: string; settings: string } | undefined;
+  if (!p) return "faurus";
+  if (p.kind === "sandbox") return "demo";
+  return p.settings.includes('"outside":true') ? "outside" : "faurus";
+}
+
+/**
+ * Real phone calls ring the founder's own number. The public demo is pressed by anonymous visitors,
+ * so it never rings anyone unless JR_DEMO_PHONE=1 is set (only for the founder's own recorded demo).
+ */
+export function phoneAllowedFor(kind: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  return kind !== "sandbox" || env.JR_DEMO_PHONE === "1";
 }
 
 export class Worker {
@@ -141,7 +160,7 @@ export class Worker {
   /** Every model call made for a job is charged to that job's app. */
   private process(job: Job): Promise<void> {
     const own = this.db.prepare("SELECT project_id FROM incidents WHERE id = ?").get(job.incident_id) as { project_id: number } | undefined;
-    return spendContext.run({ projectId: own?.project_id ?? 0 }, () => this.processJob(job));
+    return spendContext.run({ projectId: own?.project_id ?? 0, lane: own ? laneFor(this.db, own.project_id) : "faurus" }, () => this.processJob(job));
   }
 
   private async processJob(job: Job) {
@@ -239,7 +258,7 @@ export class Worker {
     // A real phone call on a WAKE, only when a fresh alert card went out (so Acknowledge and the repeats
     // have a card to work with). It never blocks the alert or the diagnosis, and a failure is only logged.
     const phoneDone =
-      decision.action === "wake" && cardSent && this.phone
+      decision.action === "wake" && cardSent && this.phone && phoneAllowedFor(project.kind)
         ? this.phone
             .wake(inc.id, project.id, { project: project.name, flow: decision.facts.critical ?? event.transaction ?? "the app", hits: inc.hits, exam: decision.facts.exam_open })
             .catch((e) => console.error("phone:", String(e)))
@@ -248,7 +267,8 @@ export class Worker {
     const voiceDone =
       decision.action === "wake" && this.voice
         ? this.voice
-            .wakeCall({ project: project.name, flow: decision.facts.critical ?? event.transaction ?? "the app", hits: inc.hits, exam: decision.facts.exam_open })
+            // One clip per incident per 15 minutes, reused by every run in between (voice.ts).
+            .wakeCall({ project: project.name, flow: decision.facts.critical ?? event.transaction ?? "the app", hits: inc.hits, exam: decision.facts.exam_open }, { key: `incident:${inc.id}`, reuseMs: VOICE_REUSE_MS })
             .then(async (clip) => {
               if (!clip) return;
               feed("voice", { url: `/public/voice/${clip.id}` });
@@ -337,7 +357,7 @@ export class Worker {
       !!this.ai &&
       this.liveDiagnosesToday(incidentId) < perIncident &&
       (!outside || this.projectDiagnosesToday(project.id) < OUTSIDE_PER_DAY) &&
-      this.ai.guard.countToday("diagnosis") < DAILY_SONNET &&
+      this.ai.guard.countToday("diagnosis", laneFor(this.db, project.id)) < DAILY_DIAGNOSES[laneFor(this.db, project.id)] &&
       this.ai.guard.pick(this.ai.diagnosisModel, this.ai.decisionModel) !== null;
 
     if (!canLive) {

@@ -2,6 +2,7 @@
 // SENTRY_DSN points at JaagteRaho. Answers fast so the app never waits on us.
 
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { timingSafeEqual } from "node:crypto";
 import { brotliDecompressSync, gunzipSync, inflateSync } from "node:zlib";
 import type { DB, Project } from "../db/db.js";
@@ -117,6 +118,9 @@ export function intakeRoutes({ db, now = () => new Date(), onStored }: IntakeOpt
     return c.json({ id: eventId });
   };
 
+  // Bodies with no Content-Length are counted while they stream and cut off at the limit (server.ts
+  // also has a global 256 KB limit; this one is the envelope's own, smaller one).
+  app.use("/api/:projectId/envelope*", bodyLimit({ maxSize: MAX_BODY_BYTES, onError: (c) => c.json({ detail: "envelope too large" }, 413) }));
   app.post("/api/:projectId/envelope/", handler);
   app.post("/api/:projectId/envelope", handler);
   return app;

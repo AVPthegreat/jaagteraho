@@ -16,6 +16,10 @@ npx jaagteraho test                 # send a test error (reads SENTRY_DSN or .en
 - installs the package with npm, pnpm, yarn or bun, or into the project's Python virtual environment (`venv`, `.venv` or `env`); `--no-install` skips this. For Python it also adds `sentry-sdk` to `requirements.txt`
 - sends a test error (`--no-test` to skip). You get a ✅ on Telegram.
 
-Running it twice changes nothing. Nothing is sent anywhere except the one test error. Self-hosting? Set `JAAGTERAHO_URL` or pass `--server`.
+Running it twice changes nothing. Nothing is sent anywhere except the new app's name (to register it) and the one test error.
+
+By default `init` registers the app with the hosted JaagteRaho API (`https://jr-api.15-252-108-184.sslip.io`). Self-hosting? Set `JAAGTERAHO_URL` or pass `--server https://your-watcher`.
+
+Needs Node.js 18.17 or newer. Works on macOS, Linux and Windows.
 
 MIT licence.

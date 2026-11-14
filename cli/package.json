@@ -2,22 +2,46 @@
   "name": "jaagteraho",
   "version": "0.1.0",
   "description": "Connect your app to JaagteRaho, an AI night watchman: one command adds the open-source Sentry SDK, points it at JaagteRaho and sends a test error.",
+  "keywords": [
+    "sentry",
+    "error-monitoring",
+    "on-call",
+    "telegram",
+    "ai",
+    "alerts",
+    "cli"
+  ],
+  "homepage": "https://github.com/AVPthegreat/jaagteraho#readme",
+  "bugs": {
+    "url": "https://github.com/AVPthegreat/jaagteraho/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AVPthegreat/jaagteraho.git",
+    "directory": "cli"
+  },
+  "license": "MIT",
   "type": "module",
   "bin": {
     "jaagteraho": "bin/jaagteraho.mjs"
   },
   "files": [
     "bin",
-    "lib"
+    "lib",
+    "README.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=18.17"
   },
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test test/*.test.mjs",
+    "prepublishOnly": "npm test"
   },
   "dependencies": {
     "qrcode-terminal": "^0.12.0"
   },
-  "license": "MIT"
+  "publishConfig": {
+    "access": "public"
+  }
 }

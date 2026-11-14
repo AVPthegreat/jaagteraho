@@ -17,6 +17,7 @@ import { connectRoutes } from "./web/connect.js";
 import { githubRoutes } from "./github/app.js";
 import { logRoutes } from "./intake/logs.js";
 import { cors } from "hono/cors";
+import { bodyLimits } from "./web/limits.js";
 import { makeVoice } from "./voice/voice.js";
 import { makePhone } from "./phone/phone.js";
 import { ensureSelfProject, reportSelf } from "./selfwatch.js";
@@ -60,6 +61,8 @@ app.onError((err, c) => {
   reportSelf(db, err, `${c.req.method} ${c.req.routePath || c.req.path}`);
   return c.json({ error: "Something went wrong on our side. It has been reported." }, 500);
 });
+// Before every route: no handler may read an unbounded body (256 KB, 1 MB on /logs/*).
+app.use("*", bodyLimits());
 app.get("/health", (c) => c.json({ ok: true, watching_itself_as: selfId }));
 app.route("/", intakeRoutes({ db }));
 app.route("/", logRoutes(db));

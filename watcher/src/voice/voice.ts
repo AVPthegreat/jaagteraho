@@ -3,14 +3,20 @@
 
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 export type Clip = { id: string; ogg: Buffer };
 export type WakeInfo = { project: string; flow: string; hits: number; exam: boolean };
+/** key: one clip per key (an incident) is made at most every reuseMs; calls in between get the same clip. */
+export type WakeOpts = { key?: string; reuseMs?: number };
+
+/** Clips kept on disk: the newest KEEP_CLIPS, and none older than KEEP_DAYS. */
+export const KEEP_CLIPS = 200;
+export const KEEP_DAYS = 3;
 
 export interface Voice {
-  wakeCall(info: WakeInfo): Promise<Clip | null>;
+  wakeCall(info: WakeInfo, opts?: WakeOpts): Promise<Clip | null>;
   get(id: string, format?: "ogg" | "mp3"): Promise<Buffer | null>;
 }
 
@@ -60,16 +66,54 @@ function transcode(input: Buffer, args: string[]): Promise<Buffer> {
 
 /** Stores clips on disk so the public page can play the same wake-up call. */
 export abstract class StoredVoice implements Voice {
+  // Recent clips by key, so a fault pressed again and again (the public demo) is synthesized once per window.
+  private recent = new Map<string, { until: number; clip: Promise<Clip> }>();
   constructor(protected dir: string) {}
   protected abstract synthesize(text: string): Promise<Buffer>;
-  async wakeCall(info: WakeInfo): Promise<Clip | null> {
+  protected encode(audio: Buffer): Promise<[Buffer, Buffer | null]> {
+    return Promise.all([toOggOpus(audio), toMp3(audio).catch(() => null)]);
+  }
+
+  async wakeCall(info: WakeInfo, opts: WakeOpts = {}): Promise<Clip | null> {
+    const now = Date.now();
+    const reuseMs = opts.reuseMs ?? 0;
+    for (const [k, v] of this.recent) if (now >= v.until) this.recent.delete(k);
+    const hit = opts.key && reuseMs > 0 ? this.recent.get(opts.key) : undefined;
+    if (hit) return hit.clip;
+    const clip = this.make(info);
+    if (opts.key && reuseMs > 0) {
+      this.recent.set(opts.key, { until: now + reuseMs, clip });
+      // A failed synthesis is not reused: the next run tries again.
+      clip.catch(() => this.recent.get(opts.key!)?.clip === clip && this.recent.delete(opts.key!));
+    }
+    return clip;
+  }
+
+  private async make(info: WakeInfo): Promise<Clip> {
     const audio = await this.synthesize(wakeText(info, (process.env.JR_VOICE_LANG as "en" | "hi") ?? "hi"));
-    const [ogg, mp3] = await Promise.all([toOggOpus(audio), toMp3(audio).catch(() => null)]);
+    const [ogg, mp3] = await this.encode(audio);
     const id = randomBytes(8).toString("hex");
     await mkdir(this.dir, { recursive: true });
     await writeFile(join(this.dir, `${id}.ogg`), ogg);
     if (mp3) await writeFile(join(this.dir, `${id}.mp3`), mp3);
+    await this.prune().catch((e) => console.error("voice prune:", e));
     return { id, ogg };
+  }
+
+  /** Deletes clips older than KEEP_DAYS and all but the newest KEEP_CLIPS. Returns how many clips went. */
+  async prune(now = Date.now(), keep = KEEP_CLIPS, days = KEEP_DAYS): Promise<number> {
+    const names = await readdir(this.dir).catch(() => [] as string[]);
+    const clips = new Map<string, number>();
+    for (const n of names) {
+      const m = n.match(/^([0-9a-f]{16})\.(ogg|mp3)$/);
+      if (!m) continue;
+      const t = (await stat(join(this.dir, n)).catch(() => null))?.mtimeMs ?? 0;
+      clips.set(m[1], Math.max(clips.get(m[1]) ?? 0, t));
+    }
+    const newestFirst = [...clips].sort((a, b) => b[1] - a[1]);
+    const gone = newestFirst.filter(([, t], i) => i >= keep || now - t > days * 86_400_000).map(([id]) => id);
+    for (const id of gone) for (const ext of ["ogg", "mp3"]) await unlink(join(this.dir, `${id}.${ext}`)).catch(() => undefined);
+    return gone.length;
   }
   async get(id: string, format: "ogg" | "mp3" = "ogg"): Promise<Buffer | null> {
     if (!/^[0-9a-f]{16}$/.test(id)) return null;

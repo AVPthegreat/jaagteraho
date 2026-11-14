@@ -4,6 +4,8 @@ import { randomBytes, randomInt } from "node:crypto";
 import type { DB } from "./db/db.js";
 
 export const NEW_APPS_PER_DAY = 10;
+/** Of today's new-app slots, this many are kept for the website and the setup command (Connect): Telegram /new cannot take them. */
+export const CONNECT_RESERVE = 3;
 export const APPS_PER_OWNER = 3;
 export const FREE_CREDIT_USD = Number(process.env.JR_FREE_CREDIT_USD ?? 5);
 
@@ -61,6 +63,15 @@ export function createOutsideApp(db: DB, name: string, repo: string | null, heal
   const code = randomBytes(6).toString("hex");
   db.prepare("INSERT INTO link_codes (code, project_id, expires_at) VALUES (?, ?, ?)").run(code, id, new Date(Date.now() + 7 * 86_400_000).toISOString());
   return { id, name: uniqueName, dsn: dsnFor(key, id), logs_url: logsUrlFor(key, id), link_code: code };
+}
+
+/**
+ * Creates an outside app only if today's limit has room for this channel. The count and the insert are one
+ * transaction, so requests racing each other (each waiting on GitHub first) cannot overrun the limit.
+ */
+export function createOutsideAppIfRoom(db: DB, via: "connect" | "telegram", name: string, repo: string | null, heal: "ask" | "auto-after" = "ask"): NewApp | null {
+  const limit = via === "connect" ? NEW_APPS_PER_DAY : NEW_APPS_PER_DAY - CONNECT_RESERVE;
+  return db.transaction(() => (outsideAppsToday(db) >= limit ? null : createOutsideApp(db, name, repo, heal))).immediate();
 }
 
 export function appsOwnedBy(db: DB, userId: number): number {

@@ -10,9 +10,7 @@ import { createInterface } from "node:readline/promises";
 import { detect } from "../lib/detect.mjs";
 import { applyPlan, makePlan, preview } from "../lib/plan.mjs";
 import { sendTestError } from "../lib/send.mjs";
-
-// The hosted JaagteRaho server. Override with --server or JAAGTERAHO_URL (for self-hosting).
-const DEFAULT_SERVER = process.env.JAAGTERAHO_URL ?? "http://127.0.0.1:8787";
+import { serverUrl } from "../lib/server.mjs";
 
 const args = process.argv.slice(2);
 const cmd = args[0] && !args[0].startsWith("-") ? args[0] : "init";
@@ -60,7 +58,7 @@ async function showQr(url) {
 }
 
 async function register(server, name, repo) {
-  const res = await fetch(`${server.replace(/\/$/, "")}/public/connect`, {
+  const res = await fetch(`${server}/public/connect`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ session: `cli-${randomBytes(8).toString("hex")}`, name, repo: repo ?? "", consent: true }),
@@ -83,7 +81,8 @@ async function init() {
   let dsn = typeof flag("dsn") === "string" ? flag("dsn") : null;
   let telegram = null;
   if (!dsn) {
-    const server = typeof flag("server") === "string" ? flag("server") : DEFAULT_SERVER;
+    // The hosted server (lib/server.mjs); --server or JAAGTERAHO_URL for self-hosting.
+    const server = serverUrl(flag("server"));
     const repo = gitRepo();
     const name = await ask(`App name ${dim(`(${basename(root)})`)}: `, basename(root));
     console.log(

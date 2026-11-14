@@ -2,6 +2,12 @@
 // PASS on the fixed code. Only for local Python projects we own (the demo portal), only for tests
 // that pass a strict check: no file, network, process or environment access, imports limited to
 // the code under test and a few standard modules. Runs in throwaway copies with a clean environment.
+//
+// Known limit (14 Nov 2026): the test runs as the same OS user as the watcher, so the OS alone would let
+// it read /proc/<watcher pid>/environ, where Docker's env_file puts the secrets. Three layers stop that:
+// the syntax check (no os, io, open, pathlib...), a Python audit hook in RUNNER that refuses /proc, /sys,
+// /run, /data and .env files, process starts, sockets and C libraries, and the clean child environment.
+// The complete fix is to run proofs in a separate container or as a separate user with no secrets.
 
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -70,7 +76,58 @@ print(json.dumps(sorted(set(bad))))
 
 // Layer 2: the test process may not start any other process, write big files, use much memory
 // or run long. Limits are set inside the child before the test is imported.
-const RUNNER = String.raw`
+export const RUNNER = String.raw`
+import os, sys, tempfile
+# Layer 3: an audit hook (it cannot be removed from Python code) refuses what layer 1 should already
+# have caught: reading /proc (another process's environment), /sys, /run, the watcher's data, .env files;
+# writing outside this copy and the temp folder; starting processes; sockets; loading C libraries.
+_root = os.path.realpath(os.getcwd()) + os.sep
+_tmp = os.path.realpath(tempfile.gettempdir()) + os.sep
+_deny = ("/proc", "/sys", "/run", "/var/run", "/data", "/dev", "/root", "/home")
+_dev_ok = {"/dev/null", "/dev/urandom", "/dev/zero"}
+_blocked = {"subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn", "os.fork", "os.forkpty", "os.kill", "os.killpg",
+            "socket.connect", "socket.bind", "socket.sendto", "socket.sendmsg", "socket.getaddrinfo", "ctypes.dlopen", "ctypes.dlsym", "ctypes.cdata",
+            }
+_wflags = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_APPEND | os.O_TRUNC
+_busy = [False]
+def _bad_path(p):
+    if p in _dev_ok:
+        return False
+    name = os.path.basename(p)
+    return any(p == d or p.startswith(d + "/") for d in _deny) or name == ".env" or name.startswith(".env.")
+def _hook(event, args):
+    if _busy[0]:
+        return
+    if event in _blocked or event.startswith("subprocess.") or event.startswith("os.exec") or event.startswith("os.spawn"):
+        raise PermissionError("not allowed in a regression test: " + event)
+    if event in ("open", "os.listdir", "os.scandir", "shutil.copyfile", "os.remove", "os.rename", "os.rmdir", "os.mkdir", "os.symlink", "os.link", "os.truncate", "os.chmod", "os.chown"):
+        path = args[0] if args else None
+        if path is None or isinstance(path, int):
+            return
+        _busy[0] = True
+        try:
+            p = os.path.realpath(os.fsdecode(path))
+        finally:
+            _busy[0] = False
+        # rename, link, symlink and copyfile have a destination too.
+        dest = None
+        if event in ("os.rename", "os.link", "os.symlink", "shutil.copyfile") and len(args) > 1 and isinstance(args[1], (str, bytes)):
+            _busy[0] = True
+            try:
+                dest = os.path.realpath(os.fsdecode(args[1]))
+            finally:
+                _busy[0] = False
+        if _bad_path(p) or (dest and _bad_path(dest)):
+            raise PermissionError("not allowed in a regression test: " + p)
+        if dest and not (dest + os.sep).startswith(_root) and not dest.startswith(_tmp):
+            raise PermissionError("not allowed in a regression test: writing " + dest)
+        writes = event != "open" and event not in ("os.listdir", "os.scandir")
+        if event == "open":
+            mode, flags = (args[1] if len(args) > 1 else None), (args[2] if len(args) > 2 else 0)
+            writes = (isinstance(mode, str) and any(ch in mode for ch in "wax+")) or (isinstance(flags, int) and bool(flags & _wflags))
+        if writes and not (p + os.sep).startswith(_root) and not p.startswith(_tmp) and p not in _dev_ok:
+            raise PermissionError("not allowed in a regression test: writing " + p)
+sys.addaudithook(_hook)
 import resource, unittest
 for name, value in (("RLIMIT_NPROC", 0), ("RLIMIT_FSIZE", 1 << 20), ("RLIMIT_CPU", 15), ("RLIMIT_AS", 1 << 30), ("RLIMIT_CORE", 0)):
     lim = getattr(resource, name, None)
@@ -122,7 +179,7 @@ function runIn(dir: string, settings: string | null): "passed" | "failed" | "err
 // The fixed code runs too (the test imports it), so the lines the fix adds get a check of their own:
 // nothing that reaches the file system, processes, the network or dynamic code.
 const RISKY_IN_FIX =
-  /\b(os|sys|subprocess|socket|shutil|ctypes|importlib|pathlib|pickle|marshal|signal|threading|multiprocessing|asyncio|http|urllib|requests|httpx|open|eval|exec|compile|__import__|getattr|setattr|delattr|globals|locals|vars|breakpoint|input)\b/;
+  /\b(os|io|sys|subprocess|socket|shutil|ctypes|importlib|pathlib|pickle|marshal|signal|threading|multiprocessing|asyncio|http|urllib|xmlrpc|ftplib|smtplib|telnetlib|requests|httpx|open|eval|exec|compile|__import__|getattr|setattr|delattr|globals|locals|vars|breakpoint|input)\b/;
 
 export function riskyFixLines(original: string, patched: string): string[] {
   const before = new Set(original.split("\n").map((l) => l.trim()));

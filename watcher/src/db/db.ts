@@ -196,6 +196,9 @@ CREATE INDEX IF NOT EXISTS phone_calls_incident ON phone_calls (incident_id);
 function migrate(db: DB) {
   const has = (table: string, col: string) => (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).some((c) => c.name === col);
   if (!has("spend", "project_id")) db.exec("ALTER TABLE spend ADD COLUMN project_id INTEGER");
+  // Which daily budget a call was charged to (ai/claude.ts Lane); older rows count as "faurus".
+  if (!has("spend", "lane")) db.exec("ALTER TABLE spend ADD COLUMN lane TEXT");
+  db.exec("CREATE INDEX IF NOT EXISTS spend_at ON spend(at)");
   if (!has("projects", "github_installation")) db.exec("ALTER TABLE projects ADD COLUMN github_installation INTEGER");
   // Self-healing: a server-only secret per app, and whether each event carried it (heal.ts).
   if (!has("projects", "ingest_secret")) db.exec("ALTER TABLE projects ADD COLUMN ingest_secret TEXT");
