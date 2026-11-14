@@ -146,25 +146,28 @@ function QuizkartAlert() {
 export default function How() {
   return (
     <>
-      <section className="page-head field-night" aria-labelledby="how-h">
-        <div className="frame grid">
+      <section className="page-head" aria-labelledby="how-h">
+        <div className="frame">
+          <p className="eyebrow">How it works</p>
           <h1 id="how-h" className="display" data-rv>
-            How it works
+            Connect once. <em>Sleep.</em>
           </h1>
-          <p className="lead" data-rv style={{ "--d": 1 } as React.CSSProperties}>Connect once. Then your phone tells you when it matters.</p>
+          <p className="lead" data-rv style={{ "--d": 1 } as React.CSSProperties}>
+            Your phone tells you when it matters, with the cause and a checked fix. Every step, the bot&apos;s commands, the cost and the heal rules.
+          </p>
         </div>
       </section>
 
       <section className="section">
         <div className="frame">
-          <div className="prose" style={{ marginBottom: "clamp(88px, 10vw, 160px)" }}>
+          <div className="prose" style={{ marginBottom: "clamp(48px, 6vw, 88px)" }}>
             <p className="lead" data-rv>
               JaagteRaho is not a dashboard you keep open. You connect your app once, in about five minutes. After that it watches every error day and
               night, decides which ones deserve you, and tells you on Telegram what broke, why, and how to fix it.
             </p>
           </div>
 
-          <div className="grid doc">
+          <div className="doc">
             <h2 id="see-h" data-rv>
               What you will see
             </h2>
@@ -192,7 +195,7 @@ export default function How() {
             </div>
           </div>
 
-          <div className="grid doc">
+          <div className="doc">
             <h2 id="setup-h" data-rv>
               Set it up: about 5 minutes, once
             </h2>
@@ -238,8 +241,8 @@ export default function How() {
         </div>
       </section>
 
-      <section className="section field-night" aria-labelledby="night-h">
-        <div className="frame grid doc">
+      <section className="section night-band" aria-labelledby="night-h">
+        <div className="frame doc night">
           <div className="night-side">
             <h2 id="night-h" data-rv>
               When your app breaks at 2 am
@@ -264,7 +267,7 @@ export default function How() {
 
       <section className="section">
         <div className="frame">
-          <div className="grid doc">
+          <div className="doc">
             <h2 id="labels-h" data-rv>
               The three fix labels
             </h2>
@@ -291,7 +294,7 @@ export default function How() {
             </div>
           </div>
 
-          <div className="grid doc">
+          <div className="doc">
             <h2 id="cmd-h" data-rv>
               Things you can tell the bot
             </h2>
@@ -319,7 +322,7 @@ export default function How() {
             </div>
           </div>
 
-          <div className="grid doc">
+          <div className="doc">
             <h2 id="cost-h" data-rv>
               What it costs
             </h2>
@@ -338,7 +341,7 @@ export default function How() {
             </div>
           </div>
 
-          <div className="grid doc">
+          <div className="doc">
             <h2 id="heal-h" data-rv>
               Your heal rule
             </h2>
@@ -391,7 +394,7 @@ export default function How() {
             </div>
           </div>
 
-          <div className="grid doc">
+          <div className="doc">
             <h2 id="never-h" data-rv>
               What it never does
             </h2>
@@ -410,8 +413,8 @@ export default function How() {
         </div>
       </section>
 
-      <section className="section field-surface" aria-labelledby="try-h">
-        <div className="frame grid doc">
+      <section className="section" aria-labelledby="try-h">
+        <div className="frame doc">
           <h2 id="try-h" data-rv>
             See it for yourself in a minute
           </h2>

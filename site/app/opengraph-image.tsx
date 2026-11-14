@@ -14,16 +14,16 @@ export default function Image() {
   );
   return new ImageResponse(
     (
-      <div style={{ width: "100%", height: "100%", display: "flex", background: "#05070a", fontFamily: "sans-serif" }}>
+      <div style={{ width: "100%", height: "100%", display: "flex", background: "#06080d", fontFamily: "sans-serif" }}>
         <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", width: 520, padding: "56px 0 56px 64px", flexShrink: 0 }}>
           <span style={{ color: "#ffffff", fontSize: 34, fontWeight: 700 }}>JaagteRaho</span>
           <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
             <span style={{ color: "#ffffff", fontSize: 70, fontWeight: 800, lineHeight: 0.95, letterSpacing: -2 }}>YOUR APP BREAKS AT 2 AM.</span>
             <span style={{ color: "#a9b0c2", fontSize: 30, lineHeight: 1.3 }}>If you don&apos;t wake up, JaagteRaho heals it.</span>
           </div>
-          <span style={{ color: "#f2b441", fontSize: 22 }}>Break the demo yourself · HackGlobal 2026</span>
+          <span style={{ color: "#f5b544", fontSize: 22 }}>Break the demo yourself · HackGlobal 2026</span>
         </div>
-        <div style={{ flex: 1, display: "flex", background: "#f2b441", marginTop: 96, marginLeft: 40, padding: "48px 0 0 48px" }}>
+        <div style={{ flex: 1, display: "flex", background: "#f5b544", marginTop: 96, marginLeft: 40, padding: "48px 0 0 48px" }}>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#0e1621", borderRadius: "14px 0 0 0", padding: "16px 32px" }}>
             {row("00:00", "KeyError on /api/submit")}
             <div style={{ display: "flex", gap: 24, padding: "18px 0", borderBottom: "1px solid #2b3a4a", alignItems: "center" }}>

@@ -86,10 +86,10 @@ export function PasteForm({ initialId, intro }: { initialId: string | null; intr
   };
 
   return (
-    <div className="grid split">
+    <div className="split">
       <div className="side">
         {intro}
-        <form action={submit} className="form" data-rv>
+        <form action={submit} className="form panel" data-rv>
           <label htmlFor="repo">Public GitHub repository</label>
           <input className="input" id="repo" name="repo" type="url" required placeholder="https://github.com/you/your-app" />
           <label htmlFor="tb" className="gap">
@@ -111,6 +111,11 @@ export function PasteForm({ initialId, intro }: { initialId: string | null; intr
       <div className="main" data-rv style={{ "--d": 1 } as React.CSSProperties}>
         <div className="log" data-ui aria-live="polite">
           <div className="log-head">
+            <span className="dots" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
             <span className="label">{result ? result.repo : "Diagnosis"}</span>
             {result && (
               <button type="button" className="btn quiet" onClick={share}>

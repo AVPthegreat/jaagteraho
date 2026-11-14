@@ -7,8 +7,9 @@ export default async function Paste({ searchParams }: { searchParams: Promise<{ 
   const { id } = await searchParams;
   return (
     <>
-      <section className="page-head field-night" aria-labelledby="paste-h">
-        <div className="frame grid">
+      <section className="page-head" aria-labelledby="paste-h">
+        <div className="frame">
+          <p className="eyebrow">Try it on one error</p>
           <h1 id="paste-h" className="display" data-rv>
             Paste your error
           </h1>

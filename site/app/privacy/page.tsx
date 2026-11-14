@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { HOSTED_ON } from "../site";
 
 export const metadata: Metadata = { title: "Privacy · JaagteRaho" };
 
@@ -14,7 +15,7 @@ const NOTES: Array<[string, React.ReactNode]> = [
   [
     "Who processes it",
     <>
-      The watcher runs on an AWS server in Mumbai, India (it moves to Vultr when our hackathon credits arrive). Masked error details and the relevant
+      The watcher runs on {HOSTED_ON}. Masked error details and the relevant
       source files are sent to Claude through Anthropic&apos;s API (United States) for decisions and diagnosis. Alerts go to the owner on Telegram.
       Spoken wake-up calls use a text-to-speech provider and contain only flow names and counts.
     </>,
@@ -27,16 +28,21 @@ const NOTES: Array<[string, React.ReactNode]> = [
     </>,
   ],
   [
-    "What it never does",
-    <>Merge, deploy, restart or roll back anything on its own, or change login, payments, grading or settings code.</>,
+    "What it will not do",
+    <>
+      Push straight to your main branch, deploy or restart your servers, or touch login, sessions, payments, exams, grading, settings, config, CI or
+      infrastructure code on its own. By default you approve every fix. If you choose a heal rule and give write access to one repository, a heal is a
+      pull request that merges only behind your required checks, is rolled back if the errors don&apos;t drop, and can be undone in one tap.
+    </>,
   ],
 ];
 
 export default function Privacy() {
   return (
     <>
-      <section className="page-head field-night" aria-labelledby="privacy-h">
-        <div className="frame grid">
+      <section className="page-head" aria-labelledby="privacy-h">
+        <div className="frame">
+          <p className="eyebrow">Privacy</p>
           <h1 id="privacy-h" className="display" data-rv>
             What it keeps
           </h1>
@@ -46,7 +52,7 @@ export default function Privacy() {
       <section className="section">
         <div className="frame">
           {NOTES.map(([title, body]) => (
-            <div className="grid doc" key={title}>
+            <div className="doc" key={title}>
               <h2 data-rv>{title}</h2>
               <div className="body">
                 <p data-rv>
@@ -55,7 +61,7 @@ export default function Privacy() {
               </div>
             </div>
           ))}
-          <div className="grid doc">
+          <div className="doc">
             <h2 data-rv>Deleting your data</h2>
             <div className="body">
               <p data-rv>
