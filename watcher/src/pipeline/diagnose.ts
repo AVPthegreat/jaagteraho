@@ -46,6 +46,7 @@ Rules for edits:
 - "find" must be copied exactly from the file and occur once. Keep indentation.
 - Do not add imports of new packages, URLs, network calls, file deletion, or changes to login, permissions, payments, grading, settings or dependencies.
 - Prefer handling the bad case with a clear message for the user over hiding the error.
+- Never invent a default for a value the user or client should have sent (for example or "python", a guessed language, id or amount): the request would silently do something the user did not ask for. Reject it with a clear message that lists the valid choices.
 - If no safe fix exists, return an empty edits list and say why in cause_technical.
 Write cause_plain for the app owner at 2 am: plain words, what users saw, why.
 Some files are marked as imported by the code in the stack trace: the real cause may be there (a shared helper, a setting, a validator) even though the crash happened elsewhere. Put the fix where the cause is.
