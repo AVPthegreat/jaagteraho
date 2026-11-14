@@ -53,11 +53,20 @@ function insertNodeTop(text, line) {
   return [...lines.slice(0, i), line, ...lines.slice(i)].join("\n");
 }
 
+// A DSN is written into the person's source code, so only plain URL characters are accepted:
+// no quotes, spaces, backslashes or "$", whatever a typo or a server answer contains.
+const DSN_SHAPE = /^https?:\/\/[A-Za-z0-9]+@[A-Za-z0-9.-]+(?::\d{1,5})?(?:\/[A-Za-z0-9._-]+)*\/\d+\/?$/;
+
+export function validDsn(dsn) {
+  return typeof dsn === "string" && dsn.length <= 300 && DSN_SHAPE.test(dsn);
+}
+
 /**
  * Returns { changes: [{ file, action, content, summary }], install: string[] | null, manual: string[] }.
- * action is "create" or "update"; content is the whole new file.
+ * action is "create" or "update"; content is the whole new file. Throws on a DSN that is not a plain URL.
  */
 export function makePlan(root, app, dsn) {
+  if (!validDsn(dsn)) throw new Error(`That does not look like a DSN: ${JSON.stringify(String(dsn).slice(0, 80))}. It should look like https://<key>@<host>/<number>.`);
   const changes = [];
   const manual = [];
   let install = null;

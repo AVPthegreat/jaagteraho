@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import type { CleanFrame } from "../src/intake/allowlist.js";
-import { proveFix, testProblems } from "../src/pipeline/verify.js";
+import { proveFix, readOutcome, riskyFixLines, testProblems } from "../src/pipeline/verify.js";
 import { describeChange, lastChange, suspects } from "../src/source/changes.js";
 
 const SANDBOX = fileURLToPath(new URL("../../sandbox", import.meta.url)).replace(/\/$/, "");
@@ -65,6 +65,35 @@ describe("fix proof", () => {
     assert.deepEqual(testProblems("from django.utils import timezone\nimport unittest\nx = timezone.now()", ["portal", "django"]), []);
     const r = proveFix(SANDBOX, { "portal/submissions.py": fixed }, { file: "t.py", code: "import os\nos.system('touch /tmp/jr-pwned')" });
     assert.equal(r.verdict, "skipped");
+  });
+
+  it("does not count a test that cannot even run on the current code as proof", () => {
+    // Imports a name that exists only after the fix: it "fails" before, but not because of the bug.
+    const helper = `${fixed}\n\ndef jr_helper():\n    return 1\n`;
+    const test = "import unittest\nfrom portal.submissions import jr_helper\n\n\nclass T(unittest.TestCase):\n    def test_x(self):\n        self.assertEqual(jr_helper(), 1)\n";
+    const r = proveFix(SANDBOX, { "portal/submissions.py": helper }, { file: "t.py", code: test });
+    assert.equal(r.verdict, "not_proved");
+    assert.equal(r.before, "error");
+    assert.match(r.note, /could not run on the current code/);
+  });
+
+  it("reads unittest output: only a run with a failure counts as failed", () => {
+    assert.equal(readOutcome(1, null, "F\n----\nRan 1 test in 0.001s\n\nFAILED (failures=1)"), "failed");
+    assert.equal(readOutcome(1, null, "E\n----\nRan 1 test in 0.001s\n\nFAILED (errors=1)"), "failed");
+    assert.equal(readOutcome(0, null, "Ran 2 tests in 0.002s\n\nOK"), "passed");
+    assert.equal(readOutcome(1, null, "ImportError: cannot import name 'x'"), "error");
+    assert.equal(readOutcome(null, "SIGKILL", ""), "error");
+    assert.equal(readOutcome(0, null, "Ran 0 tests in 0.000s\n\nOK"), "error");
+  });
+
+  it("does not run a fix that adds code reaching outside the program", () => {
+    for (const line of ['    import os; os.system("x")', '    __import__("socket")', "    open('/etc/passwd').read()", "    x = ().__class__.__base__.__subclasses__()"]) {
+      const bad = original.replace('    language = data["language"]', `    language = data.get("language", "python")\n${line}`);
+      const r = proveFix(SANDBOX, { "portal/submissions.py": bad }, { file: "t.py", code: TEST });
+      assert.equal(r.verdict, "skipped", line);
+      assert.match(r.note, /reaches outside the program/);
+    }
+    assert.deepEqual(riskyFixLines("a = 1\n", "a = 1\nb = data.get('x')\n"), []);
   });
 
   it("skips when there is no test", () => {

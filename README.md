@@ -1,18 +1,29 @@
 # JaagteRaho
 
-**An AI night watchman for a live app.** When your app breaks at 2 am, JaagteRaho decides whether it is worth waking you, tells you in plain words why it broke, and has a checked fix waiting for your approval.
+**Your app breaks at 2 am. JaagteRaho stays awake for you.**
 
-Built for HackGlobal 2026 (Track 01, Agentic and GenAI apps) by Anant Vardhan Pandey, who runs [Faurus](https://faurus.app), a coding and exam platform used by colleges, alone.
+An AI on-call agent for people who run a live app alone. It reads every error from your app, wakes you only when real users are hurt, tells you the cause in plain words with the file and line, and has a checked fix waiting for your approval. It never changes your code on its own.
 
-- **Live demo:** _link added at deployment_ — break a demo exam portal and watch the whole loop
-- **Paste your error:** _link added at deployment_ — diagnose a Python or JavaScript error from your own public repository
-- **Connect your app:** _link added at deployment_ — one command, or `/new` in Telegram
-- **Evidence:** _link added at deployment_ — every number below, measured
+**Measured on 13 Nov 2026, by scripts in this repository, mistakes included:** 20 of 20 planted bugs reached the owner · 0 wrong fixes among the 19 shown · 4 of 4 harmless errors kept quiet · 1.6 s median to a decision, 11.7 s to a checked fix · about $0.013 per error. [How each number was measured](#measured).
+
+- **Live demo:** _link added at deployment_. Break a demo exam portal (no sign-up) and watch the whole loop with a timer.
+- **Demo video (2:45):** _link added at submission_
+- **Paste your error:** _link added at deployment_. Diagnose a Python or JavaScript error from your own public repository.
+- **Connect your app:** _link added at deployment_. Run one command, or send `/new` in Telegram.
+- **Evidence:** _link added at deployment_. Every number below, with how it was measured.
 - **System design:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
-## The problem
+Built for HackGlobal 2026 (Track 01, Agentic and GenAI apps) by Anant Vardhan Pandey.
 
-Students and solo founders now run live products, but nobody watches them after launch. Faurus's server errors went to a log nobody read; if it failed during a live exam, I heard about it from a student. Error trackers collect errors, but one person still has to decide which ones matter, find the cause and fix it, usually at night.
+## Why: I am the person it wakes
+
+I run [Faurus](https://faurus.app), a coding and exam platform that colleges use. It has about 11,000 accounts and one engineer: me.
+
+Its server errors went to a log file nobody read. If something broke during a live exam at 2 am, I heard about it the next morning, from a student. By then the exam was over.
+
+Error trackers collect errors. They do not decide which one is worth waking a tired person for, find the cause or write the fix. For one person running a live product, that is the whole job, and it happens at night.
+
+Students, freelancers and solo founders now ship real products, often written with AI help, and nobody is on call for them after launch. JaagteRaho (Hindi for "stay awake", the night watchman's call) is the one who stays up.
 
 ## How a founder uses it
 
@@ -50,25 +61,11 @@ flowchart LR
 
 Every number is produced by a script in this repository. Measured 13 and 14 Nov 2026.
 
-**30 real bugs from 17 open-source Python projects** ([`watcher/eval`](watcher/eval)): tracebacks people posted on GitHub (requests, Flask, pip, pytest, Celery, black and others), scored against the lines the real, merged fix changed. JaagteRaho reads the code as it was before the fix and never sees the real fix.
-
-| | Result |
-|---|---|
-| Bug in a file from the traceback: right file | 20 of 20 (100%) |
-| Bug in a file from the traceback: right lines (±3) | 17 of 20 (85%) |
-| Cause outside the traceback: right file | 5 of 10 (50%), 6 of 10 on a repeat run; before lookups: 2 of 9 (22%) |
-| Cause outside the traceback: right lines (±3) | 3 of 10, 4 of 10 on the repeat; before: 0 of 9 |
-| Cost per diagnosis | about $0.04 (these are large library files) |
-
-How the outside-traceback number rose: the diagnosis now gets the repository's code at that commit and may look things up before answering (where a function is defined, where the error's text appears, a few more lines), for up to three cheap rounds. The first call shows the failing functions instead of 160-line windows, so the total cost stayed close to before ($0.042 against $0.038). We designed this after reading the 10 outside-traceback cases, so they are not a held-out test; the 20 in-traceback cases were not used for tuning and did not get worse. Run log: [`watcher/eval/NOTES-lookups.md`](watcher/eval/NOTES-lookups.md).
-
-A cause deep in another part of a large library is still our weakest case: about half are found.
-
 **JR-Bench: 20 planted bugs and 4 noise errors in 7 sample apps** ([`bench`](bench)): six Python apps of 21 to 101 files and one Node.js app. Each bug is planted as if a commit introduced it and triggered for real; a hidden test JaagteRaho never sees judges the fix.
 
 | | Result |
 |---|---|
-| Real bugs that reached the owner | 20 of 20 |
+| Planted bugs that reached the owner | 20 of 20 |
 | Noise (dropped connection, favicon, bot scanner, planned restart) kept quiet | 4 of 4, at about $0.0005 each |
 | Exam-time bugs on a critical route that woke the owner | 3 of 3 |
 | Proposed fix works (hidden test passes) | 20 of 20 |
@@ -79,6 +76,14 @@ A cause deep in another part of a large library is still our weakest case: about
 | Cost per error (decision + diagnosis + fix review) | about $0.013 |
 
 What the benchmark changed: the first fix gate showed a fix only when every review answer was clean, and held back 10 of 16 fixes that were in fact correct. The three-level gate shows 15 of the same 16, still with none wrong.
+
+**30 real bugs from 17 open-source Python projects** ([`watcher/eval`](watcher/eval)): tracebacks people posted on GitHub (requests, Flask, pip, pytest, Celery, black and others), scored against the lines the real, merged fix changed. JaagteRaho reads the code as it was before the fix and never sees the real fix.
+
+| | Result |
+|---|---|
+| Bug in a file from the traceback: right file | 20 of 20 (100%) |
+| Bug in a file from the traceback: right lines (±3) | 16 of 20 (80%) |
+| Cost per diagnosis | about $0.03 (these are large library files) |
 
 **A real Node.js app:** an Express app connected with `npx jaagteraho init` (real `@sentry/node`); its `TypeError` was decided ("notify: blocks users"), diagnosed at `server.js:10` in plain words for $0.011, and a correct fix reached the gate.
 

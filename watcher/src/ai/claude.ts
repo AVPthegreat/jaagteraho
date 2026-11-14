@@ -9,6 +9,7 @@ const PRICES: Record<string, [number, number]> = {
   "claude-sonnet-5-5": [2, 10],
   "claude-opus-5-5": [4, 20],
 };
+const HIGHEST_PRICE: [number, number] = [Math.max(...Object.values(PRICES).map((p) => p[0])), Math.max(...Object.values(PRICES).map((p) => p[1]))];
 
 /** The app a model call is made for, so spend can be charged to its owner's free credit. */
 export const spendContext = new AsyncLocalStorage<{ projectId: number }>();
@@ -41,7 +42,9 @@ export class SpendGuard {
   }
 
   record(model: string, purpose: string, usage: Usage): number {
-    const [inp, out] = PRICES[model] ?? [0, 0];
+    // A model missing from the table (a new or misspelled id) is charged at the highest known price,
+    // never as free, so the spend cap keeps working.
+    const [inp, out] = PRICES[model] ?? HIGHEST_PRICE;
     // Cached input: writes are charged at 1.25 times the input price, reads at 0.1 times (never below the real price).
     const write = usage.cache_creation_input_tokens ?? 0;
     const read = usage.cache_read_input_tokens ?? 0;

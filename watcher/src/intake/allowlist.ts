@@ -3,7 +3,7 @@
 // extra, modules, server name, or local variables. The only trace of a user is a one-way
 // hash of their id (tag jr_user), used to count how many people an error affected.
 
-import { createHmac } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { clip, maskClip } from "./mask.js";
 
 export type CleanFrame = {
@@ -42,8 +42,13 @@ export function userHash(user: unknown): string | null {
   const u = user as Record<string, unknown>;
   const id = [u.id, u.email, u.username, u.ip_address].find((v) => (typeof v === "string" || typeof v === "number") && String(v).trim() && !/^\{\{.*\}\}$/.test(String(v)));
   if (id === undefined) return null;
-  return createHmac("sha256", process.env.JR_LINK_SECRET ?? "jaagteraho-users").update(String(id)).digest("hex").slice(0, 12);
+  return createHmac("sha256", process.env.JR_LINK_SECRET || PROCESS_SECRET).update(String(id)).digest("hex").slice(0, 12);
 }
+
+// Without JR_LINK_SECRET, a random key for this run only: hashes stay one-way (a key published in
+// the repository would let anyone test guessed emails offline), at the cost of user counts
+// restarting when the server restarts.
+const PROCESS_SECRET = randomBytes(32).toString("hex");
 const MAX_FRAMES = 30;
 const MAX_CONTEXT_LINES = 5;
 
