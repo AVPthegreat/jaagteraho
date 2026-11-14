@@ -104,6 +104,7 @@ function narrate(ev: PlayEvent | undefined, app: string): string {
       return d.verdict === "proved" ? "Its own test proved the fix." : "Its own test could not prove the fix.";
     case "ready":
       if (!d.approvable) return String(d.reason ?? "This fix was not applied.");
+      if (d.care_note) return "Fix ready, but the AI reviewer had concerns. Read them, then approve it to try it in your copy.";
       if (d.protected_note) return "Fix ready. It touches a protected area, so it waits for your tap. Approve it to apply it in your copy.";
       return d.heal === "auto" ? "Fix ready. Healing on its own…" : "Fix ready. Approve it to apply it.";
     case "note":
@@ -449,8 +450,9 @@ export function Playground() {
       t: by.hidden_test?.t,
       body: fixed ? (
         <span>{by.applied?.data.by === "healed" ? "Healed on its own." : "Applied after you approved it."}</span>
-      ) : canApprove && (run?.heal === "ask" || ready?.protected_note) ? (
+      ) : canApprove && (run?.heal === "ask" || ready?.protected_note || ready?.care_note) ? (
         <>
+          {ready?.care_note ? <span className="pg2-care">{String(ready.care_note)} </span> : null}
           {ready?.protected_note ? <span className="soft pg2-protected">{String(ready.protected_note)} </span> : null}
           <button type="button" className="btn btn-sm" onClick={() => act("approve")} disabled={busy !== null}>
             {busy === "approve" ? "Applying…" : "Approve fix"}
@@ -466,7 +468,21 @@ export function Playground() {
           ) : null}
         </span>
       ) : ready && !ready.approvable ? (
-        <span className="soft">{String(ready.reason ?? "This fix was not applied.")}</span>
+        <span className="soft">
+          {String(ready.reason ?? "This fix was not applied.")}{" "}
+          {ready.no_edit ? (
+            <button
+              type="button"
+              className="linkish"
+              onClick={() => {
+                setBug("surprise");
+                document.querySelector(".pg2-bugs")?.scrollIntoView({ behavior: "smooth", block: "center" });
+              }}
+            >
+              Try another bug
+            </button>
+          ) : null}
+        </span>
       ) : by.applied ? (
         <span className="soft">Our hidden test is checking it…</span>
       ) : by.failed ? (

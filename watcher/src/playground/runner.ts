@@ -150,16 +150,27 @@ export function areaWords(files: string[]): string {
  * (and the reviewer's matching "touches a sensitive area" concern) is a note, not a block; the risky-code
  * rules (network, processes, files, dynamic code) and every other check stay hard.
  */
-export function copyVerdict(level: string, reasons: string[], protectedFiles: string[], outside: string | null): { appliable: boolean; reason: string | null; protectedNote: string | null } {
+export function copyVerdict(
+  level: string,
+  reasons: string[],
+  protectedFiles: string[],
+  outside: string | null,
+): { appliable: boolean; reason: string | null; protectedNote: string | null; careNote: string | null; noEdit?: boolean } {
   const protectedNote = protectedFiles.length
     ? `In a real app this fix waits for your tap, because it touches ${areaWords(protectedFiles)}. In your copy you can apply it.`
     : null;
-  if (outside) return { appliable: false, reason: `Not applied: the fix ${outside}, which only a person may approve.`, protectedNote: null };
-  if (level === "recommended") return { appliable: true, reason: null, protectedNote };
-  const onlySensitive = level === "caution" && protectedFiles.length > 0 && reasons.length > 0 && reasons.every((r) => /sensitive area/.test(r));
-  if (onlySensitive) return { appliable: true, reason: null, protectedNote };
-  if (level === "caution") return { appliable: false, reason: `Not applied: the AI reviewer had concerns (${reasons.join("; ")}).`, protectedNote: null };
-  return { appliable: false, reason: `Not applied: the checks withheld this fix (${reasons[0] ?? "it did not pass every check"}).`, protectedNote: null };
+  if (outside) return { appliable: false, reason: `Not applied: the fix ${outside}, which only a person may approve.`, protectedNote: null, careNote: null };
+  if (level === "recommended") return { appliable: true, reason: null, protectedNote, careNote: null };
+  // In the copy only: a fix the AI reviewer had concerns about may be applied, with the concerns spelled out.
+  // (In a real app a "caution" fix is shown but never applied without the owner, and never heals on its own.)
+  if (level === "caution") {
+    const concerns = reasons.filter((r) => !(protectedFiles.length && /sensitive area/.test(r)));
+    const careNote = concerns.length ? `Use with care: ${concerns.join("; ")}. In a real app this would wait for your tap.` : null;
+    return { appliable: true, reason: null, protectedNote, careNote };
+  }
+  if (reasons.includes("no edit proposed"))
+    return { appliable: false, noEdit: true, reason: "JaagteRaho found the cause but did not propose a safe edit. In a real app you would get the cause only.", protectedNote: null, careNote: null };
+  return { appliable: false, reason: `Not applied: the checks withheld this fix (${reasons[0] ?? "it did not pass every check"}).`, protectedNote: null, careNote: null };
 }
 
 /** Python modules a fix may import in the playground copy: the standard library's pure helpers. */
@@ -190,6 +201,7 @@ export class Playground {
   /** One-time tickets for the visitor's live feed, so the session id never travels in a URL. */
   private tickets = new Map<string, { session: string; until: number }>();
   private titles: Record<string, { title: string; symptom: string; action: string }> = {};
+  private goodCases = new Set<string>();
   private ownBySession = new Map<string, number>();
   private timer: NodeJS.Timeout | null = null;
   private stopped = false;
@@ -215,6 +227,13 @@ export class Playground {
       this.titles = JSON.parse(readFileSync(join(this.dir, "playground-titles.json"), "utf8"));
     } catch {
       this.titles = {};
+    }
+    // Bugs whose fix went in and passed our hidden test in the last full end-to-end run (scripts/playground-hints.ts).
+    try {
+      const hints = JSON.parse(readFileSync(join(this.dir, "playground-hints.json"), "utf8")) as { good?: unknown };
+      this.goodCases = new Set(Array.isArray(hints.good) ? hints.good.filter((x): x is string => typeof x === "string") : []);
+    } catch {
+      this.goodCases = new Set();
     }
     this.steps = opts.steps ?? realSteps;
     this.canSpendOpt = opts.canSpend;
@@ -550,9 +569,10 @@ export class Playground {
               mine.patched = verdict.appliable ? gate.patched : null;
               mine.approvable = verdict.appliable;
               // A fix in a protected area never heals on its own, as in a real app; the visitor may still apply it.
-              mine.protectedArea = protectedFiles.length > 0;
+              // Protected areas and reviewer concerns never heal on its own, as in a real app; the visitor may still apply them.
+              mine.protectedArea = protectedFiles.length > 0 || !!verdict.careNote;
               mine.proved = proof.verdict === "proved";
-              emit("ready", { approvable: verdict.appliable, heal: mine.heal, reason: verdict.reason, protected_note: verdict.protectedNote });
+              emit("ready", { approvable: verdict.appliable, heal: mine.heal, reason: verdict.reason, protected_note: verdict.protectedNote, care_note: verdict.careNote, no_edit: verdict.noEdit === true });
             } else if (outside) {
               emit("hidden_test", { result: "not_run", note: `Not run: the fix adds code that reaches outside the program (${outside.slice(0, 60)}).` });
             } else {
@@ -563,7 +583,7 @@ export class Playground {
             }
           } else {
             emit("own_test", { verdict: "skipped", note: "No edit to test." });
-            if (mine) emit("ready", { approvable: false, heal: mine.heal, reason: gate.reasons[0] ? `JaagteRaho found the cause but proposed no edit it could check (${gate.reasons[0]}).` : "JaagteRaho found the cause but proposed no edit." });
+            if (mine) emit("ready", { approvable: false, heal: mine.heal, no_edit: true, reason: "JaagteRaho found the cause but did not propose a safe edit. In a real app you would get the cause only." });
           }
         }
         const cost = Math.round(this.spentBy(projectId, startedAt) * 10000) / 10000;
@@ -602,7 +622,7 @@ export class Playground {
           mine.state = "broken";
           // "Heal on its own": only a recommended fix that its own test proved, as with real heal rules.
           if (mine.heal === "auto") {
-            if (mine.approvable && mine.protectedArea) emit("note", { text: "Not healed on its own: it touches a protected area, so it waits for your tap, as it would in a real app." });
+            if (mine.approvable && mine.protectedArea) emit("note", { text: "Not healed on its own: it touches a protected area or the reviewer had concerns, so it waits for your tap, as it would in a real app." });
             else if (mine.approvable && mine.proved) await this.applyFix(mine, "healed");
             else if (mine.approvable) emit("note", { text: "Not healed on its own: its own test did not prove the fix. You can still approve it." });
           }
@@ -697,6 +717,9 @@ export class Playground {
       const row = this.db.prepare("SELECT json_extract(scorecard, '$.appliable_in_copy') AS a FROM playground_runs WHERE case_id = ? AND status = 'done' AND scorecard IS NOT NULL ORDER BY id DESC LIMIT 1").get(id) as { a: number | null } | undefined;
       return row?.a === undefined || row.a === null ? null : row.a === 1;
     };
+    // First choice: bugs the last full end-to-end run fixed and proved (the hint list), unless a later run here failed.
+    const proven = cases.filter((c) => this.goodCases.has(c.id) && lastAppliable(c.id) !== false);
+    if (proven.length) return proven[randomInt(0, proven.length)];
     const touchesProtected = (c: BenchCase) => (c.inject ?? []).some((e) => SENSITIVE.test(e.file));
     const good = cases.filter((c) => !touchesProtected(c) && lastAppliable(c.id) !== false);
     const ok = good.length ? good : cases.filter((c) => lastAppliable(c.id) !== false);
@@ -797,7 +820,7 @@ export class Playground {
     }
   }
 
-  private reachesOutside(dir: string, patched: Record<string, string>, d: DiagnosisResult): string | null {
+  reachesOutside(dir: string, patched: Record<string, string>, d: DiagnosisResult): string | null {
     const originals: Record<string, string> = {};
     for (const p of Object.keys(patched)) {
       try {
@@ -815,7 +838,15 @@ export class Playground {
       const mod = m[1] ?? m[2];
       return mod.startsWith(".") || SAFE_IMPORTS.test(mod.split(".")[0]) || mod.split(".")[0] === appRoot(file);
     };
-    const edits = d.edits.map((e) => (e.file.endsWith(".py") ? { ...e, replace: e.replace.split("\n").filter((l) => !safeImport(l, e.file)).join("\n") } : e));
+    // Node.js: requiring another file of the app itself ('./x', '../core/money') is not reaching outside either.
+    const appRequire = (line: string) => /^(?:const|let|var)\s+[\w{}\s,:]+=\s*require\(\s*['"]\.{1,2}\/[\w./-]+['"]\s*\)(?:\.\w+)?\s*;?$/.test(line.trim());
+    const edits = d.edits.map((e) =>
+      e.file.endsWith(".py")
+        ? { ...e, replace: e.replace.split("\n").filter((l) => !safeImport(l, e.file)).join("\n") }
+        : /\.(?:js|cjs|mjs)$/.test(e.file)
+          ? { ...e, replace: e.replace.split("\n").filter((l) => !appRequire(l)).join("\n") }
+          : e,
+    );
     const js = riskyAdditions(edits, originals);
     if (js.length) return js[0];
     for (const [p, text] of Object.entries(patched)) {
