@@ -1,0 +1,28 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# local planning and archives (not part of the submission)
+.planning/
+PAST-PROJECTS.md
+
+# build output and dependencies
+node_modules/
+.next/
+dist/
+.venv/
+__pycache__/
+*.pyc
+
+# data
+*.db
+*.db-wal
+*.db-shm
+data/
+
+.DS_Store
+deploy/backups/
+watcher/eval/eval.db*
+watcher/eval/bench.db*
+*.tsbuildinfo
