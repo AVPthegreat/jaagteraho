@@ -20,7 +20,7 @@ It already watches [Faurus](https://faurus.app) (code.faurus.app, about 11,000 a
 | **Demo video (2:45)** | _link added at submission_ |
 | **System design** | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 
-Hosted on Vultr (Bangalore). Built for HackGlobal 2026 (Track 01, Agentic and GenAI apps) by Anant Vardhan Pandey.
+Hosted on Vultr (Bangalore). Built for HackGlobal 2026 (Build with AI track; 14–15 Nov 2026, organised by Polaris School of Technology, powered by Vultr) by Anant Vardhan Pandey.
 
 <!-- Demo GIF: replace with docs/images/demo.gif once recorded (break-it run: Submit, WOKE OWNER, cause, fix, Approve, works again). -->
 ![Demo GIF placeholder: a visitor breaks Submit code on the demo exam portal, JaagteRaho wakes the owner, explains the cause and the approved fix makes it work again](docs/images/break-it-run.png)

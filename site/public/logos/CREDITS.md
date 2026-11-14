@@ -10,3 +10,5 @@ All fetched 2026-11-14. Scripts, classes and external references stripped; viewB
 | gnani.svg, gnani-white.svg | https://cdn.prod.website-files.com/6848bfb15c1067d1b767ceb1/6a28e9711abd50da5dabc294_Layer_1.svg (navbar brand logo on https://www.gnani.ai/) | Trademark of Gnani.ai (Gnani Innovations Pvt. Ltd.), used to credit the service we run on. |
 | twilio.svg, twilio-white.svg | https://www.twilio.com/content/dam/twilio-com/core-assets/customer-logos/t-z/twilio.svg | Trademark of Twilio Inc., used to credit the service we run on. |
 
+
+| hackglobal-wordmark.png | Official HackGlobal card sent by the founder (2026-11-14) | Trademark of the HackGlobal organisers, used to credit the event this project was built for. |
