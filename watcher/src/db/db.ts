@@ -230,7 +230,8 @@ export type ProjectSettings = {
   learn_until?: string | null; // ISO time; set by /learn
   repo_prefix?: string; // deploy path prefix to strip from abs_path, e.g. "/app/"
   outside?: boolean; // connected by an outside developer through the website
-  heal?: import("../pipeline/heal.js").HealPolicy; // self-healing rules; see heal.ts (default: the owner approves every fix)
+  heal?: import("../pipeline/heal.js").HealPolicy;
+  playground?: boolean; // a live playground app (playground/runner.ts): never alerts, calls or heals
 };
 
 export const getSettings = (db: DB, projectId: number): ProjectSettings => {

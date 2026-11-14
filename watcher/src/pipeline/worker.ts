@@ -76,8 +76,15 @@ export function laneFor(db: DB, projectId: number): Lane {
  * Real phone calls ring the founder's own number. The public demo is pressed by anonymous visitors,
  * so it never rings anyone unless JR_DEMO_PHONE=1 is set (only for the founder's own recorded demo).
  */
-export function phoneAllowedFor(kind: string, env: NodeJS.ProcessEnv = process.env): boolean {
+export function phoneAllowedFor(kind: string, env: NodeJS.ProcessEnv = process.env, settings: { playground?: boolean } = {}): boolean {
+  // The playground (playground/runner.ts) never rings anyone, whatever JR_DEMO_PHONE says.
+  if (settings.playground === true) return false;
   return kind !== "sandbox" || env.JR_DEMO_PHONE === "1";
+}
+
+/** Playground apps are run by playground/runner.ts, never by this worker: no cards, messages, calls or heals. */
+export function isPlaygroundProject(db: DB, projectId: number): boolean {
+  return getSettings(db, projectId).playground === true;
 }
 
 export class Worker {
@@ -172,6 +179,7 @@ export class Worker {
       | undefined;
     if (!inc) return;
     const project = this.db.prepare("SELECT id, name, kind, repo, created_at, github_installation FROM projects WHERE id = ?").get(inc.project_id) as ProjectRow;
+    if (isPlaygroundProject(this.db, project.id)) return;
     const ev = this.db
       .prepare("SELECT exception_type, message_masked, transaction_name, frames, tags, release FROM events WHERE project_id = ? AND event_id = ?")
       .get(project.id, payload.event_id) as EventRow | undefined;
@@ -259,7 +267,7 @@ export class Worker {
     // A real phone call on a WAKE, only when a fresh alert card went out (so Acknowledge and the repeats
     // have a card to work with). It never blocks the alert or the diagnosis, and a failure is only logged.
     const phoneDone =
-      decision.action === "wake" && cardSent && this.phone && phoneAllowedFor(project.kind)
+      decision.action === "wake" && cardSent && this.phone && phoneAllowedFor(project.kind, process.env, getSettings(this.db, project.id))
         ? this.phone
             .wake(inc.id, project.id, { project: project.name, flow: decision.facts.critical ?? event.transaction ?? "the app", hits: inc.hits, exam: decision.facts.exam_open })
             .catch((e) => console.error("phone:", String(e)))

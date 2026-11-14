@@ -21,9 +21,12 @@ services:
       JR_TWIN_FIXED_URL: http://twin-fixed:8000
       # A read-only copy of the demo portal's code, used only to prove fixes with a regression test.
       JR_SANDBOX_SOURCE: /sandbox
+      # The Live playground's apps and planted bugs (read-only; each run works on a temp copy).
+      JR_BENCH_DIR: /bench
     volumes:
       - watcher_data:/data
       - ../sandbox:/sandbox:ro
+      - ../bench:/bench:ro
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
