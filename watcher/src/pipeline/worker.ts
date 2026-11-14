@@ -197,6 +197,7 @@ export class Worker {
       transaction: ev.transaction_name,
       frames: JSON.parse(ev.frames) as CleanFrame[],
       tags: JSON.parse(ev.tags) as Record<string, string>,
+      release: ev.release,
     };
     const session = project.kind === "sandbox" ? payload.session : null;
     const feed = (type: Parameters<typeof bus.publish>[1]["type"], data: Record<string, unknown>) =>

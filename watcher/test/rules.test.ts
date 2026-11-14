@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { applyRules, tally, type Answer, type Facts } from "../src/pipeline/decide.js";
+import { readFileSync } from "node:fs";
+import { applyRules, startupFailure, tally, type Answer, type Facts } from "../src/pipeline/decide.js";
+import { parseTraceback } from "../src/web/paste.js";
 
 const base: Facts = { critical: null, exam_open: false, owner_away: false, hits_10m: 1, users_1h: 0, change: "new", learn_mode: false, backlog: false };
 const ans = (p: Partial<Answer>): Answer => ({
@@ -54,5 +56,73 @@ describe("rules", () => {
     assert.equal(applyRules({ ...base, users_1h: 6, owner_away: true }, votes(ans({ severity: "2" })), false).rule, 10);
     assert.equal(applyRules({ ...base, users_1h: 50, learn_mode: true }, noise, false).action, "log");
     assert.equal(applyRules({ ...base, users_1h: 50, severity: undefined } as Facts, votes(ans({ severity: "4" })), false).action, "wake");
+  });
+});
+
+describe("rule 11: the app fails to start", () => {
+  const tb = (text: string) => parseTraceback(text)!;
+  const django = tb(`Traceback (most recent call last):
+  File "/app/manage.py", line 22, in <module>
+    main()
+  File "/app/manage.py", line 18, in main
+    execute_from_command_line(sys.argv)
+  File "/usr/lib/python3/dist-packages/django/core/management/__init__.py", line 416, in execute
+    settings.INSTALLED_APPS
+  File "/app/oj/settings.py", line 40, in <module>
+    SECRET_KEY = os.environ["SECRET_KEY"]
+django.core.exceptions.ImproperlyConfigured: The SECRET_KEY setting must not be empty.`);
+  const redis = tb(`Traceback (most recent call last):
+  File "/app/wsgi.py", line 9, in <module>
+    application = create_app()
+  File "/app/web/__init__.py", line 31, in create_app
+    cache.ping()
+  File "/usr/lib/python3/dist-packages/redis/client.py", line 1269, in ping
+    return self.execute_command("PING")
+redis.exceptions.ConnectionError: Error 111 connecting to redis:6379. Connection refused.`);
+  const ev = (p: ReturnType<typeof tb>, transaction: string | null = null) => ({ transaction, exception_type: p.exception_type, message: p.message, frames: p.frames });
+
+  it("recognises boot-time failures with no request route", () => {
+    assert.match(startupFailure(ev(django)) ?? "", /cannot load its code or settings/);
+    assert.match(startupFailure(ev(redis)) ?? "", /cannot reach a service/);
+    assert.equal(startupFailure(ev(redis, "/api/submit")), null, "with a route, the request rules judge it");
+  });
+
+  it("leaves the bench's noise alone (client disconnects, scanners, favicon, shutdown)", () => {
+    const bench = JSON.parse(readFileSync(new URL("../../bench/cases.json", import.meta.url), "utf8")) as { cases: Array<{ id: string; kind: string; route: string | null; traceback?: string }> };
+    const noise = bench.cases.filter((c) => c.kind === "noise");
+    assert.equal(noise.length, 4);
+    for (const c of noise) {
+      const facts: Facts = { ...base, hits_10m: 5, startup: startupFailure(ev(tb(c.traceback!), c.route)) };
+      assert.equal(facts.startup, null, c.id);
+      assert.notEqual(applyRules(facts, votes(ans({ is_noise: "yes", severity: "0" }), ans({ is_noise: "yes", severity: "0" }), ans({ is_noise: "yes", severity: "0" }), ans({ is_noise: "yes", severity: "0" }), ans({ is_noise: "yes", severity: "0" })), false).action, "wake", c.id);
+    }
+  });
+
+  it("wakes when it repeats or arrives with a new release, whatever the model says; a one-off does not", () => {
+    const quiet = votes(ans({ is_noise: "yes", severity: "0" }), ans({ is_noise: "yes", severity: "0" }), ans({ is_noise: "yes", severity: "0" }), ans({ is_noise: "yes", severity: "0" }), ans({ is_noise: "yes", severity: "0" }));
+    const startup = "it cannot load its code or settings";
+    const r = applyRules({ ...base, startup, hits_10m: 2 }, quiet, false);
+    assert.equal(r.action, "wake");
+    assert.equal(r.rule, 11);
+    assert.match(r.rule_text, /fails to start.*every request is affected/);
+    assert.equal(applyRules({ ...base, startup, hits_10m: 1, new_release: true }, quiet, false).action, "wake");
+    assert.notEqual(applyRules({ ...base, startup, hits_10m: 1 }, quiet, false).rule, 11, "a single boot error with no new release is judged as before");
+    assert.equal(applyRules({ ...base, startup, hits_10m: 5, learn_mode: true }, quiet, false).action, "log", "learn mode still comes first");
+  });
+
+  it("Faurus boot failures: a helper that settings.py calls while loading (bench severity 5, redis_layout)", () => {
+    const fx = JSON.parse(readFileSync(new URL("./fixtures/faurus-boot.json", import.meta.url), "utf8")) as { cases: Array<{ id: string; traceback: string }> };
+    const quiet = votes(ans({ severity: "2" }), ans({ severity: "2" }), ans({ severity: "2" }), ans({ severity: "2" }), ans({ severity: "2" }));
+    for (const c of fx.cases) {
+      const startup = startupFailure(ev(tb(c.traceback)));
+      assert.match(startup ?? "", /startup code fails \(oj\/settings\.py while loading\)/, c.id);
+      const r = applyRules({ ...base, startup, hits_10m: 2 }, quiet, false);
+      assert.equal(r.action, "wake", c.id);
+      assert.equal(r.rule, 11, c.id);
+    }
+    // The same crash in a request (a route) or in a helper called by a request handler is not a boot failure.
+    assert.equal(startupFailure(ev(tb(fx.cases[0].traceback), "/api/submission")), null);
+    const inHandler = tb(fx.cases[2].traceback.replace('File "/app/OnlineJudge/oj/settings.py", line 397, in <module>', 'File "/app/OnlineJudge/submission/views.py", line 88, in post'));
+    assert.equal(startupFailure(ev(inHandler)), null);
   });
 });
