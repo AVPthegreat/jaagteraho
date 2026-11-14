@@ -1,0 +1,24 @@
+"""Payout records."""
+
+from dataclasses import dataclass, field
+from datetime import date
+from decimal import Decimal
+
+from ..core.errors import ValidationError
+
+
+@dataclass
+class Payout:
+    seller_id: int
+    amount: Decimal
+    paid_on: date
+    id: int = 0
+    tags: list = field(default_factory=list)
+
+    def validate(self) -> "Payout":
+        if self.amount < 0:
+            raise ValidationError("amount must not be negative")
+        return self
+
+    def describe(self) -> str:
+        return f"#{self.id} · ₹{self.amount} · on {self.paid_on.isoformat()}"

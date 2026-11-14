@@ -1,0 +1,816 @@
+[
+  {
+    "repo": "pallets/click",
+    "issue_url": "https://github.com/pallets/click/issues/3487",
+    "traceback": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n  File \"/myproject/click/src/click/utils.py\", line 337, in echo\n    file.write(out)  # type: ignore\n    ^^^^^^^^^^^^^^^\nTypeError: a bytes-like object is required, not 'str'",
+    "buggy_commit": "d42f15b71757de791a5781fb179fd972da9169f5",
+    "fix_commit": "a5f5aa6d4012d256ccca24638f2642fc371e9f77",
+    "fix_url": "https://github.com/pallets/click/pull/3493",
+    "fixed_files": [
+      "src/click/utils.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/click/utils.py",
+        "start": 235,
+        "end": 235
+      },
+      {
+        "file": "src/click/utils.py",
+        "start": 290,
+        "end": 294
+      },
+      {
+        "file": "src/click/utils.py",
+        "start": 297,
+        "end": 297
+      },
+      {
+        "file": "src/click/utils.py",
+        "start": 313,
+        "end": 313
+      }
+    ],
+    "cause_summary": "echo() set out = out or \"\" before appending the newline, which turned an empty bytes/bytearray message into a str and then wrote that str to the binary stream.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "pallets/werkzeug",
+    "issue_url": "https://github.com/pallets/werkzeug/issues/2955",
+    "traceback": "IndexError                                Traceback (most recent call last)\nCell In[2], line 1\n----> 1 Authorization.from_header(\"Digest =foo\")\n\nFile ~/Downloads/.venv/lib/python3.12/site-packages/werkzeug/datastructures/auth.py:114, in Authorization.from_header(cls, value)\n    110     return cls(scheme, {\"username\": username, \"password\": password})\n    112 if \"=\" in rest.rstrip(\"=\"):\n    113     # = that is not trailing, this is parameters.\n--> 114     return cls(scheme, parse_dict_header(rest), None)\n    116 # No = or only trailing =, this is a token.\n    117 return cls(scheme, None, rest)\n\nFile ~/Downloads/.venv/lib/python3.12/site-packages/werkzeug/http.py:371, in parse_dict_header(value)\n    368 value = value.strip()\n    369 encoding: str | None = None\n--> 371 if key[-1] == \"*\":\n    372     # key*=charset''value becomes key=value, where value is percent encoded\n    373     # adapted from parse_options_header, without the continuation handling\n    374     key = key[:-1]\n    375     match = _charset_value_re.match(value)\n\nIndexError: string index out of range",
+    "buggy_commit": "40319f91dbbae0a780526eab037a009b1a7e4d36",
+    "fix_commit": "6732b579eeaaa2cfb562e57bed55994e4f93ccfb",
+    "fix_url": "https://github.com/pallets/werkzeug/pull/2956",
+    "fixed_files": [
+      "src/werkzeug/http.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/werkzeug/http.py",
+        "start": 363,
+        "end": 364
+      }
+    ],
+    "cause_summary": "parse_dict_header() indexed key[-1] without checking for an empty key, so a parameter like '=foo' with no name raised IndexError.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "pallets/werkzeug",
+    "issue_url": "https://github.com/pallets/werkzeug/issues/2708",
+    "traceback": "Traceback (most recent call last):\n  File \"<stdin>\", line 1, in <module>\n  File \"/Users/midchildan/Documents/playground/werkzeug/lib/python3.10/site-packages/werkzeug/urls.py\", line 983, in iri_to_uri\n    iri = iri.decode(charset)\nTypeError: decode() argument 'encoding' must be str, not None",
+    "buggy_commit": "d70b37ddc7ef2197e94a00705c12d8746178f4e0",
+    "fix_commit": "1892c108073275e736a82f74c870ce7aa87a9f80",
+    "fix_url": "https://github.com/pallets/werkzeug/pull/2709",
+    "fixed_files": [
+      "src/werkzeug/urls.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/werkzeug/urls.py",
+        "start": 968,
+        "end": 969
+      },
+      {
+        "file": "src/werkzeug/urls.py",
+        "start": 985,
+        "end": 994
+      }
+    ],
+    "cause_summary": "iri_to_uri() decoded a bytes argument with charset before the code that defaults charset to 'utf-8' had run, so bytes.decode() received None.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "pallets/click",
+    "issue_url": "https://github.com/pallets/click/issues/2415",
+    "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\Rok\\Development\\pyi-click\\program.py\", line 6, in <module>\n    click.utils.echo(\"Hello world\")\n  File \"C:\\Users\\Rok\\Development\\pyi-click\\venv\\lib\\site-packages\\click\\utils.py\", line 299, in echo\n    file.write(out)  # type: ignore\nAttributeError: 'NoneType' object has no attribute 'write'",
+    "buggy_commit": "9a536eebd958558c2cd24c17fb66fac112f1ac91",
+    "fix_commit": "549947111c4af2191dd4b245e1de2c25d20c36d6",
+    "fix_url": "https://github.com/pallets/click/pull/2555",
+    "fixed_files": [
+      "src/click/_compat.py",
+      "src/click/_termui_impl.py",
+      "src/click/utils.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/click/_compat.py",
+        "start": 579,
+        "end": 580
+      },
+      {
+        "file": "src/click/_compat.py",
+        "start": 583,
+        "end": 583
+      },
+      {
+        "file": "src/click/_compat.py",
+        "start": 584,
+        "end": 585
+      },
+      {
+        "file": "src/click/_termui_impl.py",
+        "start": 12,
+        "end": 13
+      },
+      {
+        "file": "src/click/_termui_impl.py",
+        "start": 63,
+        "end": 64
+      },
+      {
+        "file": "src/click/_termui_impl.py",
+        "start": 65,
+        "end": 66
+      },
+      {
+        "file": "src/click/_termui_impl.py",
+        "start": 354,
+        "end": 355
+      },
+      {
+        "file": "src/click/utils.py",
+        "start": 269,
+        "end": 270
+      }
+    ],
+    "cause_summary": "When no console streams exist (e.g. pythonw/PyInstaller windowed apps) _default_text_stdout() returns None and echo() wrote to it without a None check.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "pallets/jinja",
+    "issue_url": "https://github.com/pallets/jinja/issues/1697",
+    "traceback": "Traceback (most recent call last):\n  File \"/mycode/venv/lib/python3.10/site-packages/typer/main.py\", line 328, in __call__\n    raise e\n  File \"/mycode/venv/lib/python3.10/site-packages/typer/main.py\", line 311, in __call__\n    return get_command(self)(*args, **kwargs)\n  File \"/mycode/venv/lib/python3.10/site-packages/click/core.py\", line 1130, in __call__\n    return self.main(*args, **kwargs)\n  File \"/mycode/venv/lib/python3.10/site-packages/typer/core.py\", line 778, in main\n    return _main(\n  File \"/mycode/venv/lib/python3.10/site-packages/typer/core.py\", line 216, in _main\n    rv = self.invoke(ctx)\n  File \"/mycode/venv/lib/python3.10/site-packages/click/core.py\", line 1657, in invoke\n    return _process_result(sub_ctx.command.invoke(sub_ctx))\n  File \"/mycode/venv/lib/python3.10/site-packages/click/core.py\", line 1404, in invoke\n    return ctx.invoke(self.callback, **ctx.params)\n  File \"/mycode/venv/lib/python3.10/site-packages/click/core.py\", line 760, in invoke\n    return __callback(*args, **kwargs)\n  File \"/mycode/venv/lib/python3.10/site-packages/typer/main.py\", line 683, in wrapper\n    return callback(**use_params)  # type: ignore\n  File \"/mycode/src/myproject/cli/commands/build.py\", line 106, in build\n    _create_all_docker_files(project_config, build_mode=mode, services=services)\n  File \"/mycode/src/myproject/cli/commands/build.py\", line 118, in _create_all_docker_files\n    _create_docker_file(service, project_config, build_mode)\n  File \"/mycode/src/myproject/cli/commands/build.py\", line 135, in _create_docker_file\n    dockerfile_template = get_jinja_env().get_template('Dockerfile.jinja')\n  File \"/mycode/venv/lib/python3.10/site-packages/jinja2/environment.py\", line 1010, in get_template\n    return self._load_template(name, globals)\n  File \"/mycode/venv/lib/python3.10/site-packages/jinja2/environment.py\", line 969, in _load_template\n    template = self.loader.load(self, name, self.make_globals(globals))\n  File \"/mycode/venv/lib/python3.10/site-packages/jinja2/loaders.py\", line 126, in load\n    source, filename, uptodate = self.get_source(environment, name)\n  File \"/mycode/venv/lib/python3.10/site-packages/jinja2/loaders.py\", line 195, in get_source\n    pieces = split_template_path(template)\n  File \"/mycode/venv/lib/python3.10/site-packages/jinja2/loaders.py\", line 32, in split_template_path\n    os.path.sep in piece\nAttributeError: module 'posixpath' has no attribute 'sep'",
+    "buggy_commit": "7f936deac07ff78a131e29bf8ca8d3527c62a0c4",
+    "fix_commit": "997f7f524396d616edf8a62d21fb5d8dac6c7814",
+    "fix_url": "https://github.com/pallets/jinja/pull/1698",
+    "fixed_files": [
+      "src/jinja2/loaders.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/jinja2/loaders.py",
+        "start": 31,
+        "end": 31
+      },
+      {
+        "file": "src/jinja2/loaders.py",
+        "start": 228,
+        "end": 229
+      },
+      {
+        "file": "src/jinja2/loaders.py",
+        "start": 277,
+        "end": 277
+      },
+      {
+        "file": "src/jinja2/loaders.py",
+        "start": 282,
+        "end": 282
+      },
+      {
+        "file": "src/jinja2/loaders.py",
+        "start": 303,
+        "end": 303
+      },
+      {
+        "file": "src/jinja2/loaders.py",
+        "start": 376,
+        "end": 376
+      },
+      {
+        "file": "src/jinja2/loaders.py",
+        "start": 378,
+        "end": 378
+      },
+      {
+        "file": "src/jinja2/loaders.py",
+        "start": 389,
+        "end": 392
+      },
+      {
+        "file": "src/jinja2/loaders.py",
+        "start": 397,
+        "end": 398
+      }
+    ],
+    "cause_summary": "loaders.py used os.path.sep, which some path modules (posixpath on certain builds) do not define; the fix switches to os.sep.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "pydantic/pydantic",
+    "issue_url": "https://github.com/pydantic/pydantic/issues/13870",
+    "traceback": "Traceback (most recent call last):\n  File \"<repro>/worker/consume.py\", line 7, in <module>\n    config = cloudpickle.loads(Path(__file__).with_name(\"payload.pkl\").read_bytes())\n  File \"<repro>/latest/lib/python3.13/site-packages/cloudpickle/cloudpickle.py\", line 553, in _make_skeleton_class\n    skeleton_class = types.new_class(\n        name, bases, {\"metaclass\": type_constructor}, lambda ns: ns.update(type_kwargs)\n    )\n  File \"<python>/lib/python3.13/types.py\", line 75, in new_class\n    return meta(name, resolved_bases, ns, **kwds)\n  File \"<repro>/latest/lib/python3.13/site-packages/pydantic/_internal/_model_construction.py\", line 243, in __new__\n    set_model_fields(cls, config_wrapper=config_wrapper, ns_resolver=ns_resolver)\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<repro>/latest/lib/python3.13/site-packages/pydantic/_internal/_model_construction.py\", line 579, in set_model_fields\n    fields, pydantic_extra_info, class_vars = collect_model_fields(\n                                              ~~~~~~~~~~~~~~~~~~~~^\n        cls, config_wrapper, ns_resolver, typevars_map=typevars_map\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"<repro>/latest/lib/python3.13/site-packages/pydantic/_internal/_fields.py\", line 423, in collect_model_fields\n    _update_fields_from_docstrings(cls, fields)\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^\n  File \"<repro>/latest/lib/python3.13/site-packages/pydantic/_internal/_fields.py\", line 122, in _update_fields_from_docstrings\n    fields_docs = extract_docstrings_from_cls(cls, use_inspect=use_inspect)\n  File \"<repro>/latest/lib/python3.13/site-packages/pydantic/_internal/_docs_extraction.py\", line 99, in extract_docstrings_from_cls\n    source, _ = inspect.getsourcelines(cls)\n                ~~~~~~~~~~~~~~~~~~~~~~^^^^^\n  File \"<python>/lib/python3.13/inspect.py\", line 1245, in getsourcelines\n    lines, lnum = findsource(object)\n                  ~~~~~~~~~~^^^^^^^^\n  File \"<python>/lib/python3.13/inspect.py\", line 1060, in findsource\n    file = getsourcefile(object)\n  File \"<python>/lib/python3.13/inspect.py\", line 963, in getsourcefile\n    filename = getfile(object)\n  File \"<python>/lib/python3.13/inspect.py\", line 932, in getfile\n    raise TypeError('{!r} is a built-in class'.format(object))\nTypeError: <class 'model_defs.Config'> is a built-in class",
+    "buggy_commit": "df5af375b51168a7e289b7e2dc1b259635121eee",
+    "fix_commit": "bb6da4cfbb1f559885ea2fa207ec93853bfeac64",
+    "fix_url": "https://github.com/pydantic/pydantic/pull/13874",
+    "fixed_files": [
+      "pydantic/_internal/_docs_extraction.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "pydantic/_internal/_docs_extraction.py",
+        "start": 100,
+        "end": 100
+      }
+    ],
+    "cause_summary": "extract_docstrings_from_cls() caught only OSError from inspect.getsourcelines(), but for classes rebuilt by cloudpickle inspect raises TypeError ('is a built-in class').",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "pypa/pip",
+    "issue_url": "https://github.com/pypa/pip/issues/6385",
+    "traceback": "Traceback (most recent call last):\n  File \"/home/travis/virtualenv/python3.4.6/lib/python3.4/site-packages/pip/_vendor/packaging/markers.py\", line 270, in __init__\n    self._markers = _coerce_parse_result(MARKER.parseString(marker))\n  File \"/home/travis/virtualenv/python3.4.6/lib/python3.4/site-packages/pip/_vendor/pyparsing.py\", line 1814, in parseString\n    raise exc\n  File \"/home/travis/virtualenv/python3.4.6/lib/python3.4/site-packages/pip/_vendor/pyparsing.py\", line 1804, in parseString\n    loc, tokens = self._parse( instring, 0 )\n  File \"/home/travis/virtualenv/python3.4.6/lib/python3.4/site-packages/pip/_vendor/pyparsing.py\", line 1548, in _parseNoCache\n    loc,tokens = self.parseImpl( instring, preloc, doActions )\n  File \"/home/travis/virtualenv/python3.4.6/lib/python3.4/site-packages/pip/_vendor/pyparsing.py\", line 3722, in parseImpl\n    loc, exprtokens = e._parse( instring, loc, doActions )\n  File \"/home/travis/virtualenv/python3.4.6/lib/python3.4/site-packages/pip/_vendor/pyparsing.py\", line 1552, in _parseNoCache\n    loc,tokens = self.parseImpl( instring, preloc, doActions )\n  File \"/home/travis/virtualenv/python3.4.6/lib/python3.4/site-packages/pip/_vendor/pyparsing.py\", line 3502, in parseImpl\n    raise ParseException(instring, loc, self.errmsg, self)\npip._vendor.pyparsing.ParseException: Expected stringEnd (at char 23), (line:1, col:24)\nDuring handling of the above exception, another exception occurred:\nTraceback (most recent call last):\n  File \"/home/travis/virtualenv/python3.4.6/lib/python3.4/site-packages/pip/_internal/cli/base_command.py\", line 179, in main\n    status = self.run(options, args)\n  File \"/home/travis/virtualenv/python3.4.6/lib/python3.4/site-packages/pip/_internal/commands/install.py\", line 289, in run\n    self.name, wheel_cache\n  File \"/home/travis/virtualenv/python3.4.6/lib/python3.4/site-packages/pip/_internal/cli/base_command.py\", line 289, in populate_requirement_set\n    use_pep517=options.use_pep517):\n  File \"/home/travis/virtualenv/python3.4.6/lib/python3.4/site-packages/pip/_internal/req/req_file.py\", line 112, in parse_requirements\n    for req in req_iter:\n  File \"/home/travis/virtualenv/python3.4.6/lib/python3.4/site-packages/pip/_internal/req/req_file.py\", line 193, in process_line\n    isolated=isolated, options=req_options, wheel_cache=wheel_cache\n  File \"/home/travis/virtualenv/python3.4.6/lib/python3.4/site-packages/pip/_internal/req/constructors.py\", line 226, in install_req_from_line\n    markers = Marker(markers_as_string)\n  File \"/home/travis/virtualenv/python3.4.6/lib/python3.4/site-packages/pip/_vendor/packaging/markers.py\", line 275, in __init__\n    raise InvalidMarker(err_str)\npip._vendor.packaging.markers.InvalidMarker: Invalid marker: \"python_version >= '2.7'; python_version <\\t'3.5'\", parse error at '; python'",
+    "buggy_commit": "9d0e2601f8c82765b0fe92001540e9a7ddd4fdf1",
+    "fix_commit": "95ef105f4eea913c09170dab3f4b6efebddf2843",
+    "fix_url": "https://github.com/pypa/pip/pull/14135",
+    "fixed_files": [
+      "src/pip/_internal/req/constructors.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/pip/_internal/req/constructors.py",
+        "start": 21,
+        "end": 21
+      },
+      {
+        "file": "src/pip/_internal/req/constructors.py",
+        "start": 356,
+        "end": 356
+      }
+    ],
+    "cause_summary": "parse_req_from_line() built Marker(markers_as_string) without catching InvalidMarker, so a malformed marker in a requirements file crashed pip with a raw traceback.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "celery/celery",
+    "issue_url": "https://github.com/celery/celery/issues/9489",
+    "traceback": "Traceback (most recent call last):\n  File \"/usr/local/lib/python3.12/site-packages/kombu/pidbox.py\", line 102, in dispatch\n    reply = handle(method, arguments)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/kombu/pidbox.py\", line 124, in handle_cast\n    return self.handle(method, arguments)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/kombu/pidbox.py\", line 118, in handle\n    return self.handlers[method](self.state, **arguments)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/celery/worker/control.py\", line 363, in heartbeat\n    dispatcher.send('worker-heartbeat', freq=5, **worker_state.SOFTWARE_INFO)\n    ^^^^^^^^^^^^^^^\nAttributeError: 'NoneType' object has no attribute 'send'",
+    "buggy_commit": "e6965acd86496013d91a8916b61672e0023a6bf3",
+    "fix_commit": "03c79ac140b2098520011a94d2e9a52f83571260",
+    "fix_url": "https://github.com/celery/celery/pull/10295",
+    "fixed_files": [
+      "celery/worker/control.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "celery/worker/control.py",
+        "start": 347,
+        "end": 348
+      },
+      {
+        "file": "celery/worker/control.py",
+        "start": 358,
+        "end": 359
+      },
+      {
+        "file": "celery/worker/control.py",
+        "start": 371,
+        "end": 371
+      }
+    ],
+    "cause_summary": "The heartbeat (and enable/disable events) remote control commands used state.consumer.event_dispatcher without checking that it is None when events are disabled.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "celery/celery",
+    "issue_url": "https://github.com/celery/celery/issues/10312",
+    "traceback": "  Traceback (most recent call last):\n    File \"celery/worker/worker.py\", line 203, in start\n      self.blueprint.start(self)\n    File \"celery/apps/worker.py\", line 238, in startup_info\n      results=self.app.backend.as_uri(),\n    File \"celery/app/base.py\", line 1474, in backend\n      self._backend = self._get_backend()\n    File \"celery/backends/redis.py\", line 279, in __init__\n      self.connparams = self._params_from_url(url, self.connparams)\n    File \"celery/backends/redis.py\", line 343, in _params_from_url\n      raise ValueError(E_REDIS_SSL_PARAMS_AND_SCHEME_MISMATCH)\n  ValueError:\n  SSL connection parameters have been provided but the specified URL scheme\n  is redis://. A Redis SSL connection URL should use the scheme rediss://.",
+    "buggy_commit": "8dace6d94b7714db4c677ccea824bc5fee1fdede",
+    "fix_commit": "be0e2de234324a06c61b5561fdd0ff18fabcea38",
+    "fix_url": "https://github.com/celery/celery/pull/10313",
+    "fixed_files": [
+      "celery/backends/redis.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "celery/backends/redis.py",
+        "start": 396,
+        "end": 398
+      }
+    ],
+    "cause_summary": "RedisBackend._params_from_url() raised the scheme-mismatch ValueError whenever SSL params were in connparams, including those supplied by redis_backend_use_ssl, instead of only for SSL params in the URL query.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "celery/celery",
+    "issue_url": "https://github.com/celery/celery/issues/10858",
+    "traceback": "Traceback (most recent call last):\n  File \".../lib/python3.14/multiprocessing/util.py\", line 371, in _run_finalizers\n    finalizer()\n    ~~~~~~~~~^^\n  File \".../lib/python3.14/multiprocessing/util.py\", line 295, in __call__\n    res = self._callback(*self._args, **self._kwargs)\n  File \".../site-packages/billiard/pool.py\", line 1738, in _terminate_pool\n    cls._help_stuff_finish(*help_stuff_finish_args)\n    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \".../site-packages/celery/concurrency/asynpool.py\", line 1484, in _help_stuff_finish\n    fileno_to_proc[fd].inq._reader.recv()\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^\n  File \".../site-packages/billiard/connection.py\", line 276, in recv\n    return ForkingPickler.loadbuf(buf)\n           ~~~~~~~~~~~~~~~~~~~~~~^^^^^\n  File \".../site-packages/billiard/reduction.py\", line 60, in loadbuf\n    return cls.loads(buf.getbuffer())\n           ~~~~~~~~~^^^^^^^^^^^^^^^^^\nEOFError: Ran out of input",
+    "buggy_commit": "f5dbef350688eb7250cdf1e389db93ea9cc605fd",
+    "fix_commit": "c45016323d44867d291e3e7e94d4036ea0a37ac1",
+    "fix_url": "https://github.com/celery/celery/pull/10861",
+    "fixed_files": [
+      "celery/concurrency/asynpool.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "celery/concurrency/asynpool.py",
+        "start": 1470,
+        "end": 1471
+      },
+      {
+        "file": "celery/concurrency/asynpool.py",
+        "start": 1484,
+        "end": 1484
+      }
+    ],
+    "cause_summary": "AsynPool._help_stuff_finish() kept draining the inqueue of children that had already exited (or died mid-message), so recv() raised EOFError at shutdown.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "scrapy/scrapy",
+    "issue_url": "https://github.com/scrapy/scrapy/issues/6456",
+    "traceback": "Traceback (most recent call last):\n  File \"c:\\scraper\\venv\\lib\\site-packages\\scrapy\\core\\spidermw.py\", line 106, in process_sync\n    for r in iterable:\n  File \"c:\\scraper\\src\\funcs.py\", line 184, in get_error_and_response_codes\n    elif response.json().get('error') is None:\n  File \"c:\\scraper\\venv\\lib\\site-packages\\scrapy\\http\\response\\text.py\", line 85, in json\n    self._cached_decoded_json = json.loads(self.body)\n  File \"c:\\python3.8\\lib\\json\\__init__.py\", line 343, in loads\n    s = s.decode(detect_encoding(s), 'surrogatepass')\nUnicodeDecodeError: 'utf-8' codec can't decode byte 0x92 in position 148: invalid start byte",
+    "buggy_commit": "050a8cf159a6b0c0c7d4ba08b98d957c0ab3416d",
+    "fix_commit": "18ed0c0f7cea0fc23e1f837b72059889191e735f",
+    "fix_url": "https://github.com/scrapy/scrapy/pull/7897",
+    "fixed_files": [
+      "scrapy/http/response/text.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "scrapy/http/response/text.py",
+        "start": 87,
+        "end": 87
+      },
+      {
+        "file": "scrapy/http/response/text.py",
+        "start": 89,
+        "end": 89
+      }
+    ],
+    "cause_summary": "TextResponse.json() passed the raw body bytes to json.loads(), which only auto-detects UTF-8/16/32, so a body in another encoding (cp1252) raised UnicodeDecodeError instead of using the response encoding.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "scrapy/scrapy",
+    "issue_url": "https://github.com/scrapy/scrapy/issues/4780",
+    "traceback": "Traceback (most recent call last):\n  File \"/tmp/test_scrapy/.venv/bin/scrapy\", line 8, in <module>\n    sys.exit(execute())\n  File \"/tmp/test_scrapy/.venv/lib/python3.6/site-packages/scrapy/cmdline.py\", line 114, in execute\n    settings = get_project_settings()\n  File \"/tmp/test_scrapy/.venv/lib/python3.6/site-packages/scrapy/utils/project.py\", line 69, in get_project_settings\n    settings.setmodule(settings_module_path, priority='project')\n  File \"/tmp/test_scrapy/.venv/lib/python3.6/site-packages/scrapy/settings/__init__.py\", line 286, in setmodule\n    module = import_module(module)\n  File \"/usr/lib/python3.6/importlib/__init__.py\", line 126, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n  File \"<frozen importlib._bootstrap>\", line 994, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 971, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 941, in _find_and_load_unlocked\n  File \"<frozen importlib._bootstrap>\", line 219, in _call_with_frames_removed\n  File \"<frozen importlib._bootstrap>\", line 994, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 971, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 953, in _find_and_load_unlocked\nModuleNotFoundError: No module named 'tutorial'",
+    "buggy_commit": "a0233152681f756c17bf1837744e4bc8be74ffa8",
+    "fix_commit": "ca1f32612cb69f8d645443d412bf6a560a34370d",
+    "fix_url": "https://github.com/scrapy/scrapy/pull/8042",
+    "fixed_files": [
+      "scrapy/utils/conf.py",
+      "scrapy/utils/project.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "scrapy/utils/conf.py",
+        "start": 95,
+        "end": 95
+      },
+      {
+        "file": "scrapy/utils/project.py",
+        "start": 119,
+        "end": 121
+      }
+    ],
+    "cause_summary": "get_project_settings() skipped init_env() when SCRAPY_SETTINGS_MODULE was already set, so the project directory was never added to sys.path and the settings module could not be imported.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "Textualize/rich",
+    "issue_url": "https://github.com/Textualize/rich/issues/3053",
+    "traceback": "Traceback (most recent call last):\n  File \"/Users/justin/src/mchat/rtest.py\", line 12, in <module>\n    console.print(md)\n  File \"/Users/justin/Library/Caches/pypoetry/virtualenvs/mchat-mvZqEniY-py3.11/lib/python3.11/site-packages/rich/console.py\", line 1699, in print\n    extend(render(renderable, render_options))\n  File \"/Users/justin/Library/Caches/pypoetry/virtualenvs/mchat-mvZqEniY-py3.11/lib/python3.11/site-packages/rich/console.py\", line 1331, in render\n    for render_output in iter_render:\n  File \"/Users/justin/Library/Caches/pypoetry/virtualenvs/mchat-mvZqEniY-py3.11/lib/python3.11/site-packages/rich/markdown.py\", line 686, in __rich_console__\n    yield from console.render(element, context.options)\n  File \"/Users/justin/Library/Caches/pypoetry/virtualenvs/mchat-mvZqEniY-py3.11/lib/python3.11/site-packages/rich/console.py\", line 1331, in render\n    for render_output in iter_render:\n  File \"/Users/justin/Library/Caches/pypoetry/virtualenvs/mchat-mvZqEniY-py3.11/lib/python3.11/site-packages/rich/markdown.py\", line 262, in __rich_console__\n    assert self.body is not None\n           ^^^^^^^^^^^^^^^^^^^^^\nAssertionError",
+    "buggy_commit": "01b85ac116c4635b6ddb8b488be8254be6df2a84",
+    "fix_commit": "cbf01a0a847d07daf14ea3e6deb4f1ed803c91e6",
+    "fix_url": "https://github.com/Textualize/rich/pull/3064",
+    "fixed_files": [
+      "rich/markdown.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "rich/markdown.py",
+        "start": 257,
+        "end": 265
+      }
+    ],
+    "cause_summary": "TableElement.__rich_console__ asserted that the markdown table had a header and a body, which fails for tables with no body rows.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "Textualize/rich",
+    "issue_url": "https://github.com/Textualize/rich/issues/2197",
+    "traceback": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n  File \"/tmp/rich-cwd-issue/.venv/lib/python3.9/site-packages/rich/__init__.py\", line 16, in <module>\n    _IMPORT_CWD = os.path.abspath(os.getcwd())\nFileNotFoundError: [Errno 2] No such file or directory",
+    "buggy_commit": "0ed9309a0e298ed91b21498caa021a37cac15591",
+    "fix_commit": "4dec7980fe527ea61feb7f039786bed0c4c0449c",
+    "fix_url": "https://github.com/Textualize/rich/pull/2212",
+    "fixed_files": [
+      "rich/__init__.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "rich/__init__.py",
+        "start": 16,
+        "end": 16
+      }
+    ],
+    "cause_summary": "rich/__init__.py called os.getcwd() at import time without handling FileNotFoundError, so importing rich from a deleted working directory failed.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "psf/black",
+    "issue_url": "https://github.com/psf/black/issues/4781",
+    "traceback": "Traceback (most recent call last):\n  File \"src/black/__init__.py\", line 900, in reformat_one\n  File \"src/black/__init__.py\", line 1019, in format_stdin_to_stdout\n  File \"src/black/__init__.py\", line 1083, in format_file_contents\n  File \"src/black/__init__.py\", line 1212, in format_str\n  File \"src/black/__init__.py\", line 1268, in _format_str_once\n  File \"src/black/nodes.py\", line 175, in visit\n  File \"src/black/linegen.py\", line 163, in visit_default\n  File \"src/black/nodes.py\", line 181, in visit_default\n  File \"src/black/nodes.py\", line 173, in visit\n  File \"src/black/linegen.py\", line 285, in visit_funcdef\n  File \"src/black/nodes.py\", line 175, in visit\n  File \"src/black/linegen.py\", line 163, in visit_default\n  File \"src/black/nodes.py\", line 181, in visit_default\n  File \"src/black/nodes.py\", line 173, in visit\n  File \"src/black/linegen.py\", line 416, in visit_tname\nAssertionError",
+    "buggy_commit": "efad911ff4f7855ffdc06886579ca8cd2b93733f",
+    "fix_commit": "300d1d8f82a463f5e67971df5950f7643b22b8a3",
+    "fix_url": "https://github.com/psf/black/pull/4854",
+    "fixed_files": [
+      "src/black/linegen.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/black/linegen.py",
+        "start": 465,
+        "end": 466
+      }
+    ],
+    "cause_summary": "LineGenerator.visit_tname asserted that a tname node has exactly three children, which is false for an annotated parameter inside a '# fmt: skip' one-liner under the preview feature.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "psf/black",
+    "issue_url": "https://github.com/psf/black/issues/4077",
+    "traceback": "Traceback (most recent call last):\n  <some omitted>\n  File \"/home/tg2648/black/src/black/__init__.py\", line 600, in main\n    sources = get_sources(\n              ^^^^^^^^^^^^\n  File \"/home/tg2648/black/src/black/__init__.py\", line 687, in get_sources\n    root_relative_path = path.absolute().relative_to(root).as_posix()\n                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/tg2648/.pyenv/versions/3.11.0/lib/python3.11/pathlib.py\", line 730, in relative_to\n    raise ValueError(\"{!r} is not in the subpath of {!r}\"\nValueError: '/home/tg2648/test_black_sym/app.py' is not in the subpath of '/home/tg2648/test_black' OR one path is relative and the other is absolute.",
+    "buggy_commit": "6f3fb78444655f883780dcc19349226833c677c1",
+    "fix_commit": "8fe602b1fa91dc6db682d1dba79a8a7341597271",
+    "fix_url": "https://github.com/psf/black/pull/4161",
+    "fixed_files": [
+      "src/black/__init__.py",
+      "src/black/files.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/black/__init__.py",
+        "start": 51,
+        "end": 52
+      },
+      {
+        "file": "src/black/__init__.py",
+        "start": 703,
+        "end": 703
+      },
+      {
+        "file": "src/black/files.py",
+        "start": 262,
+        "end": 269
+      },
+      {
+        "file": "src/black/files.py",
+        "start": 278,
+        "end": 279
+      }
+    ],
+    "cause_summary": "get_sources() called path.absolute().relative_to(root) directly, which raises ValueError for a file reached through a symlink that points outside the project root.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "aio-libs/aiohttp",
+    "issue_url": "https://github.com/aio-libs/aiohttp/issues/13758",
+    "traceback": "Traceback (most recent call last):\n  File \"repro.py\", line 30, in <module>\n    asyncio.run(main())\n  File \"repro.py\", line 27, in main\n    await part.read_chunk(4)\n  File \".../aiohttp/multipart.py\", line 392, in read_chunk\n    fresh = await self._read_chunk_from_stream(want)\n  File \".../aiohttp/multipart.py\", line 451, in _read_chunk_from_stream\n    size >= self._boundary_len\nAssertionError: Chunk size must be greater or equal than boundary length + 2",
+    "buggy_commit": "ed74d78659100e8ac34bc53186b7aac2d5e03887",
+    "fix_commit": "ced8133ea466a3bbe39d01a42bef79a5d2dbf1b5",
+    "fix_url": "https://github.com/aio-libs/aiohttp/pull/13760",
+    "fixed_files": [
+      "aiohttp/multipart.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "aiohttp/multipart.py",
+        "start": 389,
+        "end": 389
+      }
+    ],
+    "cause_summary": "BodyPartReader.read_chunk() tested 'if self._length:' so a Content-Length of 0 was treated as unknown length and the part was read from the stream, tripping the chunk-size assertion.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "marshmallow-code/marshmallow",
+    "issue_url": "https://github.com/marshmallow-code/marshmallow/issues/1357",
+    "traceback": "Traceback (most recent call last):\n  File \"test-mm.py\", line 8, in <module>\n    s = MySchema()\n  File \"/Users/victor/.pyenv/versions/marshmallow/lib/python3.6/site-packages/marshmallow/schema.py\", line 383, in __init__\n    self.fields = self._init_fields()\n  File \"/Users/victor/.pyenv/versions/marshmallow/lib/python3.6/site-packages/marshmallow/schema.py\", line 913, in _init_fields\n    self._bind_field(field_name, field_obj)\n  File \"/Users/victor/.pyenv/versions/marshmallow/lib/python3.6/site-packages/marshmallow/schema.py\", line 969, in _bind_field\n    field_obj._bind_to_schema(field_name, self)\n  File \"/Users/victor/.pyenv/versions/marshmallow/lib/python3.6/site-packages/marshmallow/fields.py\", line 636, in _bind_to_schema\n    self.inner._bind_to_schema(field_name, self)\n  File \"/Users/victor/.pyenv/versions/marshmallow/lib/python3.6/site-packages/marshmallow/fields.py\", line 1117, in _bind_to_schema\n    or getattr(schema.opts, self.SCHEMA_OPTS_VAR_NAME)\nAttributeError: 'List' object has no attribute 'opts'",
+    "buggy_commit": "b40a0f4e33823e6d0f341f7e8684e359a99060d1",
+    "fix_commit": "f7e8062c5855818fe70786ef46cbfcf8a1d7c365",
+    "fix_url": "https://github.com/marshmallow-code/marshmallow/pull/1359",
+    "fixed_files": [
+      "src/marshmallow/fields.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/marshmallow/fields.py",
+        "start": 1117,
+        "end": 1117
+      }
+    ],
+    "cause_summary": "DateTime._bind_to_schema() read schema.opts from its parent, but when used as an inner field of List/Tuple the parent is a field without opts; the fix uses self.root.opts.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "pytest-dev/pytest",
+    "issue_url": "https://github.com/pytest-dev/pytest/issues/13734",
+    "traceback": "INTERNALERROR> Traceback (most recent call last):\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/main.py\", line 289, in wrap_session\nINTERNALERROR>     session.exitstatus = doit(config, session) or 0\nINTERNALERROR>                          ~~~~^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/main.py\", line 343, in _main\nINTERNALERROR>     config.hook.pytest_runtestloop(session=session)\nINTERNALERROR>     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_hooks.py\", line 512, in __call__\nINTERNALERROR>     return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)\nINTERNALERROR>            ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_manager.py\", line 120, in _hookexec\nINTERNALERROR>     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)\nINTERNALERROR>            ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_callers.py\", line 167, in _multicall\nINTERNALERROR>     raise exception\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_callers.py\", line 139, in _multicall\nINTERNALERROR>     teardown.throw(exception)\nINTERNALERROR>     ~~~~~~~~~~~~~~^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/logging.py\", line 801, in pytest_runtestloop\nINTERNALERROR>     return (yield)  # Run all the tests.\nINTERNALERROR>             ^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_callers.py\", line 139, in _multicall\nINTERNALERROR>     teardown.throw(exception)\nINTERNALERROR>     ~~~~~~~~~~~~~~^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/terminal.py\", line 688, in pytest_runtestloop\nINTERNALERROR>     result = yield\nINTERNALERROR>              ^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_callers.py\", line 121, in _multicall\nINTERNALERROR>     res = hook_impl.function(*args)\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/main.py\", line 367, in pytest_runtestloop\nINTERNALERROR>     item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)\nINTERNALERROR>     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_hooks.py\", line 512, in __call__\nINTERNALERROR>     return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)\nINTERNALERROR>            ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_manager.py\", line 120, in _hookexec\nINTERNALERROR>     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)\nINTERNALERROR>            ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_callers.py\", line 167, in _multicall\nINTERNALERROR>     raise exception\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_callers.py\", line 139, in _multicall\nINTERNALERROR>     teardown.throw(exception)\nINTERNALERROR>     ~~~~~~~~~~~~~~^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/warnings.py\", line 90, in pytest_runtest_protocol\nINTERNALERROR>     return (yield)\nINTERNALERROR>             ^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_callers.py\", line 139, in _multicall\nINTERNALERROR>     teardown.throw(exception)\nINTERNALERROR>     ~~~~~~~~~~~~~~^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/assertion/__init__.py\", line 192, in pytest_runtest_protocol\nINTERNALERROR>     return (yield)\nINTERNALERROR>             ^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_callers.py\", line 139, in _multicall\nINTERNALERROR>     teardown.throw(exception)\nINTERNALERROR>     ~~~~~~~~~~~~~~^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/unittest.py\", line 475, in pytest_runtest_protocol\nINTERNALERROR>     return (yield)\nINTERNALERROR>             ^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_callers.py\", line 139, in _multicall\nINTERNALERROR>     teardown.throw(exception)\nINTERNALERROR>     ~~~~~~~~~~~~~~^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/faulthandler.py\", line 88, in pytest_runtest_protocol\nINTERNALERROR>     return (yield)\nINTERNALERROR>             ^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_callers.py\", line 121, in _multicall\nINTERNALERROR>     res = hook_impl.function(*args)\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/runner.py\", line 117, in pytest_runtest_protocol\nINTERNALERROR>     runtestprotocol(item, nextitem=nextitem)\nINTERNALERROR>     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/runner.py\", line 136, in runtestprotocol\nINTERNALERROR>     reports.append(call_and_report(item, \"call\", log))\nINTERNALERROR>                    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/runner.py\", line 248, in call_and_report\nINTERNALERROR>     report: TestReport = ihook.pytest_runtest_makereport(item=item, call=call)\nINTERNALERROR>                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_hooks.py\", line 512, in __call__\nINTERNALERROR>     return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)\nINTERNALERROR>            ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_manager.py\", line 120, in _hookexec\nINTERNALERROR>     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)\nINTERNALERROR>            ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_callers.py\", line 167, in _multicall\nINTERNALERROR>     raise exception\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_callers.py\", line 139, in _multicall\nINTERNALERROR>     teardown.throw(exception)\nINTERNALERROR>     ~~~~~~~~~~~~~~^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/tmpdir.py\", line 308, in pytest_runtest_makereport\nINTERNALERROR>     rep = yield\nINTERNALERROR>           ^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_callers.py\", line 139, in _multicall\nINTERNALERROR>     teardown.throw(exception)\nINTERNALERROR>     ~~~~~~~~~~~~~~^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/skipping.py\", line 275, in pytest_runtest_makereport\nINTERNALERROR>     rep = yield\nINTERNALERROR>           ^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/pluggy/_callers.py\", line 121, in _multicall\nINTERNALERROR>     res = hook_impl.function(*args)\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/runner.py\", line 368, in pytest_runtest_makereport\nINTERNALERROR>     return TestReport.from_item_and_call(item, call)\nINTERNALERROR>            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/reports.py\", line 377, in from_item_and_call\nINTERNALERROR>     longrepr = item.repr_failure(excinfo)\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/python.py\", line 1713, in repr_failure\nINTERNALERROR>     return self._repr_failure_py(excinfo, style=style)\nINTERNALERROR>            ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/nodes.py\", line 456, in _repr_failure_py\nINTERNALERROR>     return excinfo.getrepr(\nINTERNALERROR>            ~~~~~~~~~~~~~~~^\nINTERNALERROR>         funcargs=True,\nINTERNALERROR>         ^^^^^^^^^^^^^^\nINTERNALERROR>     ...<5 lines>...\nINTERNALERROR>         truncate_args=truncate_args,\nINTERNALERROR>         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nINTERNALERROR>     )\nINTERNALERROR>     ^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/_code/code.py\", line 766, in getrepr\nINTERNALERROR>     return fmt.repr_excinfo(self)\nINTERNALERROR>            ~~~~~~~~~~~~~~~~^^^^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/_code/code.py\", line 1198, in repr_excinfo\nINTERNALERROR>     traceback[0]._rawentry,\nINTERNALERROR>     ~~~~~~~~~^^^\nINTERNALERROR>   File \"/home/cjwatson/pytest-env/lib/python3.13/site-packages/_pytest/_code/code.py\", line 422, in __getitem__\nINTERNALERROR>     return super().__getitem__(key)\nINTERNALERROR>            ~~~~~~~~~~~~~~~~~~~^^^^^\nINTERNALERROR> IndexError: list index out of range",
+    "buggy_commit": "7eb7b3ed4270b8ad5c4c0bc45ae99b82e7546b6b",
+    "fix_commit": "fa6a232d529b33f6388dc788d7613cf206c08130",
+    "fix_url": "https://github.com/pytest-dev/pytest/pull/14025",
+    "fixed_files": [
+      "src/_pytest/_code/code.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/_pytest/_code/code.py",
+        "start": 1196,
+        "end": 1196
+      },
+      {
+        "file": "src/_pytest/_code/code.py",
+        "start": 1198,
+        "end": 1199
+      }
+    ],
+    "cause_summary": "FormattedExcinfo.repr_excinfo() indexed traceback[0] for an exception group even when every traceback entry had been hidden, so the cut traceback was empty and raised IndexError.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "pytest-dev/pytest",
+    "issue_url": "https://github.com/pytest-dev/pytest/issues/13478",
+    "traceback": "INTERNALERROR> Traceback (most recent call last):\nINTERNALERROR>   File \"/code/.venv/lib/python3.12/site-packages/_pytest/main.py\", line 289, in wrap_session\nINTERNALERROR>     session.exitstatus = doit(config, session) or 0\nINTERNALERROR>                          ^^^^^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/code/.venv/lib/python3.12/site-packages/_pytest/main.py\", line 343, in _main\nINTERNALERROR>     config.hook.pytest_runtestloop(session=session)\nINTERNALERROR>   File \"/code/.venv/lib/python3.12/site-packages/pluggy/_hooks.py\", line 512, in __call__\nINTERNALERROR>     return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)\nINTERNALERROR>            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/code/.venv/lib/python3.12/site-packages/pluggy/_manager.py\", line 120, in _hookexec\nINTERNALERROR>     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)\nINTERNALERROR>            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/code/.venv/lib/python3.12/site-packages/pluggy/_callers.py\", line 167, in _multicall\nINTERNALERROR>     raise exception\nINTERNALERROR>   File \"/code/.venv/lib/python3.12/site-packages/pluggy/_callers.py\", line 139, in _multicall\nINTERNALERROR>     teardown.throw(exception)\nINTERNALERROR>   File \"/code/.venv/lib/python3.12/site-packages/_pytest/logging.py\", line 801, in pytest_runtestloop\nINTERNALERROR>     return (yield)  # Run all the tests.\nINTERNALERROR>             ^^^^^\nINTERNALERROR>   File \"/code/.venv/lib/python3.12/site-packages/pluggy/_callers.py\", line 152, in _multicall\nINTERNALERROR>     teardown.send(result)\nINTERNALERROR>   File \"/code/.venv/lib/python3.12/site-packages/_pytest/terminal.py\", line 693, in pytest_runtestloop\nINTERNALERROR>     self._write_progress_information_filling_space()\nINTERNALERROR>   File \"/code/.venv/lib/python3.12/site-packages/_pytest/terminal.py\", line 758, in _write_progress_information_filling_space\nINTERNALERROR>     msg = self._get_progress_information_message()\nINTERNALERROR>           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/code/.venv/lib/python3.12/site-packages/_pytest/terminal.py\", line 734, in _get_progress_information_message\nINTERNALERROR>     return format_node_duration(sum(r.duration for r in not_reported))\nINTERNALERROR>                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nINTERNALERROR>   File \"/code/.venv/lib/python3.12/site-packages/_pytest/terminal.py\", line 734, in <genexpr>\nINTERNALERROR>     return format_node_duration(sum(r.duration for r in not_reported))\nINTERNALERROR>                                     ^^^^^^^^^^\nINTERNALERROR> AttributeError: 'CollectReport' object has no attribute 'duration'. Did you mean: 'location'?",
+    "buggy_commit": "e920a27e7926dee4a05c147bd9304df14b8b8a22",
+    "fix_commit": "c5a75f2498c86850c4ce13bcf10d56efc92394a4",
+    "fix_url": "https://github.com/pytest-dev/pytest/pull/13573",
+    "fixed_files": [
+      "src/_pytest/terminal.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/_pytest/terminal.py",
+        "start": 737,
+        "end": 737
+      }
+    ],
+    "cause_summary": "_get_progress_information_message() summed r.duration over all not-yet-reported reports, but with console_output_style=times a skipped module leaves a CollectReport, which has no duration.",
+    "difficulty": "in_trace"
+  },
+  {
+    "repo": "psf/requests",
+    "issue_url": "https://github.com/psf/requests/issues/6643",
+    "traceback": "Traceback (most recent call last):\n  File \"/usr/local/lib/python3.11/site-packages/urllib3/util/url.py\", line 425, in parse_url\n    host, port = _HOST_PORT_RE.match(host_port).groups()  # type: ignore[union-attr]\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAttributeError: 'NoneType' object has no attribute 'groups'\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"<stdin>\", line 1, in <module>\n  File \"/usr/local/lib/python3.11/site-packages/requests/api.py\", line 73, in get\n    return request(\"get\", url, params=params, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.11/site-packages/requests/api.py\", line 59, in request\n    return session.request(method=method, url=url, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.11/site-packages/requests/sessions.py\", line 589, in request\n    resp = self.send(prep, **send_kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.11/site-packages/requests/sessions.py\", line 703, in send\n    r = adapter.send(request, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.11/site-packages/requests/adapters.py\", line 486, in send\n    resp = conn.urlopen(\n           ^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.11/site-packages/urllib3/connectionpool.py\", line 711, in urlopen\n    parsed_url = parse_url(url)\n                 ^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.11/site-packages/urllib3/util/url.py\", line 451, in parse_url\n    raise LocationParseError(source_url) from e\nurllib3.exceptions.LocationParseError: Failed to parse: //v:h",
+    "buggy_commit": "382fc2c0c6c0ef0874bc65bc1175f97c073e5086",
+    "fix_commit": "3587a5f869ea7ae2ba6b20d281d810b65aa2418e",
+    "fix_url": "https://github.com/psf/requests/pull/6644",
+    "fixed_files": [
+      "src/requests/adapters.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/requests/adapters.py",
+        "start": 392,
+        "end": 393
+      }
+    ],
+    "cause_summary": "HTTPAdapter.request_url() passed a path starting with '//' through unchanged, and urllib3 then parsed '//v:h' as a network location and failed; the fix collapses the leading slashes.",
+    "difficulty": "root_elsewhere"
+  },
+  {
+    "repo": "pallets/flask",
+    "issue_url": "https://github.com/pallets/flask/issues/5258",
+    "traceback": "Traceback (most recent call last):\n  File \"/home/dmitry/git/github.com/minetest/contentdb/tests.py\", line 6, in <module>\n    url_for(\"doesnotmatter\", self=1)\n  File \"/home/dmitry/.cache/pypoetry/virtualenvs/contentdb-MK2UWkId-py3.10/lib/python3.10/site-packages/flask/helpers.py\", line 256, in url_for\n    return current_app.url_for(\nTypeError: Flask.url_for() got multiple values for argument 'self'",
+    "buggy_commit": "b7c1290528f907c9f41afcdfd33a2227c73e26d3",
+    "fix_commit": "438edcdf01c392619449a6bdbb18f6cf72ef7bb9",
+    "fix_url": "https://github.com/pallets/flask/pull/5264",
+    "fixed_files": [
+      "src/flask/app.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/flask/app.py",
+        "start": 954,
+        "end": 955
+      }
+    ],
+    "cause_summary": "Flask.url_for() declared self as an ordinary parameter, so a URL value named 'self' passed via **values collided with it; the fix makes self positional-only.",
+    "difficulty": "root_elsewhere"
+  },
+  {
+    "repo": "pallets/jinja",
+    "issue_url": "https://github.com/pallets/jinja/issues/1701",
+    "traceback": "Traceback (most recent call last):\n  File \"<stdin>\", line 1, in <module>\n  File \"/home/phemmer/.local/lib/python3.10/site-packages/jinja2/nativetypes.py\", line 112, in render\n    return self.environment.handle_exception()\n  File \"/home/phemmer/.local/lib/python3.10/site-packages/jinja2/environment.py\", line 936, in handle_exception\n    raise rewrite_traceback_stack(source=source)\n  File \"/home/phemmer/.local/lib/python3.10/site-packages/jinja2/nativetypes.py\", line 25, in native_concat\n    head = list(islice(values, 2))\n  File \"<template>\", line 1, in top-level template code\nTypeError: sequence item 0: expected str instance, int found",
+    "buggy_commit": "791dd3b0415b99faac229d42a81db1d7096b003c",
+    "fix_commit": "a4abbfd7538e9ff216244266579232585033136c",
+    "fix_url": "https://github.com/pallets/jinja/pull/1702",
+    "fixed_files": [
+      "src/jinja2/runtime.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/jinja2/runtime.py",
+        "start": 370,
+        "end": 370
+      },
+      {
+        "file": "src/jinja2/runtime.py",
+        "start": 384,
+        "end": 384
+      }
+    ],
+    "cause_summary": "BlockReference.__call__/_async_call joined block output with the module-level str concat instead of environment.concat, so NativeEnvironment blocks returning non-strings failed.",
+    "difficulty": "root_elsewhere"
+  },
+  {
+    "repo": "encode/httpx",
+    "issue_url": "https://github.com/encode/httpx/issues/309",
+    "traceback": "Traceback (most recent call last):\n  File \"http3/httpx/dispatch/http11.py\", line 53, in send\n    http_version, status_code, headers = await self._receive_response(timeout)\n  File \"http3/httpx/dispatch/http11.py\", line 133, in _receive_response\n    event = await self._receive_event(timeout)\n  File \"http3/httpx/dispatch/http11.py\", line 174, in _receive_event\n    self.READ_NUM_BYTES, timeout, flag=self.timeout_flag\n  File \"http3/httpx/concurrency/asyncio.py\", line 92, in read\n    raise ReadTimeout() from None\nhttp3.httpx.exceptions.ReadTimeout\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"test_proto.py\", line 16, in <module>\n    asyncio.get_event_loop().run_until_complete(test())\n  File \"/lib/python3.7/asyncio/base_events.py\", line 584, in run_until_complete\n    return future.result()\n  File \"test_proto.py\", line 11, in test\n    resp = await client.post(url, data='debug', allow_redirects=True)\n  File \"http3/httpx/client.py\", line 415, in post\n    trust_env=trust_env,\n  File \"http3/httpx/client.py\", line 566, in request\n    trust_env=trust_env,\n  File \"http3/httpx/client.py\", line 237, in send\n    return await get_response(request)\n  File \"http3/httpx/middleware.py\", line 72, in __call__\n    return await self(next_request, get_response)\n  File \"http3/httpx/middleware.py\", line 62, in __call__\n    response = await get_response(request)\n  File \"http3/httpx/client.py\", line 202, in get_response\n    request, verify=verify, cert=cert, timeout=timeout\n  File \"http3/httpx/dispatch/connection_pool.py\", line 126, in send\n    raise exc\n  File \"http3/httpx/dispatch/connection_pool.py\", line 121, in send\n    request, verify=verify, cert=cert, timeout=timeout\n  File \"http3/httpx/dispatch/connection.py\", line 65, in send\n    response = await self.h11_connection.send(request, timeout=timeout)\n  File \"http3/httpx/dispatch/http11.py\", line 53, in send\n    http_version, status_code, headers = await self._receive_response(timeout)\n  File \"http3/httpx/concurrency/asyncio.py\", line 285, in __aexit__\n    await self.task\n  File \"http3/httpx/dispatch/http11.py\", line 108, in _send_request_data\n    await self._send_event(event, timeout)\n  File \"http3/httpx/dispatch/http11.py\", line 123, in _send_event\n    bytes_to_send = self.h11_state.send(event)\n  File \"site-packages/h11/_connection.py\", line 469, in send\n    data_list = self.send_with_data_passthrough(event)\n  File \"site-packages/h11/_connection.py\", line 502, in send_with_data_passthrough\n    writer(event, data_list.append)\n  File \"site-packages/h11/_writers.py\", line 79, in __call__\n    self.send_eom(event.headers, write)\n  File \"site-packages/h11/_writers.py\", line 102, in send_eom\n    raise LocalProtocolError(\"Too little data for declared Content-Length\")\nh11._util.LocalProtocolError: Too little data for declared Content-Length",
+    "buggy_commit": "cbe76164eb0d5954c8c58d3f265755ffc876eddd",
+    "fix_commit": "33c5fe03748ad100054b2bf82d9c26fac31e2788",
+    "fix_url": "https://github.com/encode/httpx/pull/310",
+    "fixed_files": [
+      "httpx/middleware.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "httpx/middleware.py",
+        "start": 91,
+        "end": 91
+      },
+      {
+        "file": "httpx/middleware.py",
+        "start": 141,
+        "end": 141
+      },
+      {
+        "file": "httpx/middleware.py",
+        "start": 143,
+        "end": 144
+      },
+      {
+        "file": "httpx/middleware.py",
+        "start": 146,
+        "end": 147
+      },
+      {
+        "file": "httpx/middleware.py",
+        "start": 147,
+        "end": 148
+      },
+      {
+        "file": "httpx/middleware.py",
+        "start": 149,
+        "end": 149
+      }
+    ],
+    "cause_summary": "RedirectMiddleware.redirect_headers() kept Content-Length/Transfer-Encoding when a redirect switched the method to GET and dropped the body, so h11 saw too little data for the declared length.",
+    "difficulty": "root_elsewhere"
+  },
+  {
+    "repo": "fastapi/fastapi",
+    "issue_url": "https://github.com/fastapi/fastapi/issues/9424",
+    "traceback": "Traceback (most recent call last):\n  File \"/<python_location>/lib/python3.11/multiprocessing/process.py\", line 314, in _bootstrap\n    self.run()\n  File \"/<python_location>/lib/python3.11/multiprocessing/process.py\", line 108, in run\n    self._target(*self._args, **self._kwargs)\n  File \"/<project_dir>/venv/lib/python3.11/site-packages/uvicorn/_subprocess.py\", line 76, in subprocess_started\n    target(sockets=sockets)\n  File \"/<project_dir>/venv/lib/python3.11/site-packages/uvicorn/server.py\", line 59, in run\n    return asyncio.run(self.serve(sockets=sockets))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/<python_location>/lib/python3.11/asyncio/runners.py\", line 190, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/<python_location>/lib/python3.11/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"uvloop/loop.pyx\", line 1517, in uvloop.loop.Loop.run_until_complete\n  File \"/<project_dir>/venv/lib/python3.11/site-packages/uvicorn/server.py\", line 66, in serve\n    config.load()\n  File \"/<project_dir>/venv/lib/python3.11/site-packages/uvicorn/config.py\", line 471, in load\n    self.loaded_app = import_from_string(self.app)\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/<project_dir>/venv/lib/python3.11/site-packages/uvicorn/importer.py\", line 21, in import_from_string\n    module = importlib.import_module(module_str)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/<python_location>/lib/python3.11/importlib/__init__.py\", line 126, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1206, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1178, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1149, in _find_and_load_unlocked\n  File \"<frozen importlib._bootstrap>\", line 690, in _load_unlocked\n  File \"<frozen importlib._bootstrap_external>\", line 940, in exec_module\n  File \"<frozen importlib._bootstrap>\", line 241, in _call_with_frames_removed\n  File \"/<project_dir>/main.py\", line 12, in <module>\n    @app.post(\"/\", status_code=http.HTTPStatus.NO_CONTENT)\n     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/<project_dir>/venv/lib/python3.11/site-packages/fastapi/routing.py\", line 661, in decorator\n    self.add_api_route(\n  File \"/<project_dir>/venv/lib/python3.11/site-packages/fastapi/routing.py\", line 600, in add_api_route\n    route = route_class(\n            ^^^^^^^^^^^^\n  File \"/<project_dir>/venv/lib/python3.11/site-packages/fastapi/routing.py\", line 401, in __init__\n    assert is_body_allowed_for_status_code(\nAssertionError: Status code 204 must not have a response body",
+    "buggy_commit": "0bdc3ca3732e3742e094bea2b320e9774659ac38",
+    "fix_commit": "b51ec36f2e442495de5e4c22ae51a8f5c44917eb",
+    "fix_url": "https://github.com/fastapi/fastapi/pull/9425",
+    "fixed_files": [
+      "fastapi/dependencies/utils.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "fastapi/dependencies/utils.py",
+        "start": 256,
+        "end": 257
+      }
+    ],
+    "cause_summary": "get_typed_annotation() turned the string annotation 'None' (from postponed annotations) into NoneType rather than None, so the route was treated as having a response body and the 204 assertion failed.",
+    "difficulty": "root_elsewhere"
+  },
+  {
+    "repo": "psf/black",
+    "issue_url": "https://github.com/psf/black/issues/5214",
+    "traceback": "Traceback (most recent call last):\n  File \"/mnt/sda1/dev_parent/logging_strict/.venv/lib/python3.10/site-packages/black/__init__.py\", line 939, in reformat_one\n    if changed is not Changed.CACHED and format_file_in_place(\n  File \"/mnt/sda1/dev_parent/logging_strict/.venv/lib/python3.10/site-packages/black/__init__.py\", line 982, in format_file_in_place\n    dst_contents = format_file_contents(\n  File \"/mnt/sda1/dev_parent/logging_strict/.venv/lib/python3.10/site-packages/black/__init__.py\", line 1118, in format_file_contents\n    dst_contents = format_str(src_contents, mode=mode, lines=lines)\n  File \"/mnt/sda1/dev_parent/logging_strict/.venv/lib/python3.10/site-packages/black/__init__.py\", line 1247, in format_str\n    dst_contents = _format_str_once(src_contents, mode=mode, lines=lines)\n  File \"/mnt/sda1/dev_parent/logging_strict/.venv/lib/python3.10/site-packages/black/__init__.py\", line 1306, in _format_str_once\n    for line in transform_line(\n  File \"/mnt/sda1/dev_parent/logging_strict/.venv/lib/python3.10/site-packages/black/linegen.py\", line 746, in transform_line\n    is_line_short_enough(line, mode=mode, line_str=line_str_hugging_power_ops)\n  File \"/mnt/sda1/dev_parent/logging_strict/.venv/lib/python3.10/site-packages/black/lines.py\", line 1279, in is_line_short_enough\n    if leaf.bracket_depth + 1 > len(commas):\nAttributeError: 'Leaf' object has no attribute 'bracket_depth'",
+    "buggy_commit": "1e28c83d5bb693153f77f3374838c846e54526d1",
+    "fix_commit": "debb3169c698144c6b879da12b340d393c4fd0b5",
+    "fix_url": "https://github.com/psf/black/pull/5414",
+    "fixed_files": [
+      "src/blib2to3/pytree.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/blib2to3/pytree.py",
+        "start": 476,
+        "end": 476
+      },
+      {
+        "file": "src/blib2to3/pytree.py",
+        "start": 503,
+        "end": 504
+      },
+      {
+        "file": "src/blib2to3/pytree.py",
+        "start": 524,
+        "end": 525
+      },
+      {
+        "file": "src/blib2to3/pytree.py",
+        "start": 557,
+        "end": 558
+      }
+    ],
+    "cause_summary": "blib2to3 Leaf declared bracket_depth only as an annotation and neither __init__ nor clone() set it, so leaves created outside the bracket tracker lacked the attribute that is_line_short_enough() reads.",
+    "difficulty": "root_elsewhere"
+  },
+  {
+    "repo": "psf/black",
+    "issue_url": "https://github.com/psf/black/issues/4062",
+    "traceback": "Traceback (most recent call last):\n  File \"src/black/__init__.py\", line 1444, in assert_equivalent\n  File \"src/black/parsing.py\", line 140, in parse_ast\nSyntaxError: expected ':' (<unknown>, line 1)\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"src/black/__init__.py\", line 782, in reformat_code\n  File \"src/black/__init__.py\", line 945, in format_stdin_to_stdout\n  File \"src/black/__init__.py\", line 1011, in format_file_contents\n  File \"src/black/__init__.py\", line 985, in check_stability_and_equivalence\n  File \"src/black/__init__.py\", line 1447, in assert_equivalent\nAssertionError: INTERNAL ERROR: Black produced invalid code: expected ':' (<unknown>, line 1). Please report a bug on https://github.com/psf/black/issues.  This invalid output might be helpful: /var/folders/hh/hdb5qd2x3v51v6l0gknpfjfr0000gp/T/blk_wad8_c6m.log",
+    "buggy_commit": "3416b2c82d51f27ce55c31ef0bfe4a9e21816611",
+    "fix_commit": "50d5756e8e63b17e4523f096f312011273ce640f",
+    "fix_url": "https://github.com/psf/black/pull/4086",
+    "fixed_files": [
+      "src/black/linegen.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/black/linegen.py",
+        "start": 747,
+        "end": 747
+      }
+    ],
+    "cause_summary": "left_hand_split() only checked for a missing opening bracket, not for empty tail leaves, so at line length 1 it produced a split that broke the code and failed the equivalence check.",
+    "difficulty": "root_elsewhere"
+  },
+  {
+    "repo": "marshmallow-code/marshmallow",
+    "issue_url": "https://github.com/marshmallow-code/marshmallow/issues/2868",
+    "traceback": "Traceback (most recent call last):\n  File \"/data/src/test.py\", line 11, in <module>\n    schema.load({\"sentinel\": None})\n  File \"/home/hdd/miniconda3/envs/py312/lib/python3.12/site-packages/marshmallow/schema.py\", line 730, in load\n    return self._do_load(\n           ^^^^^^^^^^^^^^\n  File \"/home/hdd/miniconda3/envs/py312/lib/python3.12/site-packages/marshmallow/schema.py\", line 938, in _do_load\n    raise exc\nmarshmallow.exceptions.ValidationError: {'sentinel': ['Field may not be null.']}",
+    "buggy_commit": "213ee3a020e24fb26ead3a2285ba0402c90080ce",
+    "fix_commit": "19ca8dce2d5bde94509a4a89e495f35c695442d5",
+    "fix_url": "https://github.com/marshmallow-code/marshmallow/pull/2894",
+    "fixed_files": [
+      "src/marshmallow/fields.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/marshmallow/fields.py",
+        "start": 2067,
+        "end": 2068
+      },
+      {
+        "file": "src/marshmallow/fields.py",
+        "start": 2070,
+        "end": 2071
+      }
+    ],
+    "cause_summary": "fields.Constant set load_default/dump_default after Field.__init__ had already computed allow_none from a missing default, so a None constant was rejected as null on load.",
+    "difficulty": "root_elsewhere"
+  },
+  {
+    "repo": "python-attrs/attrs",
+    "issue_url": "https://github.com/python-attrs/attrs/issues/1284",
+    "traceback": "Traceback (most recent call last):\n  File \"/home/user/attrs_pre_init.py\", line 4, in <module>\n    @define\n     ^^^^^^\n  File \"/home/user/.venv/lib/python3.12/site-packages/attr/_next_gen.py\", line 153, in define\n    return wrap(maybe_cls)\n           ^^^^^^^^^^^^^^^\n  File \"/home/user/.venv/lib/python3.12/site-packages/attr/_next_gen.py\", line 144, in wrap\n    return do_it(cls, True)\n           ^^^^^^^^^^^^^^^^\n  File \"/home/user/.venv/lib/python3.12/site-packages/attr/_next_gen.py\", line 90, in do_it\n    return attrs(\n           ^^^^^^\n  File \"/home/user/.venv/lib/python3.12/site-packages/attr/_make.py\", line 1715, in attrs\n    return wrap(maybe_cls)\n           ^^^^^^^^^^^^^^^\n  File \"/home/user/.venv/lib/python3.12/site-packages/attr/_make.py\", line 1694, in wrap\n    builder.add_init()\n  File \"/home/user/.venv/lib/python3.12/site-packages/attr/_make.py\", line 1090, in add_init\n    _make_init(\n  File \"/home/user/.venv/lib/python3.12/site-packages/attr/_make.py\", line 2181, in _make_init\n    init = _make_method(\n           ^^^^^^^^^^^^^\n  File \"/home/user/.venv/lib/python3.12/site-packages/attr/_make.py\", line 345, in _make_method\n    _compile_and_eval(script, globs, locs, filename)\n  File \"/home/user/.venv/lib/python3.12/site-packages/attr/_make.py\", line 317, in _compile_and_eval\n    bytecode = compile(script, filename, \"exec\")\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<attrs generated init __main__.A>\", line 2\n    self.__attrs_pre_init__(a=attr_dict['a'].default=a=attr_dict['a'].default)\n                                                    ^\nSyntaxError: invalid syntax",
+    "buggy_commit": "689a0e64012d1e576ebd99e786a254bc537582c6",
+    "fix_commit": "09161fc9181bf94aa3bbc5509c663d736a9553dc",
+    "fix_url": "https://github.com/python-attrs/attrs/pull/1319",
+    "fixed_files": [
+      "src/attr/_make.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "src/attr/_make.py",
+        "start": 2210,
+        "end": 2210
+      },
+      {
+        "file": "src/attr/_make.py",
+        "start": 2212,
+        "end": 2214
+      },
+      {
+        "file": "src/attr/_make.py",
+        "start": 2218,
+        "end": 2218
+      }
+    ],
+    "cause_summary": "_attrs_to_init_script() built the __attrs_pre_init__ call from kw_only argument strings that still included '=default', generating invalid code like a=attr_dict['a'].default=a=....",
+    "difficulty": "root_elsewhere"
+  },
+  {
+    "repo": "celery/celery",
+    "issue_url": "https://github.com/celery/celery/issues/6164",
+    "traceback": "Traceback (most recent call last):\nFile \"/usr/local/lib/python3.8/site-packages/celery/result.py\", line 389, in __del__\nself.backend.remove_pending_result(self)\nFile \"/usr/local/lib/python3.8/site-packages/celery/backends/asynchronous.py\", line 187, in remove_pending_result\nself.on_result_fulfilled(result)\nFile \"/usr/local/lib/python3.8/site-packages/celery/backends/asynchronous.py\", line 195, in on_result_fulfilled\nself.result_consumer.cancel_for(result.id)\nFile \"/usr/local/lib/python3.8/site-packages/celery/backends/redis.py\", line 180, in cancel_for\nkey = self._get_key_for_task(task_id)\nFile \"/usr/local/lib/python3.8/site-packages/celery/backends/base.py\", line 753, in get_key_for_task\nreturn key_t('').join([\nTypeError\n:\nsequence item 1: expected a bytes-like object, UUID found",
+    "buggy_commit": "a094d2a891cb77dcaa6ee432a5102a4863e5beff",
+    "fix_commit": "6e0d683085f591de55106b0de698de93d6638af0",
+    "fix_url": "https://github.com/celery/celery/pull/10406",
+    "fixed_files": [
+      "celery/backends/base.py"
+    ],
+    "fixed_lines": [
+      {
+        "file": "celery/backends/base.py",
+        "start": 13,
+        "end": 14
+      },
+      {
+        "file": "celery/backends/base.py",
+        "start": 1040,
+        "end": 1041
+      }
+    ],
+    "cause_summary": "BaseKeyValueStoreBackend._get_key_for() passed the task id straight to key_t(), so a uuid.UUID task id made the bytes join raise TypeError.",
+    "difficulty": "root_elsewhere"
+  }
+]

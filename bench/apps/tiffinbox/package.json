@@ -1,0 +1,5 @@
+{
+  "name": "tiffinbox",
+  "private": true,
+  "main": "src/app.js"
+}

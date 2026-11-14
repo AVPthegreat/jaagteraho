@@ -1,0 +1,34 @@
+'use strict';
+const { setting } = require('../core/config');
+const { AppError } = require('../core/errors');
+const { requireFields, ok, fail, queryInt } = require('../core/http');
+const { paginate } = require('../core/pagination');
+const { describe } = require('./model');
+const repo = require('./repo');
+const service = require('./service');
+
+// HTTP handlers for /api/orders.
+function createOrder(request) {
+  const body = request.body || {};
+  try {
+    requireFields(body, 'menu_id', 'plates', 'total', 'placed_on');
+    return ok(describe(service.create(body)), 201);
+  } catch (error) {
+    if (error instanceof AppError) return fail(error);
+    throw error;
+  }
+}
+
+function listOrders(request) {
+  const page = queryInt(request, 'page', 1);
+  const size = queryInt(request, 'size', setting('pageSize'));
+  return ok(paginate(repo.all().map(describe), page, size));
+}
+
+const summaryOrders = () => ok(service.summary());
+
+module.exports = {
+  'POST /api/orders': createOrder,
+  'GET /api/orders': listOrders,
+  'GET /api/orders/summary': summaryOrders,
+};
