@@ -262,7 +262,7 @@ export default async function Home() {
           </li>
           <li>
             <b>Fix</b>
-            <span>the change and its checks{at(ev?.median_seconds.fix)}. Approve it and the same button works again</span>
+            <span>the change and its checks{at(ev?.median_seconds.fix)}. If every check passed, Approve makes the same button work again</span>
           </li>
         </ol>
         <BreakIt country={country && /^[A-Z]{2}$/.test(country) ? country : null} />
