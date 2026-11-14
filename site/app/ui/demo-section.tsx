@@ -14,7 +14,7 @@ export function DemoSection({ ev, country, headingId, level = 2 }: { ev: Evidenc
           <i aria-hidden="true" /> Live · no sign-up · nothing pre-recorded
         </p>
         <H id={headingId} className={level === 1 ? "display" : "h-section"} data-rv style={{ "--d": 1 } as React.CSSProperties}>
-          Break our exam portal. <em>Watch it heal.</em>
+          Break our exam portal. <em>Watch the watchman work.</em>
         </H>
         <p className="lead" data-rv style={{ "--d": 2 } as React.CSSProperties}>
           A real Django exam portal we run so you can break it. Each button triggers one bug we planted. The crash reaches JaagteRaho exactly as one

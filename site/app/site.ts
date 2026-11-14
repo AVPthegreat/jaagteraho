@@ -6,7 +6,7 @@ export const GATE_SRC = `${REPO}/blob/main/watcher/src/pipeline/gate.ts`;
 export const HEAL_SRC = `${REPO}/blob/main/watcher/src/pipeline/heal.ts`;
 
 /* Where the watcher runs. Change this one line when it moves (for example to Vultr). */
-export const HOSTED_ON = "an AWS server in Mumbai, India";
+export const HOSTED_ON = "a Vultr Cloud Compute server in Bangalore, India";
 
 /* The demo video, once it is published. Nothing is shown while it is null. */
 export const VIDEO_URL: string | null = null;

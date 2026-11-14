@@ -65,6 +65,7 @@ export default async function Home() {
           <span>No sign-up for the demo</span>
           <span>Python and Node.js apps</span>
           <span>Free during HackGlobal 2026</span>
+          <span>Hosted on Vultr</span>
         </p>
       </HeroStage>
 
