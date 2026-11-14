@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
+import { isChunkError, reloadOnce } from "./ui/chunk-reload";
 
 /* Any page that throws shows this, in the site's design, with a way to retry. */
 export default function SiteError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
+    // Old chunks after a deploy: one quiet reload fixes it.
+    if (isChunkError(error) && reloadOnce()) return;
     console.warn("page error", error?.digest ?? error?.message);
   }, [error]);
   return (

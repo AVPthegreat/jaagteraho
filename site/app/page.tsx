@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { Clips } from "./home/clips";
 import { HomeMotion } from "./home/home-motion";
-import { LiveStrip } from "./home/live-strip";
 import { NightStory } from "./home/night-story";
 import { Radar } from "./home/radar";
 import { Shield } from "./home/shield";
 import { Watches } from "./home/watches";
-import { BENCH_ALL, benchFixPct, benchInr, benchInrPerBug, CLIPS, FAURUS_BENCH as FB } from "./site";
+import { BENCH_ALL, benchFixPct, benchInr, benchInrPerBug, FAURUS_BENCH as FB } from "./site";
 import "./home/home.css";
 
 const d = (n: number) => ({ "--d": n }) as React.CSSProperties;
@@ -20,7 +19,6 @@ export default function Home() {
         <div className="hero4-sky" aria-hidden="true" />
         <div className="frame hero4-grid">
           <div className="hero4-copy">
-            <LiveStrip />
             <p className="eyebrow" data-h>
               <span className="eyebrow-dot" aria-hidden="true" /> The AI night watchman for your app
             </p>
@@ -80,7 +78,7 @@ export default function Home() {
               Watch it work, <em>start to finish.</em>
             </h2>
           </div>
-          <Clips clips={CLIPS} />
+          <Clips />
         </div>
       </section>
 

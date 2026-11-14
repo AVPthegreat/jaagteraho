@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PlaygroundBoundary } from "./boundary";
 import { Playground } from "./playground";
 import "./playground.css";
 
@@ -20,7 +21,9 @@ export default function PlaygroundPage() {
           </h1>
           <p className="pg2-lead">Real apps, real crashes, a real fix. Your own copy, in an isolated sandbox.</p>
         </header>
-        <Playground />
+        <PlaygroundBoundary>
+          <Playground />
+        </PlaygroundBoundary>
         <p className="small soft pg2-foot">
           The playground never calls or messages anyone. Every run is real, with the same pipeline and limits as a connected app, on a separate daily
           budget.
