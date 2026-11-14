@@ -5,10 +5,10 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const LINKS: Array<[string, string]> = [
-  ["/demo", "Live demo"],
-  ["/how", "How it works"],
-  ["/evidence", "Evidence"],
-  ["/paste", "Paste your error"],
+  ["/#night", "One night"],
+  ["/#watches", "What it watches"],
+  ["/#safety", "Safety"],
+  ["/#try", "Try it"],
 ];
 
 /* The main navigation: a row on wide screens, a menu button on a phone. */
