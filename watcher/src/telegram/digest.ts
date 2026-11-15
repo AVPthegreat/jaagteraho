@@ -41,8 +41,17 @@ export function buildDigest(db: DB, projectIds: number[], sinceIso: string, titl
       .get(...projectIds, sinceIso) as { t: number }
   ).t;
 
+  const scans = db
+    .prepare(
+      `SELECT COUNT(DISTINCT e.incident_id) AS bursts, COUNT(*) AS n FROM events e JOIN incidents i ON i.id = e.incident_id
+       WHERE e.project_id IN (${inList}) AND e.received_at > ? AND i.fingerprint >= 'scan:' AND i.fingerprint < 'scan;'`,
+    )
+    .get(...projectIds, sinceIso) as { bursts: number; n: number };
+
   const lines = [`<b>${esc(title)}</b>`, `${events} ${events === 1 ? "error" : "errors"} reported.`];
   if (decisions.length) lines.push(decisions.map((d) => `${d.n} ${ACTION_WORD[d.action] ?? d.action}`).join(" · "));
+  if (scans.n > 0)
+    lines.push(`🛡 ${scans.bursts} blocked ${scans.bursts === 1 ? "scan" : "scans"}: ${scans.n.toLocaleString("en-US")} hostile requests, all refused by the app. No action needed.`);
   if (top.length) {
     lines.push("", "<b>Most frequent</b>");
     for (const t of top) lines.push(`• ${esc(t.project)}: ${esc(t.exception_type)} on ${esc(t.transaction_name ?? "?")} ×${t.n}${t.action ? ` (${ACTION_WORD[t.action] ?? t.action})` : ""}`);
@@ -58,4 +67,45 @@ export function buildDigest(db: DB, projectIds: number[], sinceIso: string, titl
 export function istNow(now = new Date()): { date: string; hour: number } {
   const ist = new Date(now.getTime() + 5.5 * 3_600_000);
   return { date: ist.toISOString().slice(0, 10), hour: ist.getUTCHours() };
+}
+
+const fmt = (n: number) => n.toLocaleString("en-US");
+
+/**
+ * The one quiet message for a finished burst of blocked hostile traffic (intake/scan.ts), or null when the
+ * incident is not a scan. Counts come from the stored events: paths and exception types as reported,
+ * sources as one-way user hashes (never an IP address).
+ */
+export function buildScanSummary(db: DB, incidentId: number): string | null {
+  const inc = db
+    .prepare("SELECT i.fingerprint, i.first_seen, i.last_seen, p.name FROM incidents i JOIN projects p ON p.id = i.project_id WHERE i.id = ?")
+    .get(incidentId) as { fingerprint: string; first_seen: string; last_seen: string; name: string } | undefined;
+  if (!inc || !inc.fingerprint.startsWith("scan:")) return null;
+  const total = (db.prepare("SELECT COUNT(*) AS n FROM events WHERE incident_id = ?").get(incidentId) as { n: number }).n;
+  if (total === 0) return null;
+  const paths = db
+    .prepare("SELECT COALESCE(transaction_name, '?') AS p, COUNT(*) AS n FROM events WHERE incident_id = ? GROUP BY p ORDER BY n DESC, p LIMIT 5")
+    .all(incidentId) as Array<{ p: string; n: number }>;
+  const nPaths = (db.prepare("SELECT COUNT(DISTINCT COALESCE(transaction_name, '?')) AS n FROM events WHERE incident_id = ?").get(incidentId) as { n: number }).n;
+  const types = db
+    .prepare("SELECT exception_type AS t, COUNT(*) AS n FROM events WHERE incident_id = ? GROUP BY t ORDER BY n DESC LIMIT 3")
+    .all(incidentId) as Array<{ t: string; n: number }>;
+  const sources = (
+    db.prepare("SELECT COUNT(DISTINCT json_extract(tags, '$.jr_user')) AS n FROM events WHERE incident_id = ?").get(incidentId) as { n: number }
+  ).n;
+  const hostRefused = types.some((t) => /(?:^|\.)DisallowedHost$/.test(t.t)) ||
+    !!db.prepare("SELECT 1 FROM events WHERE incident_id = ? AND message_masked LIKE '%Invalid HTTP\\_HOST header%' ESCAPE '\\' LIMIT 1").get(incidentId);
+  const minutes = Math.max(1, Math.round((Date.parse(inc.last_seen) - Date.parse(inc.first_seen)) / 60_000));
+
+  const lines = [
+    `🛡 <b>Blocked scan on ${esc(inc.name)}</b>`,
+    `${fmt(total)} hostile ${total === 1 ? "request" : "requests"} in about ${minutes} min, probing ${fmt(nPaths)} ${nPaths === 1 ? "path" : "paths"}. The app refused every one (${types.map((t) => `${esc(t.t.replace(/^.*\./, ""))} ×${fmt(t.n)}`).join(", ")}).`,
+    "No user was affected. No action needed.",
+    "",
+    "<b>Most probed</b>",
+    ...paths.map((p) => `• ${esc(p.p)} ×${fmt(p.n)}`),
+  ];
+  if (sources > 0) lines.push(`Sources: ${fmt(sources)} (hashed; addresses are never stored)`);
+  if (hostRefused) lines.push("", "Tip: drop requests with unknown Host headers at nginx (a default server that returns 444), so scans never reach the app.");
+  return lines.join("\n");
 }

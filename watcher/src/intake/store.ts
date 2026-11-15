@@ -1,8 +1,13 @@
 // Stores a clean event and updates its incident in one transaction, then queues work.
 
-import type { DB } from "../db/db.js";
+import { getSettings, type DB } from "../db/db.js";
 import type { CleanEvent } from "./allowlist.js";
 import { fingerprint } from "./fingerprint.js";
+import { classifyScan, SCAN_BURST_GAP_MS } from "./scan.js";
+
+/** Incident fingerprints of blocked scans start with this; one incident per burst ("scan:<project>:<start>"). */
+export const SCAN_PREFIX = "scan:";
+export const SCAN_EXCEPTION = "Blocked scan";
 
 const QUIET_BEFORE_REOPEN_MS = 6 * 60 * 60 * 1000;
 
@@ -14,12 +19,27 @@ type IncidentRow = { id: number; status: string; last_seen: string; hits: number
 
 /** authenticated: the event carried the app's server-only ingest secret (needed before a fix may apply itself). */
 export function storeEvent(db: DB, projectId: number, ev: CleanEvent, now = new Date(), authenticated = false): StoreResult {
-  const fp = fingerprint(projectId, ev);
+  const scan = classifyScan(ev, getSettings(db, projectId).hosts ?? []);
   const nowIso = now.toISOString();
 
   return db.transaction((): StoreResult => {
     const dup = db.prepare("SELECT 1 FROM events WHERE project_id = ? AND event_id = ?").get(projectId, ev.event_id);
     if (dup) return { stored: false, reason: "duplicate" };
+
+    // Blocked hostile traffic: every refused probe within 10 minutes of the last one joins one incident,
+    // so a scan of 33 paths is one quiet entry, not 33 alerts. Only its first event queues a decision.
+    let fp: string;
+    if (scan) {
+      const burst = db
+        .prepare(
+          `SELECT fingerprint FROM incidents WHERE project_id = ? AND fingerprint >= 'scan:' AND fingerprint < 'scan;'
+           AND last_seen > ? ORDER BY last_seen DESC LIMIT 1`,
+        )
+        .get(projectId, new Date(now.getTime() - SCAN_BURST_GAP_MS).toISOString()) as { fingerprint: string } | undefined;
+      fp = burst?.fingerprint ?? `${SCAN_PREFIX}${projectId}:${nowIso}`;
+    } else {
+      fp = fingerprint(projectId, ev);
+    }
 
     const existing = db
       .prepare("SELECT id, status, last_seen, hits FROM incidents WHERE project_id = ? AND fingerprint = ?")
@@ -35,7 +55,7 @@ export function storeEvent(db: DB, projectId: number, ev: CleanEvent, now = new 
           `INSERT INTO incidents (project_id, fingerprint, exception_type, transaction_name, first_seen, last_seen)
            VALUES (?, ?, ?, ?, ?, ?)`,
         )
-        .run(projectId, fp, ev.exception_type, ev.transaction, nowIso, nowIso);
+        .run(projectId, fp, scan ? SCAN_EXCEPTION : ev.exception_type, scan ? "many paths" : ev.transaction, nowIso, nowIso);
       incidentId = Number(r.lastInsertRowid);
       change = "new";
       hits = 1;
@@ -43,7 +63,7 @@ export function storeEvent(db: DB, projectId: number, ev: CleanEvent, now = new 
       incidentId = existing.id;
       const quiet = now.getTime() - Date.parse(existing.last_seen) > QUIET_BEFORE_REOPEN_MS;
       // A backlog fingerprint stays backlog: it was marked old during learn mode.
-      if (existing.status === "backlog") change = "repeat";
+      if (existing.status === "backlog" || scan) change = "repeat";
       else if (existing.status === "closed" || quiet) change = "reopened";
       else change = "repeat";
       hits = change === "reopened" ? 1 : existing.hits + 1;
@@ -64,6 +84,7 @@ export function storeEvent(db: DB, projectId: number, ev: CleanEvent, now = new 
       ev.exception_type, ev.message, ev.transaction, JSON.stringify(ev.frames), JSON.stringify(ev.tags), ev.sdk, authenticated ? 1 : 0,
     );
 
+    if (scan && change === "repeat") return { stored: true, incidentId, change, hits };
     db.prepare(
       "INSERT INTO jobs (kind, incident_id, payload, created_at, updated_at) VALUES ('incident', ?, ?, ?, ?)",
     ).run(incidentId, JSON.stringify({ change, event_id: ev.event_id, session: ev.tags.jr_session ?? null }), nowIso, nowIso);

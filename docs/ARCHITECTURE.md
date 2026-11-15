@@ -178,7 +178,7 @@ The message is not in the fingerprint, because it often contains changing values
 
 ### 4.5 Decision layer
 
-**Facts code knows (no model):** critical flow (route matches the project's critical patterns), exam window open, owner away, hits in the last 10 minutes, new or reopened, learn mode on, a startup failure (no route, boot-time error; `startupFailure` in decide.ts), a release first seen in the last 30 minutes.
+**Facts code knows (no model):** critical flow (route matches the project's critical patterns), exam window open, owner away, hits in the last 10 minutes, new or reopened, learn mode on, a startup failure (no route, boot-time error; `startupFailure` in decide.ts), a release first seen in the last 30 minutes, blocked hostile traffic (see "Blocked scans" below).
 
 **Questions to Claude Haiku**, answered five times each with a JSON schema. For each question the majority answer counts; the vote share is shown as "4 of 5, uncalibrated".
 
@@ -195,6 +195,7 @@ The message is not in the fingerprint, because it often contains changing values
 | # | When | Action |
 |---|---|---|
 | 1 | Learn mode is on, or the fingerprint was marked as old backlog | log |
+| 12 | Blocked hostile traffic: the incident is a scan burst (see below) | log (one quiet summary per burst) |
 | 11 | No request route, a boot-time failure (`ImproperlyConfigured`, `ImportError`/`ModuleNotFoundError`, a refused connection raised from settings/wsgi/asgi/manage/app factory/`__init__`, or module-level code in such a file) **and** 2 or more hits in 10 minutes or a release first seen in the last 30 minutes: the app fails to start | **wake** |
 | 2 | Critical flow failing while an exam window is open | **wake** |
 | 3 | Critical flow failing, with 3 or more hits in 10 minutes | wake if away, otherwise notify |
@@ -208,9 +209,17 @@ The message is not in the fingerprint, because it often contains changing values
 
 People are counted from a one-way hash of the SDK's user id (`jr_user`, HMAC with a server secret) or, on the demo, the visitor session; the id itself is never stored.
 
-Rules 2 to 4 and 11 cannot be lowered by any model answer. Rule 11 is checked right after rule 1. If the model fails (8-second timeout, refusal, invalid answer, cap reached), it retries once and then the incident is treated as **notify**, never ignore. The alert says the decision was made by rules alone.
+Rules 2 to 4 and 11 cannot be lowered by any model answer. Rule 11 is checked right after rule 1, then rule 12. Rule 10 never applies to rule 12 (a scanner's many addresses are not many people). If the model fails (8-second timeout, refusal, invalid answer, cap reached), it retries once and then the incident is treated as **notify**, never ignore. The alert says the decision was made by rules alone.
 
 **Caps:** at most 3 wakes a night per project; after that, wakes become notifications with a note.
+
+**Blocked scans (rule 12, `intake/scan.ts`).** On 16 Nov 2026 a scanner sent 2,734 requests in two minutes to Faurus's raw EC2 hostname, probing `/.env`, `/api/credentials`, `/api/keys`, Kubernetes secrets, GraphQL and Swagger. Django refused every one (`DisallowedHost`, 400), yet the per-path fingerprints made about 33 incidents and the model votes called 12 of them "blocks users": 12 Telegram messages at 2:40 am for an attack that was fully blocked. Now code recognises this before any model is asked:
+
+- **What counts** (`classifyScan`): no signed-in user (the SDK sent no user id, email or username; an IP address alone does not count) **and** the app refused the request with a 4xx: a `DisallowedHost` whose Host is not one of the app's own (a bare IP, `localhost`, a cloud machine's default name such as `*.compute.amazonaws.com`, not a hostname at all, or anything outside the project setting `hosts` when it is set), or a `SuspiciousOperation`-family or plain refusal (`Http404`, `PermissionDenied`, `NotFound`, ...) on a path only scanners ask for (`.env`, `.git`, `credentials`, `keys`, `secrets`, `wp-admin`, `phpmyadmin`, `actuator`, `swagger`, `graphql`, ...).
+- **What never counts:** any other exception (a crash is a 5xx: the app failed, so it goes the normal way, even on `/.env`), any signed-in user, a fatal event, and a `DisallowedHost` for one of the app's own hosts (that is a broken `ALLOWED_HOSTS`, and every visitor is blocked). With no `hosts` setting, a refused unknown domain is folded only when the path is a secret probe.
+- **Grouping:** every such event within 10 minutes of the last one joins one incident (`scan:<project>:<start>`, shown as "Blocked scan on many paths"). Only its first event queues a decision; that decision is rule 12, rules-only, with no model call. Each event keeps its own path and exception type; sources are counted from the one-way user hash, never from an address (the allowlist already drops request data and IPs).
+- **One quiet message at most:** once a burst has been silent for 10 minutes and has 50 or more events (`JR_SCAN_SUMMARY_MIN`), the owner gets one message delivered without sound: totals, the exception types, the most-probed paths, and, for refused Host headers, the tip to drop unknown hosts at nginx. Smaller bursts appear only in the 08:00 summary, which has a "blocked scans" line. We send after the burst ends, not at the threshold, so the numbers are final and the night stays quiet; it is silent because nobody needs to act.
+- **Why rules may overrule the model here:** "no model answer can lower a critical alert" protects against a model hiding a real failure. Here the facts are certain and in the safe direction: the app itself refused the request and no signed-in person was involved, so nobody was blocked.
 
 ### 4.6 Diagnosis
 
