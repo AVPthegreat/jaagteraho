@@ -1,8 +1,8 @@
 {
-  "_note": "The home 'See it work' film. To swap the film, copy its .mp4/.webm/.jpg into site/public/clips/ and edit this file (src without extension, poster, steps with start seconds). Timings: jr-video/final/jaagteraho_site_film.steps.json.",
-  "src": "/clips/jaagteraho-film",
-  "poster": "/clips/jaagteraho-film.jpg",
-  "label": "JaagteRaho in 50 seconds",
+  "_note": "Home film = the approved v6 90 s video at 1.25x (jr-video/final/jaagteraho_90s_v6_site125.*). Step times are the v6 caption times / 1.25.",
+  "src": "/clips/jaagteraho-v6",
+  "poster": "/clips/jaagteraho-v6.jpg",
+  "label": "JaagteRaho in 70 seconds",
   "steps": [
     {
       "at": 0,
@@ -10,24 +10,24 @@
       "line": "2 a.m. crash. Up to $20,000 lost in one hour of downtime."
     },
     {
-      "at": 9.58,
-      "title": "Small bugs fix themselves",
-      "line": "It fixes it and leaves you a note for the morning."
+      "at": 16.0,
+      "title": "Meet JaagteRaho",
+      "line": "An on-call engineer you can afford. Small bugs fix themselves."
     },
     {
-      "at": 13.08,
+      "at": 26.04,
       "title": "Serious? It calls you",
       "line": "Press 1. No answer in 3 minutes? It heals, with one tap to undo."
     },
     {
-      "at": 28.36,
+      "at": 44.86,
       "title": "Tested on real code",
-      "line": "294 bugs, 182/182 critical woke the owner, 96% fixes proved. $1.19 of AI."
+      "line": "Live on Vultr. 294 bugs, 182/182 critical woke the owner, 96% fixes proved."
     },
     {
-      "at": 41.3,
+      "at": 59.28,
       "title": "Connect in one setting",
-      "line": "Any app on Sentry's SDK. Freelancers, startups, college teams."
+      "line": "Freelancers, startups, college teams. Try the playground."
     }
   ]
 }
