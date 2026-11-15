@@ -57,21 +57,20 @@ JaagteRaho (Hindi for "stay awake", the night watchman's call) is an AI on-call 
 ## Go-to-market
 
 - **Who first:** freelancers, startups and college tech teams, starting in India, where small teams run live apps with nobody on call.
-- **Zero-friction connect:** any app on Sentry's open-source SDK connects by changing one setting; others run `jaagteraho init` from this repo (npm publish pending).
+- **Zero-friction connect:** any app on Sentry's open-source SDK connects by changing one setting; others run `npx jaagteraho init` ([on npm](https://www.npmjs.com/package/jaagteraho)).
 - **Where we find them:** developer communities and colleges, starting with the colleges already on Faurus.
 - **Free to start:** every Telegram account gets $5 of AI credit; deciding and alerting are always free.
 
 ## Quickstart (60 seconds)
 
-`npx jaagteraho` is not on npm yet, so run it from this repository (Node 18.17+):
+The CLI is [on npm](https://www.npmjs.com/package/jaagteraho) (Node 18.17+):
 
 ```bash
-git clone https://github.com/AVPthegreat/jaagteraho
-npm install --prefix jaagteraho/cli
-
 cd your-app                                   # Django, Flask, FastAPI, Express or Next.js
-node ../jaagteraho/cli/bin/jaagteraho.mjs init
+npx jaagteraho init
 ```
+
+Prefer to run it from source? `git clone https://github.com/AVPthegreat/jaagteraho`, `npm install --prefix jaagteraho/cli`, then `node ../jaagteraho/cli/bin/jaagteraho.mjs init` inside your app.
 
 1. `init` registers your app with the hosted API, finds your framework, **shows every change before writing it**, adds the free open-source Sentry SDK and two lines, and sends a test error.
 2. Open the Telegram link it prints (or scan the QR code): a ✅ arrives. Deploy as usual.
