@@ -124,7 +124,7 @@ export function Watches() {
       </div>
       {/* Every panel is laid out in the same cell, so the box is always as tall as the longest one: changing
           the card (as the page scrolls past, or by tap) never pushes the rest of the page up or down. */}
-      <div className="watch-panels">
+      <div className="watch-panels" data-rv style={{ "--d": 2 } as React.CSSProperties}>
         {CASES.map((w, i) => (
           <div
             key={w.id}

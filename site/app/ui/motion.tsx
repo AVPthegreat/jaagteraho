@@ -37,6 +37,10 @@ export function Motion() {
       },
       { rootMargin: "200px 0px" },
     );
+    // Where entrances are tied to the scroll in CSS (globals.css, "Scroll choreography"), the words and cards
+    // need nothing from here; only the benchmark bars still grow on arrival.
+    const scrollLinked =
+      CSS.supports("animation-timeline: view()") && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const seen = new WeakSet<Element>();
     const scan = () => {
       const fold = window.innerHeight;
@@ -44,7 +48,7 @@ export function Motion() {
         if (seen.has(el)) return;
         seen.add(el);
         // On screen (or already scrolled past) when the script arrives: shown as it is, never hidden.
-        if (el.getBoundingClientRect().top < fold) {
+        if (el.getBoundingClientRect().top < fold || (scrollLinked && !el.classList.contains("bars"))) {
           el.classList.add("in");
           return;
         }

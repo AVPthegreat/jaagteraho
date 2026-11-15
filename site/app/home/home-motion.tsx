@@ -31,18 +31,24 @@ export function HomeMotion() {
           s.classList.toggle("past", k < i);
         });
         scenes.forEach((s, k) => s.classList.toggle("on", k === i));
-        if (clock) clock.textContent = steps[i].dataset.time ?? "";
+        if (clock) {
+          clock.textContent = steps[i].dataset.time ?? "";
+          // The time settles in rather than swapping (a quarter second, on the compositor).
+          if (!still) clock.animate([{ opacity: 0.35, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
+        }
       };
-      // The active moment is the last one whose top has passed the middle of the screen. Read from positions
-      // on each scroll frame (not from crossing events, which a fast flick can jump right over), and only
-      // while the story is near the screen.
+      // The active moment is the last one whose words have come up to just below the middle of the screen,
+      // where they also come into focus (home.css, step-focus). Read from positions on each scroll frame (not
+      // from crossing events, which a fast flick can jump right over), and only while the story is near.
+      const texts = steps.map((s) => s.querySelector<HTMLElement>(".st-text") ?? s);
       let raf = 0;
       const pick = () => {
         raf = 0;
-        const mid = window.innerHeight / 2;
+        const line = window.innerHeight * 0.6;
         let i = 0;
-        steps.forEach((s, k) => {
-          if (s.getBoundingClientRect().top <= mid) i = k;
+        texts.forEach((t, k) => {
+          const r = t.getBoundingClientRect();
+          if (r.top + r.height / 2 <= line) i = k;
         });
         show(i);
       };

@@ -3,7 +3,7 @@
 /* ------- Hero ------- */
 .hero4 {
   position: relative;
-  overflow: hidden;
+  overflow: clip;
   isolation: isolate;
   min-height: min(820px, calc(100svh - 64px));
   display: flex;
@@ -331,9 +331,6 @@
   }
   .js .story-steps .st-text :is(time, h3, p) {
     transition: color 0.35s var(--ease);
-  }
-  .js .story-steps > li:not(.on) .st-text :is(time, h3, p) {
-    color: var(--faint);
   }
   .js .story-steps .st-text h3 {
     font-size: clamp(1.3rem, 0.9rem + 0.9vw, 1.6rem);
@@ -1265,7 +1262,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1px;
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow: clip; /* not a scroll container: the cards inside animate against the page */
   border: 1px solid var(--line);
   background: var(--line);
 }
@@ -1314,7 +1311,7 @@
 }
 .close4 {
   position: relative;
-  overflow: hidden;
+  overflow: clip; /* not a scroll container, so the glow's scroll animation measures against the page */
   isolation: isolate;
   padding-block: clamp(88px, 12vh, 140px);
   text-align: center;
@@ -1610,4 +1607,196 @@
   font-weight: 500;
   color: var(--text);
   margin-right: 4px;
+}
+
+/* ------- Scroll choreography (home) -------
+   One idea per section, all tied to the scroll position (see "Scroll choreography" in globals.css):
+   the hero recedes as you leave it, the night's progress line fills as you read, each moment comes into
+   focus at the centre of the screen, the film arrives full-size, the shield's rings draw as it comes up,
+   and the lantern glow rises at the close. Nothing here changes layout. */
+@keyframes hero-copy-out {
+  to {
+    opacity: 0.08;
+    translate: 0 -6vh;
+  }
+}
+@keyframes hero-radar-out {
+  to {
+    opacity: 0.15;
+    scale: 0.84;
+    translate: 0 9vh;
+  }
+}
+@keyframes hero-sky-out {
+  to {
+    translate: 0 24vh;
+    opacity: 0.55;
+  }
+}
+@keyframes stage-in {
+  from {
+    opacity: 0;
+    scale: 0.94;
+    translate: 0 48px;
+  }
+}
+@keyframes rail-fill {
+  from {
+    scale: 1 0;
+  }
+  to {
+    scale: 1 1;
+  }
+}
+@keyframes step-focus {
+  0% {
+    opacity: 0.22;
+    translate: 0 14px;
+  }
+  38%,
+  62% {
+    opacity: 1;
+    translate: 0 0;
+  }
+  100% {
+    opacity: 0.22;
+    translate: 0 -14px;
+  }
+}
+@keyframes film-in {
+  from {
+    opacity: 0.25;
+    scale: 0.9;
+  }
+}
+@keyframes ring-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+@keyframes glow-rise {
+  from {
+    opacity: 0.1;
+    scale: 0.65;
+  }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* Hero: the words lift away, the radar recedes, the sky drifts slowest: depth as you leave. */
+    .hero4 {
+      view-timeline: --hero block;
+    }
+    .hero4-copy {
+      animation: hero-copy-out linear both;
+      animation-timeline: --hero;
+      animation-range: exit 20% exit 95%;
+    }
+    .js .hero4 .radar {
+      animation:
+        r-in 1.3s var(--ease) 0.15s backwards,
+        hero-radar-out linear both;
+      animation-timeline: auto, --hero;
+      animation-range: normal, exit 8% exit 100%;
+    }
+    .hero4-sky {
+      animation: hero-sky-out linear both;
+      animation-timeline: --hero;
+      animation-range: exit 0% exit 100%;
+    }
+
+    /* One night, wide screens: the stage arrives, then each moment comes into focus as it crosses the
+       middle of the screen, and the line beside them fills with your scroll. */
+    @media (min-width: 960px) {
+      .js .story-stage {
+        animation: stage-in linear both;
+        animation-timeline: view();
+        animation-range: entry 0% entry 70%;
+      }
+      .js .story-steps {
+        position: relative;
+        view-timeline: --steps block;
+      }
+      .js .story-steps::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: linear-gradient(180deg, var(--lantern), var(--ok));
+        transform-origin: top;
+        animation: rail-fill linear both;
+        animation-timeline: --steps;
+        animation-range: cover 50vh cover calc(100% - 50vh);
+      }
+      .js .story-steps > li,
+      .js .story-steps > li.past,
+      .js .story-steps > li.on {
+        border-left-color: var(--line-2);
+      }
+      .js .story-steps > li .st-text {
+        animation: step-focus linear both;
+        animation-timeline: view();
+        animation-range: cover 0% cover 100%;
+      }
+      .js .story-steps > li:not(.on) .st-text :is(time, h3, p) {
+        color: inherit;
+      }
+      .js .story-steps .st-text time {
+        color: var(--lantern);
+      }
+      .js .story-steps .st-text p {
+        color: var(--soft);
+      }
+    }
+    /* Phones and tablets: each moment's card rises in as it arrives. */
+    @media (max-width: 959px) {
+      .story-steps > li {
+        animation: sd-rise both cubic-bezier(0.2, 0.8, 0.2, 1);
+        animation-timeline: view();
+        animation-range: entry 0% cover 24%;
+      }
+    }
+
+    /* The film comes up to full size as it arrives; its chapters follow. */
+    .film-main {
+      animation: film-in both cubic-bezier(0.2, 0.8, 0.2, 1);
+      animation-timeline: view();
+      animation-range: entry 0% cover 42%;
+    }
+    .film-steps {
+      animation: sd-rise both cubic-bezier(0.2, 0.8, 0.2, 1);
+      animation-timeline: view();
+      animation-range: entry 10% cover 34%;
+    }
+
+    /* The shield's rings draw themselves, outermost first, as the shield comes up. */
+    .shield {
+      view-timeline: --shield block;
+    }
+    .shield .sh-ring {
+      animation: ring-draw linear both;
+      animation-timeline: --shield;
+      animation-range: entry calc(10% + var(--i, 0) * 8%) cover calc(36% + var(--i, 0) * 5%);
+    }
+
+    /* The close: the lantern's glow rises as you reach the last screen. */
+    .close4 {
+      view-timeline: --close block;
+    }
+    .close4-glow {
+      transform-origin: 50% 100%;
+      animation: glow-rise linear both;
+      animation-timeline: --close;
+      animation-range: entry 0% cover 60%;
+    }
+  }
+}
+/* Without scroll-linked animation: the moments dim and the line steps by class (home-motion.tsx). */
+@supports not (animation-timeline: view()) {
+  @media (min-width: 960px) {
+    .js .story-steps > li:not(.on) .st-text :is(time, h3, p) {
+      color: var(--faint);
+    }
+  }
 }

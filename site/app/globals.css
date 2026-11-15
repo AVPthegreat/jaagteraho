@@ -1434,7 +1434,7 @@ legend {
     radial-gradient(800px 380px at 85% 0%, rgba(122, 167, 255, 0.08), transparent 70%),
     radial-gradient(700px 400px at 0% 0%, rgba(80, 110, 200, 0.12), transparent 60%),
     var(--bg);
-  overflow: hidden;
+  overflow: clip; /* not a scroll container: the head's words animate against the page */
 }
 .page-head .lead {
   margin-top: 18px;
@@ -2091,6 +2091,32 @@ table.nums {
 }
 :where(.watch-card, .pl-steps button, .shield-list button, .pl-btn, .nav-toggle, .flow, .try-tabs button, .pg2-seg button, .pg2-steps button, .pg2-switch, .chip-btn, .tg-keys button, .pl-sound-cta, .play, .pg2-app, .pg2-bug, .film-steps button, .film-btn, .film-sound):not(:disabled):active {
   scale: 0.98;
+}
+/* ------- Scroll choreography -------
+   Where the browser can tie an animation to the scroll position (animation-timeline: view(), Chrome 115+,
+   Safari 26+), every entrance follows the scroll itself: it moves with your hand, plays backwards when you
+   scroll up, runs on the compositor, and can never fire late or freeze half-way. Only opacity and the
+   individual translate/scale properties move, so layout never changes and a control's own hover lift or
+   press scale still works. Browsers without it get the short time-based entrance (motion.tsx); with
+   reduced motion, nothing moves. */
+@keyframes sd-rise {
+  from {
+    opacity: 0;
+    translate: 0 36px;
+  }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-rv] {
+      animation-name: sd-rise;
+      animation-fill-mode: both;
+      animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+      animation-timeline: view();
+      /* Starts as the element enters; settled by the time it is about a third of the way up the screen.
+         Siblings marked --d follow one another a little later in the same scroll. */
+      animation-range: entry calc(var(--d, 0) * 4%) cover calc(26% + var(--d, 0) * 4%);
+    }
+  }
 }
 /* Looping animations rest while their section is off-screen (motion.tsx sets data-idle). Only the loops:
    a pause on everything also froze entrances that started a frame before the section was marked in view. */
