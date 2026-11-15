@@ -46,6 +46,21 @@ export default function Home() {
         </div>
       </section>
 
+      {/* 2. See it work (founder: right after the hero) */}
+      <section className="section screen clips-band" id="see" aria-labelledby="see-h">
+        <div className="frame">
+          <div className="section-head">
+            <p className="eyebrow" data-rv>
+              See it work
+            </p>
+            <h2 id="see-h" className="h-section" data-rv style={d(1)}>
+              Watch it work, <em>start to finish.</em>
+            </h2>
+          </div>
+          <Clips />
+        </div>
+      </section>
+
       {/* 2. One night, scroll by scroll */}
       <NightStory />
 
@@ -64,21 +79,6 @@ export default function Home() {
             </p>
           </div>
           <Watches />
-        </div>
-      </section>
-
-      {/* 4. See it work */}
-      <section className="section screen clips-band" id="see" aria-labelledby="see-h">
-        <div className="frame">
-          <div className="section-head">
-            <p className="eyebrow" data-rv>
-              See it work
-            </p>
-            <h2 id="see-h" className="h-section" data-rv style={d(1)}>
-              Watch it work, <em>start to finish.</em>
-            </h2>
-          </div>
-          <Clips />
         </div>
       </section>
 
