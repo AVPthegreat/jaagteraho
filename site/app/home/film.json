@@ -1,31 +1,31 @@
 {
-  "_note": "Home film = the approved v6 90 s video at 1.25x (jr-video/final/jaagteraho_90s_v6_site125.*). Step times are the v6 caption times / 1.25.",
+  "_note": "Home film = the approved v6 90 s video at 1.15x (jr-video/final/jaagteraho_90s_v6_site115.*). Step times = v6 caption times / 1.15.",
   "src": "/clips/jaagteraho-v6",
   "poster": "/clips/jaagteraho-v6.jpg",
-  "label": "JaagteRaho in 70 seconds",
+  "label": "JaagteRaho in 75 seconds",
   "steps": [
     {
-      "at": 0,
+      "at": 0.0,
       "title": "The problem",
       "line": "2 a.m. crash. Up to $20,000 lost in one hour of downtime."
     },
     {
-      "at": 16.0,
+      "at": 17.39,
       "title": "Meet JaagteRaho",
       "line": "An on-call engineer you can afford. Small bugs fix themselves."
     },
     {
-      "at": 26.04,
+      "at": 28.3,
       "title": "Serious? It calls you",
       "line": "Press 1. No answer in 3 minutes? It heals, with one tap to undo."
     },
     {
-      "at": 44.86,
+      "at": 48.76,
       "title": "Tested on real code",
       "line": "Live on Vultr. 294 bugs, 182/182 critical woke the owner, 96% fixes proved."
     },
     {
-      "at": 59.28,
+      "at": 64.43,
       "title": "Connect in one setting",
       "line": "Freelancers, startups, college teams. Try the playground."
     }

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Clips } from "./home/clips";
 import { HomeMotion } from "./home/home-motion";
-import { NightStory } from "./home/night-story";
 import { Radar } from "./home/radar";
 import { Shield } from "./home/shield";
 import { Watches } from "./home/watches";
@@ -61,46 +60,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 2. One night, scroll by scroll */}
-      <NightStory />
-
-      {/* 3. What it watches */}
-      <section className="section screen watch-band" id="watches" aria-labelledby="watch-h" data-pin-steps="4">
-        <div className="frame">
-          <div className="section-head">
-            <p className="eyebrow" data-rv>
-              What it watches
-            </p>
-            <h2 id="watch-h" className="h-section" data-rv style={d(1)}>
-              Not every error deserves your night. <em>These might.</em>
-            </h2>
-            <p className="lead" data-rv style={d(2)}>
-              Scroll, or pick a part of your app: what JaagteRaho does when it fails, and which written rule decides.
-            </p>
-          </div>
-          <Watches />
-        </div>
-      </section>
-
-      {/* 5. How safe is it */}
-      <section className="section screen safe-band" id="safety" aria-labelledby="safe-h" data-pin-steps="5">
-        <div className="frame">
-          <div className="section-head">
-            <p className="eyebrow" data-rv>
-              How safe is it
-            </p>
-            <h2 id="safe-h" className="h-section" data-rv style={d(1)}>
-              Five layers between a fix <em>and your app.</em>
-            </h2>
-            <p className="lead" data-rv style={d(2)}>
-              You approve, or let it heal under your rules. Either way, every fix passes the same layers first.
-            </p>
-          </div>
-          <Shield />
-        </div>
-      </section>
-
-      {/* 7. Proof */}
+      {/* 3. Proof: the numbers */}
       <section className="section screen proof4" id="proof" aria-labelledby="proof-h">
         <div className="frame">
           <div className="section-head">
@@ -187,6 +147,42 @@ export default function Home() {
               How each number was measured →
             </Link>
           </p>
+        </div>
+      </section>
+
+      {/* 4. How safe is it */}
+      <section className="section screen safe-band" id="safety" aria-labelledby="safe-h" data-pin-steps="5">
+        <div className="frame">
+          <div className="section-head">
+            <p className="eyebrow" data-rv>
+              How safe is it
+            </p>
+            <h2 id="safe-h" className="h-section" data-rv style={d(1)}>
+              Five layers between a fix <em>and your app.</em>
+            </h2>
+            <p className="lead" data-rv style={d(2)}>
+              You approve, or let it heal under your rules. Either way, every fix passes the same layers first.
+            </p>
+          </div>
+          <Shield />
+        </div>
+      </section>
+
+      {/* 5. What it watches */}
+      <section className="section screen watch-band" id="watches" aria-labelledby="watch-h" data-pin-steps="4">
+        <div className="frame">
+          <div className="section-head">
+            <p className="eyebrow" data-rv>
+              What it watches
+            </p>
+            <h2 id="watch-h" className="h-section" data-rv style={d(1)}>
+              Not every error deserves your night. <em>These might.</em>
+            </h2>
+            <p className="lead" data-rv style={d(2)}>
+              Scroll, or pick a part of your app: what JaagteRaho does when it fails, and which written rule decides.
+            </p>
+          </div>
+          <Watches />
         </div>
       </section>
 
