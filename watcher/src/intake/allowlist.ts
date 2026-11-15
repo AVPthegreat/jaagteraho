@@ -32,9 +32,18 @@ export type CleanEvent = {
   frames: CleanFrame[];
   tags: Record<string, string>;
   sdk: string | null;
+  /** The SDK named a user (id, email or username; an IP address alone does not count). Never stored. */
+  signed_in?: boolean;
 };
 
 const TAG_ALLOWLIST = new Set(["jr_session", "jr_flow", "jr_exam", "jr_test"]);
+
+/** True when the event names a person by id, email or username, not only by IP address. */
+export function signedIn(user: unknown): boolean {
+  if (!user || typeof user !== "object" || Array.isArray(user)) return false;
+  const u = user as Record<string, unknown>;
+  return [u.id, u.email, u.username].some((v) => (typeof v === "string" || typeof v === "number") && String(v).trim() !== "" && !/^\{\{.*\}\}$/.test(String(v)));
+}
 
 /** A short keyed hash of whatever identifies the user, or null. "{{auto}}" placeholders are ignored. */
 export function userHash(user: unknown): string | null {
@@ -141,5 +150,6 @@ export function allowlistEvent(raw: unknown, now = new Date()): CleanEvent | nul
     frames,
     tags,
     sdk,
+    signed_in: signedIn(raw.user),
   };
 }

@@ -10,6 +10,8 @@ import { installationToken } from "../github/app.js";
 import { GitHubSource, LocalSource, type GitHubToken, type SourceProvider } from "../source/source.js";
 import type { Telegram } from "../telegram/api.js";
 import { renderCard } from "../telegram/card.js";
+import { buildScanSummary } from "../telegram/digest.js";
+import { SCAN_BURST_GAP_MS } from "../intake/scan.js";
 import { isSelfProject, reportSelf } from "../selfwatch.js";
 import type { Voice } from "../voice/voice.js";
 import type { Phone } from "../phone/phone.js";
@@ -46,6 +48,8 @@ const OUTSIDE_DECISIONS_PER_DAY = 200;
 const OUTSIDE_DECISIONS_NO_CREDIT = 50;
 const MAX_FIXES_PER_DAY = 3;
 const RETENTION_DAYS = 30;
+/** A finished blocked scan with at least this many refused requests gets one quiet message; smaller ones only appear in the 08:00 summary. */
+export const SCAN_SUMMARY_MIN = envInt("JR_SCAN_SUMMARY_MIN", 50, 1, 1_000_000);
 
 /** Each token reaches only its own repository; outside developers' public repositories use a token with no access at all. */
 export function tokenFor(project: ProjectRow): GitHubToken {
@@ -113,6 +117,7 @@ export class Worker {
     this.db.prepare("UPDATE jobs SET status = 'queued' WHERE status = 'running'").run();
     this.timers.push(setInterval(() => this.pump(), 300));
     this.timers.push(setInterval(() => void this.pings().catch((e) => console.error("pings:", e)), 20_000));
+    this.timers.push(setInterval(() => void this.scanSummaries().catch((e) => console.error("scan summaries:", e)), 60_000));
     this.purgeOldEvents();
     this.timers.push(setInterval(() => this.purgeOldEvents(), 6 * 3_600_000));
   }
@@ -512,6 +517,36 @@ export class Worker {
       };
     }
     return { diagnosisId, result: { ...(JSON.parse(d.result) as DiagnosisResult), recorded_at: d.created_at }, fix };
+  }
+
+  /**
+   * One quiet message per finished burst of blocked hostile traffic (rule 12), sent once the scan has
+   * been silent for 10 minutes so the counts are final. Delivered without sound: nobody needs waking.
+   * Returns how many were sent (for the tests).
+   */
+  async scanSummaries(now = Date.now()): Promise<number> {
+    if (!this.tg) return 0;
+    const ended = new Date(now - SCAN_BURST_GAP_MS).toISOString();
+    const recent = new Date(now - 24 * 3_600_000).toISOString();
+    const due = this.db
+      .prepare(
+        `SELECT i.id, i.project_id FROM incidents i
+         WHERE i.fingerprint >= 'scan:' AND i.fingerprint < 'scan;' AND i.last_seen <= ? AND i.last_seen > ? AND i.hits >= ?`,
+      )
+      .all(ended, recent, SCAN_SUMMARY_MIN) as Array<{ id: number; project_id: number }>;
+    let sent = 0;
+    for (const d of due) {
+      const key = `scan_summary:${d.id}`;
+      if (kvGet(this.db, key) || isPlaygroundProject(this.db, d.project_id)) continue;
+      const owner = this.db.prepare("SELECT chat_id FROM owners WHERE project_id = ?").get(d.project_id) as { chat_id: number } | undefined;
+      const text = owner ? buildScanSummary(this.db, d.id) : null;
+      // Marked first, so a Telegram failure can never turn into a message every minute.
+      kvSet(this.db, key, new Date(now).toISOString());
+      if (!owner || !text) continue;
+      await this.tg.send(owner.chat_id, text, undefined, { quiet: true }).catch((e) => console.error("scan summary:", e));
+      sent++;
+    }
+    return sent;
   }
 
   /** Wake alerts repeat every 2 minutes, up to 3 times, until acknowledged. */

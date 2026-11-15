@@ -7,6 +7,7 @@ import { fence, type AI } from "../ai/claude.js";
 import { getSettings, type DB } from "../db/db.js";
 import type { CleanFrame } from "../intake/allowlist.js";
 import { topFrame } from "../intake/fingerprint.js";
+import { SCAN_PREFIX } from "../intake/store.js";
 
 export type Action = "ignore" | "log" | "notify" | "wake";
 
@@ -35,6 +36,8 @@ export type Facts = {
   startup?: string | null;
   /** The release this error came from started reporting in the last 30 minutes (a fresh deploy). */
   new_release?: boolean;
+  /** Blocked hostile traffic folded into one burst incident (intake/scan.ts): refused by the app, no signed-in user. */
+  security_noise?: boolean;
 };
 
 export type Decision = {
@@ -115,6 +118,7 @@ function newRelease(db: DB, projectId: number, release: string | null, now: Date
 
 export function computeFacts(db: DB, ctx: IncidentCtx, now = new Date()): Facts {
   const s = getSettings(db, ctx.projectId);
+  const fp = (db.prepare("SELECT fingerprint FROM incidents WHERE id = ?").get(ctx.incidentId) as { fingerprint: string } | undefined)?.fingerprint ?? "";
   // Node.js SDKs name transactions "POST /api/x"; critical routes are written as paths.
   const route = (ctx.event.transaction ?? "").replace(/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) +/, "");
   const critical = (s.critical ?? []).find((c) => route.startsWith(c.match))?.name ?? null;
@@ -135,6 +139,7 @@ export function computeFacts(db: DB, ctx: IncidentCtx, now = new Date()): Facts 
     backlog: ctx.status === "backlog",
     startup: startupFailure(ctx.event),
     new_release: newRelease(db, ctx.projectId, ctx.event.release ?? null, now),
+    security_noise: fp.startsWith(SCAN_PREFIX),
   };
 }
 
@@ -200,7 +205,8 @@ export const MANY_USERS = 5;
 export function applyRules(f: Facts, v: Votes, modelFailed: boolean): Pick<Decision, "action" | "rule" | "rule_text"> {
   const r = baseRules(f, v, modelFailed);
   // Rule 10: whatever the votes say, an error that reached many different people is never quiet.
-  if (r.rule !== 1 && (r.action === "ignore" || r.action === "log") && (f.users_1h ?? 0) >= MANY_USERS)
+  // Not for rule 12: a scanner's many addresses are not many people.
+  if (r.rule !== 1 && r.rule !== 12 && (r.action === "ignore" || r.action === "log") && (f.users_1h ?? 0) >= MANY_USERS)
     return { action: "notify", rule: 10, rule_text: `${f.users_1h} different people hit this in the last hour` };
   return r;
 }
@@ -211,6 +217,10 @@ function baseRules(f: Facts, v: Votes, modelFailed: boolean): Pick<Decision, "ac
   // repeats, or it came with a fresh deploy. Every request is affected, so no model answer can lower it.
   if (f.startup && (f.hits_10m >= 2 || f.new_release))
     return { action: "wake", rule: 11, rule_text: `the app fails to start (${f.startup}): every request is affected` };
+  // Rule 12: blocked hostile traffic (a scan the app refused with a 4xx, no signed-in user). Nobody was
+  // blocked, so it is logged as one burst, whatever a model would say. Rules beat AI here in the safe
+  // direction: the request was refused. Real errors never get here (intake/scan.ts).
+  if (f.security_noise) return { action: "log", rule: 12, rule_text: "blocked scan: hostile requests the app refused; no user affected" };
   if (f.critical && f.exam_open) return { action: "wake", rule: 2, rule_text: `critical flow (${f.critical}) failing during an exam` };
   if (f.critical && f.hits_10m >= 3)
     return f.owner_away
@@ -234,9 +244,9 @@ function baseRules(f: Facts, v: Votes, modelFailed: boolean): Pick<Decision, "ac
 export async function decide(db: DB, ai: AI | null, ctx: IncidentCtx, paused: boolean): Promise<Decision> {
   const facts = computeFacts(db, ctx);
   ctx = { ...ctx, users: facts.users_1h };
-  // Learn mode and backlog never spend money. For rules 2 to 4 the votes cannot change the
+  // Learn mode, backlog and blocked scans never spend money. For rules 2 to 4 the votes cannot change the
   // action, but they are still asked (under a tenth of a cent) so the logbook can show them.
-  if (facts.learn_mode || facts.backlog) {
+  if (facts.learn_mode || facts.backlog || facts.security_noise) {
     return { ...applyRules(facts, {}, false), engine: "rules-only", facts, votes: {} };
   }
   if (!ai || paused) {
