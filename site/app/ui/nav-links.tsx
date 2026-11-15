@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { softScroll } from "./smooth-scroll";
 
 /* The four places on the home page and the playground; "Connect your app" is the button beside them. */
 const LINKS: Array<[string, string]> = [
@@ -69,6 +70,14 @@ export function SiteNav() {
               onClick={(e) => {
                 (e.currentTarget as HTMLElement).blur();
                 setOpen(null);
+                // On the home page, a section link glides there with the page's soft scroll.
+                const target = path === "/" && href.startsWith("/#") ? document.getElementById(href.slice(2)) : null;
+                const soft = softScroll();
+                if (target && soft) {
+                  e.preventDefault();
+                  window.history.pushState(null, "", href);
+                  soft.scrollTo(target, { offset: -80 });
+                }
               }}
             >
               {label}

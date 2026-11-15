@@ -1623,8 +1623,19 @@
 @keyframes hero-radar-out {
   to {
     opacity: 0.15;
-    scale: 0.84;
-    translate: 0 9vh;
+    scale: 0.82;
+    translate: 0 10vh;
+    rotate: 14deg;
+  }
+}
+@keyframes shield-float {
+  from {
+    translate: 0 48px;
+    rotate: -3deg;
+  }
+  to {
+    translate: 0 -48px;
+    rotate: 3deg;
   }
 }
 @keyframes hero-sky-out {
@@ -1752,32 +1763,61 @@
     /* Phones and tablets: each moment's card rises in as it arrives. */
     @media (max-width: 959px) {
       .story-steps > li {
+        --rise: 64px;
+        --rise-scale: 0.95;
         animation: sd-rise both cubic-bezier(0.2, 0.8, 0.2, 1);
         animation-timeline: view();
         animation-range: entry 0% cover 24%;
       }
     }
 
-    /* The film comes up to full size as it arrives; its chapters follow. */
+    /* The film comes up to full size as it arrives, then drifts gently; its chapters move at their own pace. */
     .film-main {
-      animation: film-in both cubic-bezier(0.2, 0.8, 0.2, 1);
-      animation-timeline: view();
-      animation-range: entry 0% cover 42%;
+      --drift: 14;
+      animation:
+        film-in both cubic-bezier(0.2, 0.8, 0.2, 1),
+        drift both linear;
+      animation-timeline: view(), view();
+      animation-range:
+        entry 0% cover 42%,
+        cover 0% cover 100%;
+      animation-composition: replace, add;
     }
     .film-steps {
-      animation: sd-rise both cubic-bezier(0.2, 0.8, 0.2, 1);
-      animation-timeline: view();
-      animation-range: entry 10% cover 34%;
+      --rise: 64px;
+      --drift: 30;
+      animation:
+        sd-rise both cubic-bezier(0.2, 0.8, 0.2, 1),
+        drift both linear;
+      animation-timeline: view(), view();
+      animation-range:
+        entry 10% cover 34%,
+        cover 0% cover 100%;
+      animation-composition: replace, add;
     }
 
-    /* The shield's rings draw themselves, outermost first, as the shield comes up. */
+    /* The shield's rings draw themselves, outermost first, as the shield comes up; the shield floats and
+       turns a little as you pass, behind the card that shows each layer's output. */
     .shield {
       view-timeline: --shield block;
+    }
+    .shield-art {
+      animation: shield-float linear both;
+      animation-timeline: --shield;
+      animation-range: cover 0% cover 100%;
     }
     .shield .sh-ring {
       animation: ring-draw linear both;
       animation-timeline: --shield;
       animation-range: entry calc(10% + var(--i, 0) * 8%) cover calc(36% + var(--i, 0) * 5%);
+    }
+
+    /* Proof: the grid of numbers drifts as one piece (its cards share their seams, so they never move apart). */
+    .nums {
+      --drift: 12;
+      animation: drift linear both;
+      animation-timeline: view();
+      animation-range: cover 0% cover 100%;
     }
 
     /* The close: the lantern's glow rises as you reach the last screen. */

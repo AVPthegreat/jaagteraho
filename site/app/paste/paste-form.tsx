@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Diff, SUBMIT_DIFF } from "../ui/alert-card";
+import { softScroll } from "../ui/smooth-scroll";
 import { WATCHER } from "../watcher";
 
 type Result = {
@@ -59,7 +60,11 @@ export function PasteForm({ initialId, intro }: { initialId: string | null; intr
     setError(null);
     setResult(null);
     // On a phone or tablet the answer panel is a screen below the button: bring it into view.
-    if (window.matchMedia("(max-width: 979px)").matches) log.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    if (window.matchMedia("(max-width: 979px)").matches && log.current) {
+      const soft = softScroll();
+      if (soft) soft.scrollTo(log.current, { offset: -96 });
+      else log.current.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
     try {
       const res = await fetch(`${WATCHER}/public/paste`, {
         method: "POST",
