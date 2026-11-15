@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const LINKS: Array<[string, string]> = [
-  ["/#night", "One night"],
-  ["/#watches", "What it watches"],
+  ["/#see", "Watch it work"],
+  ["/#proof", "Proof"],
   ["/#safety", "Safety"],
   ["/playground", "Live playground"],
 ];
