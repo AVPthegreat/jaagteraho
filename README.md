@@ -8,13 +8,12 @@
 
 - **Play with it (no sign-up):** [Live Playground](https://jaagteraho.139-84-156-94.sslip.io/playground): 7 live apps, 70 planted bugs. Pick one, press the app's own button, watch it break, approve the fix, press it again.
 - **Website:** [jaagteraho.139-84-156-94.sslip.io](https://jaagteraho.139-84-156-94.sslip.io) · **Evidence:** [/evidence](https://jaagteraho.139-84-156-94.sslip.io/evidence) · **API:** [jr-api.139-84-156-94.sslip.io](https://jr-api.139-84-156-94.sslip.io/health)
-- **Video (90 s):** <VIDEO_90S>
+- **Video (90 s):** https://www.youtube.com/watch?v=2gBtKHdVs5s
 - **System design:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 Hosted on Vultr (Bangalore). Built for HackGlobal 2026 (Build with AI track; 14–15 Nov 2026, organised by Polaris School of Technology, powered by Vultr) by Anant Vardhan Pandey.
 
-<!-- Demo GIF: replace with docs/images/demo.gif once recorded (Playground run: pick a bug, real 500, cause, fix, approve, real answer, Undo). -->
-![Demo GIF placeholder: a visitor breaks Submit code on the demo exam portal, JaagteRaho wakes the owner, explains the cause and the approved fix makes it work again](docs/images/break-it-run.png)
+[![Watch the 90-second video](https://img.youtube.com/vi/2gBtKHdVs5s/maxresdefault.jpg)](https://www.youtube.com/watch?v=2gBtKHdVs5s)
 
 ## Problem
 
