@@ -141,6 +141,14 @@ describe("SlowScanDetector", () => {
     assert.equal(new SlowScanDetector().feed(1, ls, T0 + 40_000, []).length, 1);
   });
 
+  it("keeps nothing beyond the one-hour window", () => {
+    const d = new SlowScanDetector();
+    d.feed(1, parsed([line("45.9.8.7", T0, "/.env", 404, 1), line("49.36.1.2", T0, "/missing", 404, 1)]), T0);
+    assert.equal(d.size, 2);
+    d.feed(1, parsed([line("45.9.8.8", T0 + 3_600_001, "/.env", 404, 1)]), T0 + 3_600_001);
+    assert.equal(d.size, 1); // the two older addresses are gone
+  });
+
   it("memory stays bounded however many addresses scan", () => {
     const d = new SlowScanDetector({ maxIps: 100 });
     d.feed(1, parsed(Array.from({ length: 5_000 }, (_, i) => line(`45.${(i >> 8) & 255}.${i & 255}.1`, T0, "/.env", 404, 1))), T0);
