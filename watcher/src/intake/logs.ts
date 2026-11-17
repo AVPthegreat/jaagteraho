@@ -1,6 +1,7 @@
 // No-code connection: a host that can forward an app's logs (a "log drain") sends them to
 // POST /logs/:projectId/:key. We pick out Python tracebacks and Node.js stack traces and treat
-// each one like an error from the SDK. Everything else in the logs is dropped at once, never stored.
+// each one like an error from the SDK. Web-server access-log lines also feed the slow-scan detector
+// (slowscan.ts, in memory only). Everything else in the logs is dropped at once, never stored.
 //
 // Accepted bodies: plain text lines; JSON arrays or newline-delimited JSON with a `message` field
 // (Vercel-style); Heroku-style logplex frames (application/logplex-1).
@@ -8,11 +9,12 @@
 import { createHash } from "node:crypto";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import type { DB, Project } from "../db/db.js";
+import { getSettings, type DB, type Project } from "../db/db.js";
 import { parseTraceback } from "../web/paste.js";
 import type { CleanEvent } from "./allowlist.js";
 import { clip } from "./mask.js";
 import { storeEvent } from "./store.js";
+import { parseAccessLine, SlowScanDetector, type AccessLine, type SlowScanReport } from "./slowscan.js";
 
 const MAX_BODY_BYTES = 1024 * 1024;
 const KEEP_LINES = 120;
@@ -179,9 +181,15 @@ export function toEvent(projectId: number, trace: { text: string; path: string |
   };
 }
 
-export function logRoutes(db: DB, onStored?: (incidentId: number) => void) {
+/** Slow-scan hooks (server.ts wires them to the worker): told = already reported in the last 6 h; report = send the one quiet message. */
+export type SlowScanHooks = { detector?: SlowScanDetector; told: (projectId: number, hash: string) => boolean; report: (r: SlowScanReport) => void };
+
+const ownIpsFromEnv = () => (process.env.JR_OWN_IPS ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+
+export function logRoutes(db: DB, onStored?: (incidentId: number) => void, slow?: SlowScanHooks) {
   const app = new Hono();
   const finder = new TraceFinder();
+  const detector = slow ? (slow.detector ?? new SlowScanDetector()) : null;
   const findProject = db.prepare("SELECT id, name, public_key, kind, rate_per_min FROM projects WHERE id = ?");
   const counts = new Map<number, { start: number; n: number }>();
 
@@ -208,7 +216,20 @@ export function logRoutes(db: DB, onStored?: (incidentId: number) => void) {
     if (body.length > MAX_BODY_BYTES) return c.json({ detail: "too large" }, 413);
     const at = new Date();
     const key = String(project.id);
-    const traces = [...finder.push(key, extractLines(body, c.req.header("content-type") ?? ""), at.getTime()), ...finder.flush(key)];
+    const lines = extractLines(body, c.req.header("content-type") ?? "");
+    // Access-log lines feed the slow-scan detector (in memory; ordinary requests leave no trace), then are dropped.
+    if (detector && slow) {
+      const access: AccessLine[] = [];
+      for (const l of lines) {
+        const a = parseAccessLine(l.text);
+        if (a) access.push(a);
+      }
+      if (access.length) {
+        const own = [...(getSettings(db, project.id).own_ips ?? []), ...ownIpsFromEnv()];
+        for (const r of detector.feed(project.id, access, at.getTime(), own, (h) => slow.told(project.id, h))) slow.report(r);
+      }
+    }
+    const traces = [...finder.push(key, lines, at.getTime()), ...finder.flush(key)];
     let stored = 0;
     for (const t of traces) {
       const w = counts.get(project.id);
