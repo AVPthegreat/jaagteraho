@@ -11,8 +11,10 @@
 // threshold the owner gets ONE quiet message per address per 6 hours. Never a wake, never a flood; real
 // errors keep their normal path (tracebacks in the same drain still become incidents).
 //
-// Privacy: ordinary requests (a 2xx/3xx on an ordinary path) leave no trace at all. Counters live only in
-// memory and are bounded. An address is written down only once it crossed the threshold, and then only as a
+// Privacy and retention: raw log lines are never stored (parsed, counted, dropped). Ordinary requests (a 2xx/3xx
+// on an ordinary path) leave no trace at all. Counters live only in memory, bounded to 5,000 addresses, and only for
+// the one-hour window: an address with nothing left in the window is forgotten (sweep), and its older totals with it.
+// The in-memory "already told" mark for a reported address lasts the 6-hour repeat period. An address is written down only once it crossed the threshold, and then only as a
 // one-way hash (the "already told the owner" mark); the address itself appears only in the owner's message.
 // Private, loopback and the app's own server addresses (noids, health checks, the app talking to itself)
 // are never counted.
@@ -140,6 +142,16 @@ export class SlowScanDetector {
     return this.tracks.size;
   }
 
+  /** Drops every address with no activity inside the window, and expired "already told" marks: nothing outlives its purpose. */
+  private sweep(now: number) {
+    const from = now - this.cfg.windowMs;
+    for (const [k, tr] of this.tracks) {
+      if (tr.last > from) break; // Map order: least recently active first
+      this.tracks.delete(k);
+    }
+    for (const [k, until] of this.told) if (until <= now) this.told.delete(k);
+  }
+
   private remember(key: string, until: number) {
     this.told.delete(key);
     if (this.told.size >= this.cfg.maxIps) this.told.delete(this.told.keys().next().value!);
@@ -154,6 +166,7 @@ export class SlowScanDetector {
     const out: SlowScanReport[] = [];
     const ignore = new Set(ignoreIps.map((x) => x.trim().toLowerCase()).filter(Boolean));
     const { windowMs } = this.cfg;
+    this.sweep(now);
     for (const l of lines) {
       if (isInternalIp(l.ip) || ignore.has(l.ip.toLowerCase())) continue;
       const key = `${projectId}|${l.ip}`;
@@ -178,6 +191,14 @@ export class SlowScanDetector {
       const from = t - windowMs;
       while (tr.probes.length && tr.probes[0] <= from) tr.probes.shift();
       for (const [p, s] of tr.missing) if (s <= from) tr.missing.delete(p);
+      if (tr.probes.length === 0 && tr.missing.size === 0) {
+        // Nothing left in the window: forget everything older (retention is the one-hour window only).
+        tr.first = t;
+        tr.total = 0;
+        tr.status.clear();
+        tr.sizes200.clear();
+        tr.topPaths.clear();
+      }
 
       const path = l.path.split("?")[0].slice(0, 200);
       if (sensitive) {
