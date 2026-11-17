@@ -232,6 +232,7 @@ export type ProjectSettings = {
   outside?: boolean; // connected by an outside developer through the website
   heal?: import("../pipeline/heal.js").HealPolicy;
   playground?: boolean; // a live playground app (playground/runner.ts): never alerts, calls or heals
+  own_ips?: string[]; // the app's own public server addresses (noids, health checks): never counted as a slow scan (intake/slowscan.ts)
   hosts?: string[]; // the app's real hostnames ("code.faurus.app", ".faurus.app" for subdomains): a refused Host outside them is a scan (intake/scan.ts)
 };
 

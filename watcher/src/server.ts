@@ -68,7 +68,13 @@ app.onError((err, c) => {
 app.use("*", bodyLimits());
 app.get("/health", (c) => c.json({ ok: true, watching_itself_as: selfId }));
 app.route("/", intakeRoutes({ db }));
-app.route("/", logRoutes(db));
+app.route(
+  "/",
+  logRoutes(db, undefined, {
+    told: (projectId, hash) => worker.slowScanTold(projectId, hash),
+    report: (r) => void worker.slowScan(r).catch((e) => console.error("slow scan:", e)),
+  }),
+);
 app.use("/public/paste*", cors({ origin: (process.env.JR_SITE_ORIGINS ?? "http://localhost:3000").split(",").filter(Boolean), allowMethods: ["GET", "POST"], allowHeaders: ["Content-Type"] }));
 app.route("/", pasteRoutes(db, ai));
 app.route("/", ownerRoutes(db));

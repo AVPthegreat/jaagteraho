@@ -1,6 +1,7 @@
 // "While you slept": a summary of what the watchman saw, decided and proposed since a time.
 
 import type { DB } from "../db/db.js";
+import type { SlowScanReport } from "../intake/slowscan.js";
 import { esc } from "./api.js";
 
 const ACTION_WORD: Record<string, string> = { wake: "woke you", notify: "notified you", log: "logged quietly", ignore: "ignored as noise" };
@@ -107,5 +108,58 @@ export function buildScanSummary(db: DB, incidentId: number): string | null {
   ];
   if (sources > 0) lines.push(`Sources: ${fmt(sources)} (hashed; addresses are never stored)`);
   if (hostRefused) lines.push("", "Tip: drop requests with unknown Host headers at nginx (a default server that returns 444), so scans never reach the app.");
+  return lines.join("\n");
+}
+
+/** A cheap owner label from the address's reverse-DNS name (no outside lookup service): "Google Cloud", "AWS", ... */
+export function ownerFromRdns(name: string | null): string | null {
+  if (!name) return null;
+  const n = name.toLowerCase();
+  const known: Array<[RegExp, string]> = [
+    [/googleusercontent\.com$|\.1e100\.net$/, "Google Cloud"],
+    [/amazonaws\.com$/, "AWS"],
+    [/cloudapp\.(?:net|azure\.com)$/, "Microsoft Azure"],
+    [/digitalocean\.com$/, "DigitalOcean"],
+    [/linode(?:usercontent)?\.com$|akamai/, "Akamai/Linode"],
+    [/vultr(?:usercontent)?\.com$/, "Vultr"],
+    [/(?:your-server\.de|hetzner\.(?:com|de))$/, "Hetzner"],
+    [/ovh\.(?:net|com|ca)$/, "OVH"],
+    [/contaboserver\.net$/, "Contabo"],
+  ];
+  return known.find(([re]) => re.test(n))?.[1] ?? null;
+}
+
+/**
+ * The one quiet message about a slow scan seen in the access log (intake/slowscan.ts). It says what was asked for and
+ * what the app answered; "no data exposed" is said only when every answer to a sensitive path was a 404 or one and the
+ * same 200 page (the app's index fallback). Otherwise it says plainly what to check.
+ */
+export function buildSlowScanSummary(project: string, r: SlowScanReport, rdns: string | null = null): string {
+  const hours = Math.max(1, Math.round((r.until - r.since) / 3_600_000));
+  const owner = ownerFromRdns(rdns);
+  const who = owner ? ` (${esc(owner)}${rdns ? `, ${esc(rdns)}` : ""})` : rdns ? ` (${esc(rdns)})` : "";
+  const s5xx = r.status.filter(([s]) => s >= 500).reduce((a, [, n]) => a + n, 0);
+  const statusText = r.status.slice(0, 5).map(([s, n]) => `${s} ×${fmt(n)}`).join(", ");
+  // Sensitive-path answers with a 200: one single size = the same page every time (the index fallback).
+  const sizes = r.sizes200;
+  const oneSize = sizes.length <= 1;
+  const lines = [
+    `🛡 <b>Slow scan on ${esc(project)}</b>`,
+    `From <code>${esc(r.ip)}</code>${who}: ${fmt(r.total)} suspicious ${r.total === 1 ? "request" : "requests"} over about ${hours} h (${fmt(r.probesInWindow)} probes for secrets or server files and ${fmt(r.missingInWindow)} different missing paths in the last hour).`,
+    `Answers: ${statusText || "none"}.`,
+  ];
+  if (oneSize && s5xx === 0)
+    lines.push(
+      sizes.length === 1
+        ? `Every probe got a 404 or the same ${fmt(sizes[0][0])}-byte page (the app's index page), so no data was exposed. No action needed.`
+        : "Every probe got a 404, so no data was exposed. No action needed.",
+    );
+  else {
+    if (!oneSize)
+      lines.push(`⚠ Check: probes for sensitive paths got 200 answers of ${sizes.length} different sizes (${sizes.slice(0, 4).map(([b, n]) => `${fmt(b)} B ×${fmt(n)}`).join(", ")}). Make sure none of them served a real file.`);
+    if (s5xx > 0) lines.push(`⚠ ${fmt(s5xx)} answers were server errors (5xx).`);
+  }
+  lines.push("", "<b>Most probed</b>", ...r.topPaths.map(([p, n]) => `• ${esc(p)} ×${fmt(n)}`));
+  lines.push("", `Tip: block this address at your firewall or CDN (Cloudflare: Security > WAF > Tools > IP Access Rules). You will hear about it again only if it is still scanning after 6 hours.`);
   return lines.join("\n");
 }

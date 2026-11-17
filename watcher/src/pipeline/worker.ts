@@ -10,7 +10,9 @@ import { installationToken } from "../github/app.js";
 import { GitHubSource, LocalSource, type GitHubToken, type SourceProvider } from "../source/source.js";
 import type { Telegram } from "../telegram/api.js";
 import { renderCard } from "../telegram/card.js";
-import { buildScanSummary } from "../telegram/digest.js";
+import { buildScanSummary, buildSlowScanSummary } from "../telegram/digest.js";
+import { SLOW_SCAN_DEFAULTS, type SlowScanReport } from "../intake/slowscan.js";
+import { reverse } from "node:dns/promises";
 import { SCAN_BURST_GAP_MS } from "../intake/scan.js";
 import { isSelfProject, reportSelf } from "../selfwatch.js";
 import type { Voice } from "../voice/voice.js";
@@ -93,6 +95,12 @@ export function phoneAllowedFor(kind: string, env: NodeJS.ProcessEnv = process.e
   return kind !== "sandbox" || env.JR_DEMO_PHONE === "1";
 }
 
+/** The address's reverse-DNS name, or null; at most 2 seconds. Only a DNS query, no outside lookup service. */
+async function rdns(ip: string): Promise<string | null> {
+  const t = new Promise<null>((res) => setTimeout(() => res(null), 2_000).unref());
+  return Promise.race([reverse(ip).then((n) => n[0] ?? null, () => null), t]);
+}
+
 /** Playground apps are run by playground/runner.ts, never by this worker: no cards, messages, calls or heals. */
 export function isPlaygroundProject(db: DB, projectId: number): boolean {
   return getSettings(db, projectId).playground === true;
@@ -150,6 +158,8 @@ export class Worker {
   /** Raw events are kept for 30 days; incidents, decisions and diagnoses stay. */
   purgeOldEvents(now = Date.now()): number {
     const cutoff = new Date(now - RETENTION_DAYS * 86_400_000).toISOString();
+    // Slow-scan marks older than a day are no longer needed (they only hold off repeats for 6 hours).
+    this.db.prepare("DELETE FROM kv WHERE key >= 'slowscan:' AND key < 'slowscan;' AND value < ?").run(new Date(now - 86_400_000).toISOString());
     return this.db.prepare("DELETE FROM events WHERE received_at < ?").run(cutoff).changes;
   }
 
@@ -547,6 +557,30 @@ export class Worker {
       sent++;
     }
     return sent;
+  }
+
+  /** True when this address (hashed) was reported for this project within the last 6 hours, also across restarts. */
+  slowScanTold(projectId: number, hash: string, now = Date.now()): boolean {
+    const at = kvGet(this.db, `slowscan:${projectId}:${hash}`);
+    return !!at && now - Date.parse(at) < SLOW_SCAN_DEFAULTS.repeatMs;
+  }
+
+  /**
+   * The one quiet message about a slow scan seen in the access log (intake/slowscan.ts): at most one per address per
+   * 6 hours, delivered without sound. Marked before sending, so a Telegram failure never turns into repeats.
+   * Returns true when a message was sent.
+   */
+  async slowScan(r: SlowScanReport, now = Date.now(), lookup: (ip: string) => Promise<string | null> = rdns): Promise<boolean> {
+    if (this.slowScanTold(r.projectId, r.ipHash, now)) return false;
+    kvSet(this.db, `slowscan:${r.projectId}:${r.ipHash}`, new Date(now).toISOString());
+    console.log(`slow scan: project ${r.projectId}, ${r.total} suspicious requests, ${r.probesInWindow} probes/h, ${r.missingInWindow} missing paths/h`);
+    if (!this.tg || isPlaygroundProject(this.db, r.projectId)) return false;
+    const project = this.db.prepare("SELECT name FROM projects WHERE id = ?").get(r.projectId) as { name: string } | undefined;
+    const owner = this.db.prepare("SELECT chat_id FROM owners WHERE project_id = ?").get(r.projectId) as { chat_id: number } | undefined;
+    if (!project || !owner) return false;
+    const name = await lookup(r.ip).catch(() => null);
+    await this.tg.send(owner.chat_id, buildSlowScanSummary(project.name, r, name), undefined, { quiet: true }).catch((e) => console.error("slow scan summary:", e));
+    return true;
   }
 
   /** Wake alerts repeat every 2 minutes, up to 3 times, until acknowledged. */
